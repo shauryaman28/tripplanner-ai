@@ -5,7 +5,6 @@ description = "Multi-agent AI travel planner — flights, hotels, activities & i
 authors = ["shauryaman28"]
 license = "MIT"
 readme = "README.md"
-python = "^3.11"
 
 [tool.poetry.dependencies]
 python = "^3.11"

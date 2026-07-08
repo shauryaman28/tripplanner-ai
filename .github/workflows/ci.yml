@@ -18,17 +18,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry
-        run: pip install poetry
-
       - name: Install dependencies
-        run: poetry install --no-interaction
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: poetry run ruff check src/ tests/
+        run: ruff check src/ tests/
 
       - name: Unit tests (no Docker needed)
-        run: poetry run pytest tests/unit/ -v
+        run: pytest tests/unit/ -v
 
       # Integration tests are gated — only run manually or nightly
       # RUN_INTEGRATION=1 pytest tests/integration/
