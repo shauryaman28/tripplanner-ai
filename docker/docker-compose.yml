@@ -3,7 +3,7 @@ version: "3.9"
 services:
 
   postgres:
-    image: pgvector/pgvector:pg16        # pgvector baked in from day one (Phase 14+)
+    image: postgres:16-alpine
     container_name: tripplanner_postgres
     restart: unless-stopped
     environment:
@@ -14,7 +14,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql   # enables pgvector extension
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tripplanner -d tripplanner_db"]
       interval: 10s
@@ -34,25 +33,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  backend:
-    build:
-      context: ./src/backend
-      dockerfile: Dockerfile
-    container_name: tripplanner_backend
-    restart: unless-stopped
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./src/backend:/app          # hot-reload in dev
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 volumes:
   postgres_data:
