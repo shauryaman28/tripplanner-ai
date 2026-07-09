@@ -7,7 +7,6 @@ GET /ping
 """
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import text
 
 from app.db.redis import get_redis
 from app.db.session import get_db_raw

@@ -42,12 +42,10 @@ async def test_client(mock_redis):
     AsyncClient for the FastAPI app with Redis mocked out.
     Postgres connectivity is also mocked so tests run without Docker.
     """
-    from app.main import app
     from app.db import redis as redis_module
     from app.db.session import AsyncSessionLocal
+    from app.main import app
     from sqlalchemy.ext.asyncio import AsyncSession
-    from unittest.mock import patch, AsyncMock
-    from sqlalchemy import text
 
     # Patch Redis singleton
     with patch.object(redis_module, "redis_client", mock_redis):

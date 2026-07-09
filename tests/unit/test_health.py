@@ -8,7 +8,8 @@ Mocking strategy:
 Tests run without Docker. Phase 1 done criterion: all 4 pass.
 """
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -29,7 +30,9 @@ async def test_ping_returns_200_with_ok_status():
 
     with patch("app.api.routes.health.get_db_raw", mock_get_db_raw):
         with patch("app.api.routes.health.get_redis", mock_get_redis):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/ping")
 
     assert response.status_code == 200
@@ -52,7 +55,9 @@ async def test_ping_returns_503_when_postgres_down():
 
     with patch("app.api.routes.health.get_db_raw", mock_get_db_raw_fail):
         with patch("app.api.routes.health.get_redis", mock_get_redis):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/ping")
 
     assert response.status_code == 503
@@ -75,7 +80,9 @@ async def test_ping_returns_503_when_redis_down():
 
     with patch("app.api.routes.health.get_db_raw", mock_get_db_raw):
         with patch("app.api.routes.health.get_redis", mock_get_redis):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/ping")
 
     assert response.status_code == 503
@@ -98,7 +105,9 @@ async def test_ping_response_shape_is_exact():
 
     with patch("app.api.routes.health.get_db_raw", mock_get_db_raw):
         with patch("app.api.routes.health.get_redis", mock_get_redis):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.get("/ping")
 
     assert set(response.json().keys()) == {"postgres", "redis"}

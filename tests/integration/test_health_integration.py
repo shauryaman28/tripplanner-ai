@@ -11,7 +11,6 @@ This keeps the fast unit-test suite free of network dependencies.
 import os
 
 import pytest
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.skipif(
