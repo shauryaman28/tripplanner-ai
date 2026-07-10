@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 
-# ── Inputs ────────────────────────────────────────────────────────────────────
+# ── Inputs ─────────────────────────────────────────────────────────────────
 
 class FlightSearchInput(BaseModel):
     origin: str = Field(..., description="IATA airport code, e.g. DEL")
@@ -40,7 +40,7 @@ class BudgetInput(BaseModel):
     daily_spend: float = Field(..., description="Estimated daily spend in INR")
 
 
-# ── Outputs ───────────────────────────────────────────────────────────────────
+# ── Outputs ────────────────────────────────────────────────────────────────
 
 class Flight(BaseModel):
     airline: str
@@ -83,7 +83,7 @@ class BudgetEstimate(BaseModel):
     notes: str
 
 
-# ── Errors ────────────────────────────────────────────────────────────────────
+# ── Errors ─────────────────────────────────────────────────────────────────
 
 class ToolError(BaseModel):
     error: str

@@ -5,7 +5,6 @@ Run with:
     RUN_INTEGRATION=1 pytest tests/integration/
 
 Skipped automatically in CI unless RUN_INTEGRATION env var is set.
-This keeps the fast unit-test suite free of network dependencies.
 """
 
 import os
@@ -21,12 +20,9 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.asyncio
 async def test_ping_against_real_services():
-    """Full /ping against live Postgres + Redis (docker compose up required)."""
     from app.main import app
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/ping")
 
     assert response.status_code == 200

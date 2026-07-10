@@ -1,16 +1,25 @@
 """
 Unit tests for Phase 2 MCP tools.
 Pure functions — no server, no network, no Docker.
-
-Coverage:
-  - Valid input → expected output shape
-  - Invalid input → expected ToolError shape + correct error code
 """
 
-import pytest
 from datetime import date, timedelta
 
-from src.ai.mcp_server.models import Flight, Hotel, Attraction, DayForecast, BudgetEstimate, ToolError
+import pytest
+
+from src.ai.mcp_server.models import (
+    Attraction,
+    AttractionInput,
+    BudgetEstimate,
+    BudgetInput,
+    DayForecast,
+    Flight,
+    FlightSearchInput,
+    Hotel,
+    HotelSearchInput,
+    ToolError,
+    WeatherInput,
+)
 from src.ai.mcp_server.tools import (
     estimate_budget,
     get_attractions,
@@ -18,25 +27,15 @@ from src.ai.mcp_server.tools import (
     search_flights,
     search_hotels,
 )
-from src.ai.mcp_server.models import (
-    AttractionInput,
-    BudgetInput,
-    FlightSearchInput,
-    HotelSearchInput,
-    WeatherInput,
-)
-
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 PAST = (date.today() - timedelta(days=1)).isoformat()
 
 
-# ── search_flights ─────────────────────────────────────────────────────────────
+# ── search_flights ─────────────────────────────────────────────────────────
 
 def test_search_flights_valid():
-    result = search_flights(FlightSearchInput(
-        origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1
-    ))
+    result = search_flights(FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1))
     assert isinstance(result, list)
     assert len(result) > 0
     assert all(isinstance(f, Flight) for f in result)
@@ -44,17 +43,13 @@ def test_search_flights_valid():
 
 
 def test_search_flights_past_date():
-    result = search_flights(FlightSearchInput(
-        origin="DEL", destination="GOI", date=PAST, budget=20_000, passengers=1
-    ))
+    result = search_flights(FlightSearchInput(origin="DEL", destination="GOI", date=PAST, budget=20_000, passengers=1))
     assert isinstance(result, ToolError)
     assert result.code == "PAST_DATE"
 
 
 def test_search_flights_budget_too_low():
-    result = search_flights(FlightSearchInput(
-        origin="DEL", destination="GOI", date=FUTURE, budget=500, passengers=1
-    ))
+    result = search_flights(FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=500, passengers=1))
     assert isinstance(result, ToolError)
     assert result.code == "BUDGET_TOO_LOW"
 
@@ -66,37 +61,28 @@ def test_search_flights_scales_with_passengers():
     assert r2[0].price_inr == r1[0].price_inr * 2
 
 
-# ── search_hotels ──────────────────────────────────────────────────────────────
+# ── search_hotels ──────────────────────────────────────────────────────────
 
 def test_search_hotels_valid():
-    result = search_hotels(HotelSearchInput(
-        destination="Goa", check_in="2025-12-10", check_out="2025-12-15",
-        budget_per_night=5_000, guests=2
-    ))
+    result = search_hotels(HotelSearchInput(destination="Goa", check_in="2025-12-10", check_out="2025-12-15", budget_per_night=5_000, guests=2))
     assert isinstance(result, list)
     assert all(isinstance(h, Hotel) for h in result)
 
 
 def test_search_hotels_invalid_dates():
-    result = search_hotels(HotelSearchInput(
-        destination="Goa", check_in="2025-12-15", check_out="2025-12-10",
-        budget_per_night=5_000, guests=1
-    ))
+    result = search_hotels(HotelSearchInput(destination="Goa", check_in="2025-12-15", check_out="2025-12-10", budget_per_night=5_000, guests=1))
     assert isinstance(result, ToolError)
     assert result.code == "INVALID_DATES"
 
 
 def test_search_hotels_respects_budget():
     budget = 2_000.0
-    result = search_hotels(HotelSearchInput(
-        destination="Goa", check_in="2025-12-10", check_out="2025-12-15",
-        budget_per_night=budget, guests=1
-    ))
+    result = search_hotels(HotelSearchInput(destination="Goa", check_in="2025-12-10", check_out="2025-12-15", budget_per_night=budget, guests=1))
     assert isinstance(result, list)
     assert all(h.price_per_night_inr <= budget for h in result)
 
 
-# ── get_attractions ────────────────────────────────────────────────────────────
+# ── get_attractions ────────────────────────────────────────────────────────
 
 def test_get_attractions_valid():
     result = get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=3))
@@ -117,7 +103,7 @@ def test_get_attractions_no_matching_interests_falls_back():
     assert len(result) > 0
 
 
-# ── get_weather ────────────────────────────────────────────────────────────────
+# ── get_weather ────────────────────────────────────────────────────────────
 
 def test_get_weather_valid():
     result = get_weather(WeatherInput(destination="Goa", date_range="2025-12-10 to 2025-12-17"))
@@ -132,7 +118,7 @@ def test_get_weather_empty_destination():
     assert result.code == "MISSING_DESTINATION"
 
 
-# ── estimate_budget ────────────────────────────────────────────────────────────
+# ── estimate_budget ────────────────────────────────────────────────────────
 
 def test_estimate_budget_sums_correctly():
     result = estimate_budget(BudgetInput(flights=8_000, hotels=3_000, days=5, daily_spend=2_000))

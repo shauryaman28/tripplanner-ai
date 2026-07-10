@@ -1,12 +1,4 @@
-"""
-Async database session factory.
-
-Usage in FastAPI endpoints:
-    async def route(db: AsyncSession = Depends(get_db)): ...
-
-Usage in tests:
-    See tests/unit/conftest.py for the test DB fixture.
-"""
+"""Async SQLAlchemy session factory."""
 
 from collections.abc import AsyncGenerator
 
@@ -15,15 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 
-# Convert postgresql:// → postgresql+asyncpg:// for the async driver
-_async_url = settings.DATABASE_URL.replace(
-    "postgresql://", "postgresql+asyncpg://", 1
-)
+_async_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 engine = create_async_engine(
     _async_url,
-    echo=settings.APP_ENV == "development",   # SQL logging in dev only
-    pool_pre_ping=True,                        # recycles stale connections
+    echo=settings.APP_ENV == "development",
+    pool_pre_ping=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -40,10 +29,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def get_db_raw() -> None:
-    """
-    Lightweight connectivity check — executes SELECT 1.
-    Raises on any connection failure.
-    Used by /ping so tests can mock this single function cleanly.
-    """
+    """Lightweight connectivity check used by /ping."""
     async with AsyncSessionLocal() as session:
         await session.execute(text("SELECT 1"))

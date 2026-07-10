@@ -1,20 +1,19 @@
 """
 Phase 2 — all 5 MCP tools with realistic mocked responses.
 
-Each tool:
-- Has typed Pydantic inputs/outputs
-- Returns realistic hardcoded JSON (not TODO)
-- Has at least one deliberate error case
-- get_attractions is also registered as a Resource (see server.py Phase 2 note)
+Each tool has:
+- Typed Pydantic inputs/outputs
+- Realistic hardcoded responses (not TODO)
+- At least one deliberate error case returning ToolError (not a crash)
 """
 
 from datetime import date
 
 from src.ai.mcp_server.models import (
     Attraction,
+    AttractionInput,
     BudgetEstimate,
     BudgetInput,
-    AttractionInput,
     DayForecast,
     Flight,
     FlightSearchInput,
@@ -26,12 +25,9 @@ from src.ai.mcp_server.models import (
 
 
 def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
-    """Search available flights. Returns ToolError for past dates or no results."""
+    """Search flights. Returns ToolError for past dates or budget too low."""
     if date.fromisoformat(input.date) < date.today():
-        return ToolError(
-            error="Departure date is in the past.",
-            code="PAST_DATE",
-        )
+        return ToolError(error="Departure date is in the past.", code="PAST_DATE")
 
     if input.budget < 2000:
         return ToolError(
@@ -73,10 +69,7 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
 def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
     """Search hotels. Returns ToolError if check-out is before check-in."""
     if date.fromisoformat(input.check_out) <= date.fromisoformat(input.check_in):
-        return ToolError(
-            error="check_out must be after check_in.",
-            code="INVALID_DATES",
-        )
+        return ToolError(error="check_out must be after check_in.", code="INVALID_DATES")
 
     return [
         Hotel(
@@ -104,15 +97,9 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
 
 
 def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
-    """
-    Return top attractions. Also registered as a Resource in Phase 2 (see server.py).
-    Returns ToolError if limit is unreasonably high for mock data.
-    """
+    """Return top attractions. Returns ToolError if limit > 10."""
     if input.limit > 10:
-        return ToolError(
-            error="Mock server only supports up to 10 results.",
-            code="LIMIT_EXCEEDED",
-        )
+        return ToolError(error="Mock server only supports up to 10 results.", code="LIMIT_EXCEEDED")
 
     mock_pool = [
         Attraction(name="Fort Aguada", category="history", rating=4.5, description="17th-century Portuguese fort with lighthouse."),
@@ -127,7 +114,6 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
         Attraction(name="Dolphin Watching", category="adventure", rating=4.5, description="Boat trip to spot spinner dolphins."),
     ]
 
-    # Filter by interests if specified; fall back to full pool
     filtered = [a for a in mock_pool if a.category in input.interests] if input.interests else mock_pool
     if not filtered:
         filtered = mock_pool
@@ -136,14 +122,10 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
 
 
 def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
-    """Return 7-day mock forecast. Returns ToolError for unknown destinations."""
+    """Return 7-day mock forecast. Returns ToolError for empty destination."""
     if not input.destination.strip():
-        return ToolError(
-            error="Destination cannot be empty.",
-            code="MISSING_DESTINATION",
-        )
+        return ToolError(error="Destination cannot be empty.", code="MISSING_DESTINATION")
 
-    # Fake 7-day forecast
     conditions = ["Sunny", "Partly Cloudy", "Sunny", "Sunny", "Cloudy", "Sunny", "Sunny"]
     return [
         DayForecast(
@@ -157,7 +139,7 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
 
 
 def estimate_budget(input: BudgetInput) -> BudgetEstimate:
-    """Pure logic — no mock needed. Calculates full trip budget breakdown."""
+    """Pure logic — calculates full trip budget breakdown."""
     hotel_total = input.hotels * input.days
     activities = input.daily_spend * input.days
     total = input.flights + hotel_total + activities

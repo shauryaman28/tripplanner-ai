@@ -4,7 +4,7 @@ MCP server — Phase 2 (all mocked).
 Run standalone:
     python -m src.ai.mcp_server.server
 
-Or via MCP Inspector:
+Via MCP Inspector:
     npx @modelcontextprotocol/inspector python -m src.ai.mcp_server.server
 """
 

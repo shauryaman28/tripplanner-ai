@@ -2,17 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Poetry
-RUN pip install poetry --no-cache-dir
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy dependency files first (layer-cache friendly)
-COPY pyproject.toml poetry.lock* ./
-
-# Install deps without creating a venv (container is the env)
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root
-
-# Copy source
 COPY . .
 
 EXPOSE 8000

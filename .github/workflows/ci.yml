@@ -27,8 +27,8 @@ jobs:
       - name: Lint (ruff)
         run: ruff check src/ tests/
 
-      - name: Unit tests (no Docker needed)
+      - name: Unit tests
         run: pytest tests/unit/ -v
 
-      # Integration tests are gated — only run manually or nightly
+      # Integration tests require Docker — run manually:
       # RUN_INTEGRATION=1 pytest tests/integration/

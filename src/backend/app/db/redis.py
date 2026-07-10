@@ -1,24 +1,13 @@
-"""
-Async Redis client.
-
-Usage:
-    from app.db.redis import get_redis, redis_client
-    r = await get_redis()
-    await r.ping()
-
-The client is a module-level singleton initialised at startup (lifespan).
-"""
+"""Async Redis client singleton."""
 
 import redis.asyncio as aioredis
 
 from app.core.config import settings
 
-# Initialised in app lifespan — None until startup completes
 redis_client: aioredis.Redis | None = None
 
 
 async def init_redis() -> aioredis.Redis:
-    """Create and store the Redis client. Called once at app startup."""
     global redis_client
     redis_client = aioredis.from_url(
         settings.REDIS_URL,
@@ -29,7 +18,6 @@ async def init_redis() -> aioredis.Redis:
 
 
 async def close_redis() -> None:
-    """Close Redis connection. Called at app shutdown."""
     global redis_client
     if redis_client:
         await redis_client.aclose()
