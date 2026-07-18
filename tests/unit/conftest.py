@@ -14,6 +14,7 @@ def mock_redis():
     r.get.return_value = None
     r.set.return_value = True
     r.delete.return_value = 1
+    r.publish = AsyncMock(return_value=1)
     return r
 
 
@@ -28,6 +29,10 @@ def mock_db_session():
 
 @pytest_asyncio.fixture
 async def test_client(mock_redis):
+    """
+    Full test client with mocked Postgres and Redis.
+    Suitable for health, auth, and trip route unit tests.
+    """
     from app.db import redis as redis_module
     from app.db.session import AsyncSessionLocal
     from app.main import app
@@ -38,6 +43,10 @@ async def test_client(mock_redis):
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.execute = AsyncMock()
+        mock_session.get = AsyncMock(return_value=None)
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_session.refresh = AsyncMock()
 
         with patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
             async with AsyncClient(

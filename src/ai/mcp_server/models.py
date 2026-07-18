@@ -1,13 +1,18 @@
-"""Typed I/O models for all MCP tools."""
+"""Typed I/O models for all 5 MCP tools.
+
+lat/lng added to Attraction in Phase 3 so Phase 18 map view
+can use server-side coordinates instead of client-side geocoding.
+"""
 
 from pydantic import BaseModel, Field
 
 
 # ── Inputs ─────────────────────────────────────────────────────────────────
 
+
 class FlightSearchInput(BaseModel):
     origin: str = Field(..., description="IATA airport code, e.g. DEL")
-    destination: str = Field(..., description="IATA airport code, e.g. BOM")
+    destination: str = Field(..., description="IATA airport code, e.g. GOI")
     date: str = Field(..., description="Departure date ISO 8601, e.g. 2025-12-10")
     return_date: str | None = Field(None, description="Return date for round-trip")
     budget: float = Field(..., description="Max total price in INR")
@@ -35,12 +40,13 @@ class WeatherInput(BaseModel):
 
 class BudgetInput(BaseModel):
     flights: float = Field(..., description="Total flight cost in INR")
-    hotels: float = Field(..., description="Total hotel cost in INR")
+    hotels: float = Field(..., description="Hotel cost per night in INR")
     days: int = Field(..., ge=1)
     daily_spend: float = Field(..., description="Estimated daily spend in INR")
 
 
 # ── Outputs ────────────────────────────────────────────────────────────────
+
 
 class Flight(BaseModel):
     airline: str
@@ -65,6 +71,8 @@ class Attraction(BaseModel):
     category: str
     rating: float
     description: str
+    lat: float | None = None   # Phase 3 — used by Phase 18 map view
+    lng: float | None = None
 
 
 class DayForecast(BaseModel):
@@ -84,6 +92,7 @@ class BudgetEstimate(BaseModel):
 
 
 # ── Errors ─────────────────────────────────────────────────────────────────
+
 
 class ToolError(BaseModel):
     error: str

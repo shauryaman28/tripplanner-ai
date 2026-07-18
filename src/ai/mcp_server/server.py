@@ -1,10 +1,10 @@
 """
-MCP server — Phase 2 (all mocked).
+MCP server — Phase 3 (real APIs, Redis caching).
 
 Run standalone:
     python -m src.ai.mcp_server.server
 
-Via MCP Inspector:
+Inspect via MCP Inspector:
     npx @modelcontextprotocol/inspector python -m src.ai.mcp_server.server
 """
 

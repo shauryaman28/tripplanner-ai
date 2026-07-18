@@ -35,10 +35,14 @@ services:
       timeout: 5s
       retries: 5
 
+  # Optional: run the backend in Docker.
+  # During development, prefer running locally:
+  #   cd tripplanner-ai && pip install -r requirements.txt
+  #   cd src/backend && uvicorn app.main:app --reload
   backend:
     build:
-      context: ./src/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/backend/Dockerfile
     container_name: tripplanner_backend
     restart: unless-stopped
     env_file:

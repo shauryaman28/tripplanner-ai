@@ -8,7 +8,7 @@
 - FastAPI app with `/ping` health check endpoint
 - Async SQLAlchemy + asyncpg for Postgres
 - Async Redis client (singleton via lifespan)
-- `docker-compose.yml` bringing up Postgres (pgvector), Redis, and the backend
+- `docker-compose.yml` bringing up Postgres (pgvector), Redis, and optionally the backend
 - `docker/init.sql` enabling the `vector` extension on first Postgres init
 - 4 unit tests + 1 integration test for `/ping`
 - GitHub Actions CI: lint + unit tests on every push
@@ -25,7 +25,7 @@
 
 ## Done criterion checklist
 
-- [x] `docker compose up` starts Postgres, Redis, Backend with health checks
+- [x] `docker compose up postgres redis` starts Postgres and Redis with health checks
 - [x] `curl /ping` returns `{ "postgres": "ok", "redis": "ok" }`
 - [x] 503 with specific message if either service is down
 - [x] 4 unit tests pass without Docker

@@ -1,8 +1,8 @@
 """
 FastAPI application entry point.
 
-  uvicorn app.main:app --reload     (local)
-  docker compose up backend         (Docker)
+  uvicorn app.main:app --reload           (local dev)
+  docker compose up backend               (Docker)
 """
 
 from contextlib import asynccontextmanager
@@ -10,7 +10,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
+from app.api.routes.trips import router as trips_router
 from app.core.config import settings
 from app.db.redis import close_redis, init_redis
 
@@ -25,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.1.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
 
@@ -38,7 +40,5 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
-
-# Phase 5 — uncomment as routes are added:
-# from app.api.routes.trips import router as trips_router
-# from app.api.routes.auth  import router as auth_router
+app.include_router(auth_router)
+app.include_router(trips_router)
