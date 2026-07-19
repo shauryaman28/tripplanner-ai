@@ -1,6 +1,7 @@
 """
 Trip routes — all require JWT.
 
+GET    /trips                    list all trips for authenticated user
 POST   /trips                    create a trip
 POST   /trips/{id}/plan          kick off planning (202, agents wired Phase 9)
 GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
@@ -30,6 +31,23 @@ from app.schemas.itinerary import ItineraryRead
 from app.schemas.trip import TripCreate, TripRead
 
 router = APIRouter(prefix="/trips", tags=["trips"])
+
+
+# ── GET /trips ─────────────────────────────────────────────────────────────
+
+
+@router.get("", response_model=list[TripRead])
+async def list_trips(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[Trip]:
+    """Return all trips belonging to the authenticated user, newest first."""
+    result = await db.execute(
+        select(Trip)
+        .where(Trip.user_id == current_user.id)
+        .order_by(Trip.created_at.desc())
+    )
+    return list(result.scalars().all())
 
 
 # ── POST /trips ────────────────────────────────────────────────────────────

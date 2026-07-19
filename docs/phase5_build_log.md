@@ -13,7 +13,7 @@ src/backend/app/
 │   ├── deps.py              ← get_current_user, get_current_user_sse, get_redis_dep
 │   └── routes/
 │       ├── auth.py          ← POST /auth/register, POST /auth/login
-│       └── trips.py         ← All 6 trip routes
+│       └── trips.py         ← All 7 trip routes
 ├── schemas/
 │   ├── auth.py              ← UserCreate, UserRead, Token
 │   ├── trip.py              ← TripCreate (validated), TripRead
@@ -28,6 +28,7 @@ src/backend/app/
 |---|---|---|---|
 | POST | `/auth/register` | None | 400 if duplicate email |
 | POST | `/auth/login` | None | OAuth2 form → JWT |
+| GET | `/trips` | Bearer | List all trips for authenticated user |
 | POST | `/trips` | Bearer | Creates trip row |
 | POST | `/trips/{id}/plan` | Bearer | 202, creates AgentRun, publishes SSE event |
 | GET | `/trips/{id}/stream` | Bearer OR ?token= | SSE — Redis pub/sub |
@@ -82,6 +83,7 @@ curl -s -X POST "http://localhost:8000/trips/$TRIP_ID/plan" \
 - [x] POST /auth/login → JWT token
 - [x] No token → 401 on all /trips routes
 - [x] Invalid token → 401
+- [x] GET /trips → 200 list of authenticated user's trips (newest first)
 - [x] POST /trips → 201 with trip data
 - [x] POST /trips/{id}/plan → 202, creates AgentRun, publishes Redis event
 - [x] GET /trips/{id}/stream → SSE stream, `connected` event on subscribe

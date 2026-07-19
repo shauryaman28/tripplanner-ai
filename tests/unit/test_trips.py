@@ -142,6 +142,38 @@ async def test_create_trip_end_date_before_start_returns_422():
 
 
 @pytest.mark.asyncio
+async def test_list_trips_returns_user_trips():
+    from app.db.session import AsyncSessionLocal
+    from app.main import app
+
+    user_id = uuid.uuid4()
+    fake_user = _make_user(user_id)
+    fake_trip = _make_trip(user_id)
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.get = AsyncMock(return_value=fake_user)
+
+    trips_result = MagicMock()
+    trips_result.scalars.return_value.all.return_value = [fake_trip]
+    mock_session.execute = AsyncMock(return_value=trips_result)
+
+    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
+         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            resp = await c.get("/trips", headers=_auth_header(user_id))
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["destination"] == "Goa"
+
+
+@pytest.mark.asyncio
 async def test_get_trip_runs_returns_empty_list():
     from app.db.session import AsyncSessionLocal
     from app.main import app
@@ -159,12 +191,12 @@ async def test_get_trip_runs_returns_empty_list():
     mock_session.__aexit__ = AsyncMock(return_value=False)
     mock_session.get = AsyncMock(return_value=fake_user)
 
-    # First execute → trip lookup; second execute → agent_runs (empty)
+    # execute #1 → _get_trip_or_404; execute #2 → AgentRun query
     trip_result = MagicMock()
     trip_result.scalar_one_or_none.return_value = fake_trip
     runs_result = MagicMock()
     runs_result.scalars.return_value.all.return_value = []
-    mock_session.execute = AsyncMock(side_effect=[trip_result, trip_result, runs_result])
+    mock_session.execute = AsyncMock(side_effect=[trip_result, runs_result])
 
     with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
          patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):

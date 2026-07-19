@@ -29,7 +29,8 @@ async def test_ping_returns_200_with_ok_status():
 
 
 @pytest.mark.asyncio
-async def test_ping_returns_503_when_postgres_down():
+async def test_ping_returns_200_with_postgres_error_in_body():
+    """Postgres down → still 200; error message is in body, not HTTP status."""
     from app.main import app
 
     async def mock_get_db_raw_fail():
@@ -46,12 +47,15 @@ async def test_ping_returns_503_when_postgres_down():
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get("/ping")
 
-    assert response.status_code == 503
-    assert "Postgres" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["postgres"].startswith("error:")
+    assert body["redis"] == "ok"
 
 
 @pytest.mark.asyncio
-async def test_ping_returns_503_when_redis_down():
+async def test_ping_returns_200_with_redis_error_in_body():
+    """Redis down → still 200; error message is in body, not HTTP status."""
     from app.main import app
 
     async def mock_get_db_raw():
@@ -68,8 +72,10 @@ async def test_ping_returns_503_when_redis_down():
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get("/ping")
 
-    assert response.status_code == 503
-    assert "Redis" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["postgres"] == "ok"
+    assert body["redis"].startswith("error:")
 
 
 @pytest.mark.asyncio

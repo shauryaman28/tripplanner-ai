@@ -2,11 +2,13 @@
 Health-check endpoint.
 
 GET /ping
-→ { "postgres": "ok", "redis": "ok" }   both healthy
-→ 503 with detail on any failed check
+→ { "postgres": "ok", "redis": "ok" }          both healthy
+→ { "postgres": "error: <msg>", "redis": "ok" } partial failure
+
+Per roadmap spec: errors go in body, never in HTTP status.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.db.redis import get_redis
 from app.db.session import get_db_raw
@@ -22,7 +24,7 @@ async def ping() -> dict[str, str]:
         await get_db_raw()
         results["postgres"] = "ok"
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Postgres unreachable: {exc}") from exc
+        results["postgres"] = f"error: {exc}"
 
     try:
         r = await get_redis()
@@ -30,6 +32,6 @@ async def ping() -> dict[str, str]:
             raise RuntimeError("PING returned falsy")
         results["redis"] = "ok"
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Redis unreachable: {exc}") from exc
+        results["redis"] = f"error: {exc}"
 
     return results

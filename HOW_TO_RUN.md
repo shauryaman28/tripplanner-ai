@@ -110,11 +110,21 @@ uvicorn app.main:app --reload
 curl http://localhost:8000/ping
 ```
 
-Expected:
+Expected (both services healthy):
 
 ```json
 {"postgres": "ok", "redis": "ok"}
 ```
+
+`/ping` always returns **200**. If a service is down the error appears in the body, not the
+HTTP status — so callers never need to handle two different response shapes:
+
+```json
+{"postgres": "error: could not connect to server", "redis": "ok"}
+```
+
+To trigger this deliberately: `docker compose stop postgres`, run the curl, then
+`docker compose start postgres`.
 
 ---
 
@@ -160,6 +170,15 @@ curl -s http://localhost:8000/trips \
 
 ## Step 8 — Verify Phase 5: Trip routes
 
+### List trips (empty at first)
+
+```bash
+curl -s http://localhost:8000/trips \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -m json.tool
+# → 200 []
+```
+
 ### Create a trip
 
 ```bash
@@ -188,6 +207,15 @@ curl -s -X POST http://localhost:8000/trips \
   -d '{"destination":"Goa","start_date":"2025-12-17","end_date":"2025-12-10","budget":50000}' \
   -o /dev/null -w "Status: %{http_code}\n"
 # → 422
+```
+
+### List trips again (now has one)
+
+```bash
+curl -s http://localhost:8000/trips \
+  -H "Authorization: Bearer $TOKEN" \
+  | python3 -m json.tool
+# → 200 [ { "id": "...", "destination": "Goa", ... } ]
 ```
 
 ### Trigger planning (creates an AgentRun row)
@@ -283,9 +311,9 @@ All tests run with **zero network calls** — everything is mocked.
 | `tests/unit/mcp/test_tools.py` | 3 | 17 |
 | `tests/contract/test_mcp_contracts.py` | 3 | 8 |
 | `tests/unit/test_auth.py` | 5 | 5 |
-| `tests/unit/test_trips.py` | 5 | 5 |
+| `tests/unit/test_trips.py` | 5 | 6 |
 
-Expected: **all 39 pass**.
+Expected: **all 40 pass**.
 
 Integration tests (need Docker running):
 
@@ -366,8 +394,8 @@ With the backend running, open **http://localhost:8000/docs**
 
 | Phase | How to break it on purpose and explain why |
 |---|---|
-| **1** | Stop Docker Postgres → `GET /ping` returns `503 Postgres unreachable`. Stop Redis → `503 Redis unreachable`. Start both → `200 {"postgres":"ok","redis":"ok"}` |
+| **1** | Stop Docker Postgres → `GET /ping` returns `200 {"postgres":"error: ...","redis":"ok"}`. Stop Redis → `200 {"postgres":"ok","redis":"error: ..."}`. Start both → `200 {"postgres":"ok","redis":"ok"}`. Status is always 200 — errors are in the body. |
 | **2** | Call `search_flights` with a past date → `ToolError PAST_DATE`. Budget < ₹2000 → `BUDGET_TOO_LOW`. Both are validated before any network call. |
 | **3** | Call any tool with keys missing → `API_NOT_CONFIGURED`, server alive. Call `get_weather` with a date 30 days out → climate estimate (OWM only has 5-day window). Call twice → second call shows `[CACHE HIT]` in logs. |
 | **4** | Run `alembic downgrade -1` → all tables dropped. Run `alembic upgrade head` → all tables recreated. The `vector` column in `embeddings` is a pgvector type — `\d embeddings` in psql confirms it. |
-| **5** | Omit the JWT → `401`. Use an expired/tampered JWT → `401`. Call `POST /trips` with `end_date` before `start_date` → `422`. Call `GET /trips/{id}/similar` → `501`. Publish a Redis message → it appears in the SSE stream within milliseconds. |
+| **5** | Omit the JWT → `401`. Use an expired/tampered JWT → `401`. Call `POST /trips` with `end_date` before `start_date` → `422`. Call `GET /trips/{id}/similar` → `501`. Publish a Redis message → it appears in the SSE stream within milliseconds. `GET /trips` → `200 []` before any trips exist, then the list after creating one. |

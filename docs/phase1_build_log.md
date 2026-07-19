@@ -21,13 +21,15 @@
 
 **`get_db_raw()` separate from `get_db()`** — `/ping` uses a lightweight `SELECT 1` helper. Tests mock just this function without touching the full session dependency.
 
+**Errors in body, not HTTP status** — `/ping` always returns `200`. When a service is down the value for that key is `"error: <message>"` instead of `"ok"`. This matches the roadmap spec and avoids forcing callers to handle both 200 and 503 shapes. The 4 unit tests verify both the happy path and the error-in-body behaviour.
+
 **CORS is environment-aware** — `allow_origins=["*"]` in dev, locked down in prod (Phase 27).
 
 ## Done criterion checklist
 
 - [x] `docker compose up postgres redis` starts Postgres and Redis with health checks
 - [x] `curl /ping` returns `{ "postgres": "ok", "redis": "ok" }`
-- [x] 503 with specific message if either service is down
+- [x] 200 with error value in body if either service is down (e.g. `{ "postgres": "error: ...", "redis": "ok" }`)
 - [x] 4 unit tests pass without Docker
 - [x] Integration test passes with Docker running
 - [x] CI runs lint + unit tests on every push
