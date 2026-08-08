@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Claude Haiku · Gemini Flash · pgvector.
 
-**Status: Phase 5 / 30 — FastAPI Gateway, Auth, SSE**
+**Status: Phase 6 / 30 — Agent Core (FlightAgent)**
 
 ---
 
@@ -34,14 +34,14 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
 
 ### Prerequisites
 - Docker Desktop
-- Python 3.11+
+- Python 3.11+ (3.9+ also works for local dev; CI/Docker use 3.11)
 
 ### 1. Clone & configure
 ```bash
 git clone https://github.com/shauryaman28/tripplanner-ai.git
 cd tripplanner-ai
 cp .env.example .env
-# Edit .env — set JWT_SECRET at minimum
+# Edit .env — set JWT_SECRET at minimum (generate with: openssl rand -hex 32)
 ```
 
 ### 2. Start infrastructure
@@ -129,6 +129,8 @@ tripplanner-ai/
 │   │       └── schemas/                 ← Pydantic request/response schemas
 │   └── ai/
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
+│       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
+│       ├── utils/                       ← Phase 6: run_logger.py writes agent_runs
 │       ├── agents/                      ← Phase 6–8 (LangGraph agents)
 │       ├── builder/                     ← Phase 12 (ItineraryBuilder)
 │       └── orchestrator/                ← Phase 9 (OrchestratorAgent)
@@ -162,7 +164,8 @@ tripplanner-ai/
 | 3 | MCP Server (real APIs: Amadeus, GMaps, OWM) | ✅ Done |
 | 4 | Database schema & migrations | ✅ Done |
 | 5 | FastAPI gateway, JWT auth, SSE skeleton | ✅ Done |
-| 6–12 | Agent Core (LangGraph) | ⏳ |
+| 6 | FlightAgent — Dev A: LangGraph node + stub MCP client ✅ · Dev B: real MCP client + run logger | 🟡 In progress |
+| 7–12 | Agent Core (remaining) | ⏳ |
 | 13–20 | Storage & Frontend | ⏳ |
 | 21–25 | Intelligence Layer | ⏳ |
 | 26–30 | Production Readiness | ⏳ |
@@ -178,6 +181,14 @@ tripplanner-ai/
 | `OPENWEATHER_API_KEY` | Weather | https://openweathermap.org/api |
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
+
+---
+
+## Known local-setup gotchas (fixed in requirements.txt, documented for awareness)
+
+- **`email-validator` missing** → `pydantic`'s `EmailStr` needs this as a separate package. Already pinned in `requirements.txt`.
+- **`bcrypt` version mismatch** → `passlib` can't read `__about__` from `bcrypt>=4.1`, breaks password hashing with a misleading "password too long" error. Pinned to `bcrypt==4.0.1`.
+- **Docker not installed** → see `docs/local-setup.md` (Phase 46) for full first-time Mac setup, or install Docker Desktop directly from docker.com.
 
 ---
 

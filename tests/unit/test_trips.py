@@ -1,7 +1,12 @@
-"""Unit tests for trip routes. No Docker needed."""
+"""Unit tests for trip routes. No Docker needed.
+
+Same dependency_overrides fix as test_auth.py — see that file's module
+docstring for why patching AsyncSessionLocal.__call__ was silently
+ignored and caused these tests to hit the real engine/event loop.
+"""
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -26,7 +31,7 @@ def _make_trip(user_id: uuid.UUID) -> MagicMock:
     trip.group_size = 2
     trip.interests = ["beach", "food"]
     trip.status = "pending"
-    trip.created_at = datetime.utcnow()
+    trip.created_at = datetime.now(timezone.utc)
     return trip
 
 
@@ -34,8 +39,14 @@ def _make_user(user_id: uuid.UUID) -> MagicMock:
     user = MagicMock()
     user.id = user_id
     user.email = "traveller@example.com"
-    user.created_at = datetime.utcnow()
+    user.created_at = datetime.now(timezone.utc)
     return user
+
+
+def _override_get_db(mock_session):
+    async def override():
+        yield mock_session
+    return override
 
 
 @pytest.mark.asyncio
@@ -55,20 +66,14 @@ async def test_create_trip_requires_auth():
 
 @pytest.mark.asyncio
 async def test_create_trip_returns_201():
-    from app.db.session import AsyncSessionLocal, get_db
+    from app.db.session import get_db
     from app.main import app
 
     user_id = uuid.uuid4()
     fake_user = _make_user(user_id)
     fake_trip = _make_trip(user_id)
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
-
-    # get() for JWT user lookup
+    mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=fake_user)
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
@@ -87,21 +92,24 @@ async def test_create_trip_returns_201():
 
     mock_session.refresh = _refresh
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post(
-                "/trips",
-                json={
-                    "destination": "Goa",
-                    "start_date": "2025-12-10",
-                    "end_date": "2025-12-17",
-                    "budget": 50000,
-                    "group_size": 2,
-                    "interests": ["beach", "food"],
-                },
-                headers=_auth_header(user_id),
-            )
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.post(
+                    "/trips",
+                    json={
+                        "destination": "Goa",
+                        "start_date": "2025-12-10",
+                        "end_date": "2025-12-17",
+                        "budget": 50000,
+                        "group_size": 2,
+                        "interests": ["beach", "food"],
+                    },
+                    headers=_auth_header(user_id),
+                )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 201
     data = resp.json()
@@ -111,60 +119,58 @@ async def test_create_trip_returns_201():
 
 @pytest.mark.asyncio
 async def test_create_trip_end_date_before_start_returns_422():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     user_id = uuid.uuid4()
     fake_user = _make_user(user_id)
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=fake_user)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post(
-                "/trips",
-                json={
-                    "destination": "Goa",
-                    "start_date": "2025-12-17",
-                    "end_date": "2025-12-10",   # end before start
-                    "budget": 50000,
-                },
-                headers=_auth_header(user_id),
-            )
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.post(
+                    "/trips",
+                    json={
+                        "destination": "Goa",
+                        "start_date": "2025-12-17",
+                        "end_date": "2025-12-10",   # end before start
+                        "budget": 50000,
+                    },
+                    headers=_auth_header(user_id),
+                )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_list_trips_returns_user_trips():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     user_id = uuid.uuid4()
     fake_user = _make_user(user_id)
     fake_trip = _make_trip(user_id)
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=fake_user)
 
     trips_result = MagicMock()
     trips_result.scalars.return_value.all.return_value = [fake_trip]
     mock_session.execute = AsyncMock(return_value=trips_result)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.get("/trips", headers=_auth_header(user_id))
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.get("/trips", headers=_auth_header(user_id))
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 200
     data = resp.json()
@@ -175,7 +181,7 @@ async def test_list_trips_returns_user_trips():
 
 @pytest.mark.asyncio
 async def test_get_trip_runs_returns_empty_list():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     user_id = uuid.uuid4()
@@ -184,11 +190,7 @@ async def test_get_trip_runs_returns_empty_list():
     fake_trip = _make_trip(user_id)
     fake_trip.id = trip_id
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=fake_user)
 
     # execute #1 → _get_trip_or_404; execute #2 → AgentRun query
@@ -198,13 +200,16 @@ async def test_get_trip_runs_returns_empty_list():
     runs_result.scalars.return_value.all.return_value = []
     mock_session.execute = AsyncMock(side_effect=[trip_result, runs_result])
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.get(
-                f"/trips/{trip_id}/runs",
-                headers=_auth_header(user_id),
-            )
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.get(
+                    f"/trips/{trip_id}/runs",
+                    headers=_auth_header(user_id),
+                )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 200
     assert resp.json() == []
@@ -212,7 +217,7 @@ async def test_get_trip_runs_returns_empty_list():
 
 @pytest.mark.asyncio
 async def test_get_similar_returns_501():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     user_id = uuid.uuid4()
@@ -221,23 +226,22 @@ async def test_get_similar_returns_501():
     fake_trip = _make_trip(user_id)
     fake_trip.id = trip_id
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session = AsyncMock()
     mock_session.get = AsyncMock(return_value=fake_user)
 
     trip_result = MagicMock()
     trip_result.scalar_one_or_none.return_value = fake_trip
     mock_session.execute = AsyncMock(return_value=trip_result)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.get(
-                f"/trips/{trip_id}/similar",
-                headers=_auth_header(user_id),
-            )
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.get(
+                    f"/trips/{trip_id}/similar",
+                    headers=_auth_header(user_id),
+                )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 501

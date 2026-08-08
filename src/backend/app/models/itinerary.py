@@ -6,7 +6,7 @@ structured_data — day-by-day JSON produced by ItineraryBuilder (Phase 12)
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Column
@@ -25,4 +25,4 @@ class Itinerary(SQLModel, table=True):
         default=None, sa_column=Column(JSONB, nullable=True)
     )
     total_cost: Optional[float] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

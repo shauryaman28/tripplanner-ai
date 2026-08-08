@@ -9,7 +9,7 @@ input / output stored as JSONB so you can query them from psql.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Column
@@ -33,4 +33,4 @@ class AgentRun(SQLModel, table=True):
         default=None, sa_column=Column(JSONB, nullable=True)
     )
     duration_ms: Optional[int] = Field(default=None)   # wall-clock ms for the run
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

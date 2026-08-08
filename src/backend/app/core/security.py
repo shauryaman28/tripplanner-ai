@@ -4,7 +4,7 @@ Kept in core/ so it has zero FastAPI dependencies and is easy to
 unit-test without spinning up any server.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import jwt
@@ -31,7 +31,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 def create_access_token(subject: str | Any) -> str:
     """Return a signed JWT with 'sub' claim set to *subject* (user UUID)."""
-    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {"sub": str(subject), "exp": expire}
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 

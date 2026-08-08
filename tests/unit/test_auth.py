@@ -1,7 +1,17 @@
-"""Unit tests for /auth/register and /auth/login. No Docker needed."""
+"""Unit tests for /auth/register and /auth/login. No Docker needed.
+
+Uses FastAPI's dependency_overrides to replace get_db entirely for the
+duration of each test. This fully bypasses the real async engine (and
+its event-loop binding) instead of trying to patch AsyncSessionLocal's
+__call__ — Python looks up dunder methods on the *type* for implicit
+invocation (`AsyncSessionLocal()`), so an instance-level patch on
+__call__ is silently ignored and the real engine gets touched anyway.
+That mismatch was the actual cause of the "attached to a different
+loop" failures.
+"""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,22 +19,22 @@ from httpx import ASGITransport, AsyncClient
 
 
 def _make_mock_session(existing_user=None, created_user=None):
-    """Return a configured AsyncMock session."""
-    from sqlalchemy.ext.asyncio import AsyncSession
+    """Return a configured AsyncMock session.
 
-    session = AsyncMock(spec=AsyncSession)
-    session.__aenter__ = AsyncMock(return_value=session)
-    session.__aexit__ = AsyncMock(return_value=False)
+    No __aenter__/__aexit__ needed here — the dependency override below
+    yields this object directly, exactly matching what Depends(get_db)
+    would normally hand the route.
+    """
+    session = AsyncMock()
 
-    # scalar_one_or_none returns existing_user on first call (duplicate check)
     scalar_mock = MagicMock()
     scalar_mock.scalar_one_or_none.return_value = existing_user
     session.execute = AsyncMock(return_value=scalar_mock)
+    session.get = AsyncMock(return_value=existing_user)
 
     session.add = MagicMock()
     session.commit = AsyncMock()
 
-    # refresh populates the object with id + created_at
     async def _refresh(obj):
         if created_user:
             obj.id = created_user.id
@@ -35,22 +45,31 @@ def _make_mock_session(existing_user=None, created_user=None):
     return session
 
 
+def _override_get_db(mock_session):
+    async def override():
+        yield mock_session
+    return override
+
+
 @pytest.mark.asyncio
 async def test_register_new_user_returns_201():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     fake_user = MagicMock()
     fake_user.id = uuid.uuid4()
     fake_user.email = "test@example.com"
-    fake_user.created_at = datetime.utcnow()
+    fake_user.created_at = datetime.now(timezone.utc)
 
     mock_session = _make_mock_session(existing_user=None, created_user=fake_user)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post("/auth/register", json={"email": "test@example.com", "password": "pass123"})
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.post("/auth/register", json={"email": "test@example.com", "password": "pass123"})
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 201
     assert resp.json()["email"] == "test@example.com"
@@ -58,17 +77,20 @@ async def test_register_new_user_returns_201():
 
 @pytest.mark.asyncio
 async def test_register_duplicate_email_returns_400():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     existing = MagicMock()
     existing.email = "dupe@example.com"
     mock_session = _make_mock_session(existing_user=existing)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post("/auth/register", json={"email": "dupe@example.com", "password": "pass123"})
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.post("/auth/register", json={"email": "dupe@example.com", "password": "pass123"})
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 400
     assert "already registered" in resp.json()["detail"].lower()
@@ -76,19 +98,21 @@ async def test_register_duplicate_email_returns_400():
 
 @pytest.mark.asyncio
 async def test_login_invalid_credentials_returns_401():
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
-    # No user found
     mock_session = _make_mock_session(existing_user=None)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post(
-                "/auth/login",
-                data={"username": "nobody@example.com", "password": "wrong"},
-            )
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.post(
+                    "/auth/login",
+                    data={"username": "nobody@example.com", "password": "wrong"},
+                )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 401
 
@@ -96,7 +120,7 @@ async def test_login_invalid_credentials_returns_401():
 @pytest.mark.asyncio
 async def test_login_valid_credentials_returns_token():
     from app.core.security import hash_password
-    from app.db.session import AsyncSessionLocal
+    from app.db.session import get_db
     from app.main import app
 
     real_user = MagicMock()
@@ -105,13 +129,16 @@ async def test_login_valid_credentials_returns_token():
     real_user.hashed_password = hash_password("correct_password")
     mock_session = _make_mock_session(existing_user=real_user)
 
-    with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))), \
-         patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post(
-                "/auth/login",
-                data={"username": "user@example.com", "password": "correct_password"},
-            )
+    app.dependency_overrides[get_db] = _override_get_db(mock_session)
+    try:
+        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+                resp = await c.post(
+                    "/auth/login",
+                    data={"username": "user@example.com", "password": "correct_password"},
+                )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
     assert resp.status_code == 200
     body = resp.json()
