@@ -14,6 +14,10 @@ an unused LLM call here would just be dead weight. Flagged as a decision
 in the handoff message, not silently skipped.
 """
 
+
+import uuid
+from src.ai.utils.run_logger import log_agent_run, timed_run
+
 from typing import Any, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -65,6 +69,25 @@ class FlightAgent:
     def __init__(self):
         self._graph = build_flight_agent_graph()
 
-    async def run(self, input_state: dict, db: Optional[AsyncSession] = None, **kwargs: Any) -> dict:
-        return await self._graph.ainvoke(input_state)
+    async def run(
+        self,
+        input_state: dict,
+        db: Optional[AsyncSession] = None,
+        trip_id: Optional[uuid.UUID] = None,
+    ) -> dict:
+        async with timed_run() as timer:
+            result = await self._graph.ainvoke(input_state)
+
+        if db is not None and trip_id is not None:
+            await log_agent_run(
+                db=db,
+                trip_id=trip_id,
+                agent_name="flight_agent",
+                input=input_state,
+                output={"flights": result.get("flights", []), "error": result.get("error")},
+                duration_ms=timer.duration_ms,
+                status="failed" if result.get("error") is not None else "completed",
+            )
+
+        return result
 

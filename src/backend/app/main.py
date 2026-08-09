@@ -15,6 +15,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.trips import router as trips_router
 from app.core.config import settings
 from app.db.redis import close_redis, init_redis
+from src.ai.mcp_client.client import close_session
 
 
 @asynccontextmanager
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
     await init_redis()
     yield
     await close_redis()
+    await close_session()   
 
 
 app = FastAPI(

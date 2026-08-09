@@ -1,87 +1,81 @@
 import os
 import uuid
+from datetime import date, timedelta
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from sqlmodel import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import User, Trip, AgentRun
-from src.ai.mcp_client.client import call_tool, close_session
-from src.ai.utils.run_logger import log_agent_run, timed_run
 
-# Gate test using the pytest integration decorator/mark
+from app.models.agent_run import AgentRun
+from app.models.trip import Trip, TripStatus
+from app.models.user import User
+from src.ai.mcp_server.models import Flight
+
 pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_INTEGRATION") != "1",
-    reason="RUN_INTEGRATION=1 is not set"
+    not os.getenv("RUN_INTEGRATION"),
+    reason="Set RUN_INTEGRATION=1 to run integration tests (requires Docker)",
 )
+
+FUTURE = (date.today() + timedelta(days=30)).isoformat()
 
 
 @pytest.mark.asyncio
-async def test_mcp_client_and_run_logger_integration(db_session: AsyncSession):
-    """Integration test verifying call_tool and log_agent_run.
-    
-    Creates a mock trip, runs estimate_budget via call_tool inside a timed_run,
-    and logs the agent run in the database.
-    """
-    # 1. Create a user
-    user = User(email="dev_b_test@example.com", hashed_password="hashed_dummy_password")
+async def test_flight_agent_run_writes_one_agent_run_row(db_session):
+    """FlightAgent.run() + log_agent_run() together write exactly one
+    correctly-shaped row to agent_runs — the Phase 6 Dev B done criterion."""
+    from src.ai.agents.flight_agent import FlightAgent
+
+    # 1. real user + trip rows so the trip_id FK is valid
+    user = User(email=f"{uuid.uuid4()}@example.com", hashed_password="x")
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
 
-    # 2. Create a trip
     trip = Trip(
         user_id=user.id,
         destination="Goa",
-        start_date="2025-12-10",
-        end_date="2025-12-17",
-        budget=50000.0,
-        interests=["beach", "food"],
-        status="pending"
+        start_date=date.today(),
+        end_date=date.today() + timedelta(days=5),
+        budget=20_000,
+        status=TripStatus.PENDING,
     )
     db_session.add(trip)
     await db_session.commit()
     await db_session.refresh(trip)
 
-    # 3. Simulate agent node execution
-    tool_params = {
-        "flights": 10000.0,
-        "hotels": 2000.0,
-        "days": 7,
-        "daily_spend": 1500.0
-    }
+    # 2. mock call_tool so the test needs no live MCP server
+    fake_flight = Flight(
+        airline="6E", flight_number="6E-204",
+        departure=f"{FUTURE}T06:00:00", arrival=f"{FUTURE}T08:15:00",
+        duration_mins=135, price_inr=4200.0, stops=0,
+    ).model_dump()
 
-    async with timed_run() as timer:
-        tool_result = await call_tool("estimate_budget", tool_params)
-    
-    # Close session to clean up the subprocess
-    await close_session()
+    with patch("src.ai.agents.flight_agent.call_tool", AsyncMock(return_value=[fake_flight])):
+        agent = FlightAgent()
+        result = await agent.run(
+            {
+                "origin": "DEL", "destination": "GOI",
+                "date": FUTURE, "budget": 20_000, "passengers": 1,
+            },
+            db=db_session,
+            trip_id=trip.id,
+        )
 
-    assert not isinstance(tool_result, Exception)
-    assert isinstance(tool_result, dict)
-    assert "total" in tool_result
+    # 3. agent returned correct data
+    assert result["error"] is None
+    assert len(result["flights"]) == 1
+    assert result["flights"][0]["airline"] == "6E"
 
-    # Log run as completed using the test db_session
-    run_record = await log_agent_run(
-        db=db_session,
-        trip_id=trip.id,
-        agent_name="flight_agent",
-        input={"origin": "DEL", "destination": "GOI", "budget": 20000.0},
-        output=tool_result,
-        duration_ms=timer.duration_ms,
-        status="completed"
-    )
+    # 4. exactly one agent_runs row, correctly shaped
+    rows = (
+        await db_session.execute(
+            select(AgentRun).where(AgentRun.trip_id == trip.id)
+        )
+    ).scalars().all()
 
-    assert run_record.id is not None
-    assert run_record.status == "completed"
-    assert run_record.output == tool_result
-    assert run_record.duration_ms == timer.duration_ms
-
-    # 4. Verify in DB using the test db_session
-    query = select(AgentRun).where(AgentRun.id == run_record.id)
-    result = await db_session.execute(query)
-    db_record = result.scalar_one_or_none()
-    
-    assert db_record is not None
-    assert db_record.agent_name == "flight_agent"
-    assert db_record.status == "completed"
-    assert db_record.output == tool_result
-    assert db_record.duration_ms == timer.duration_ms
+    assert len(rows) == 1
+    run = rows[0]
+    assert run.agent_name == "flight_agent"
+    assert run.status == "completed"
+    assert run.duration_ms is not None and run.duration_ms >= 0
+    assert run.output["flights"][0]["airline"] == "6E"
