@@ -13,7 +13,7 @@ Strategy:
 """
 
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -400,7 +400,7 @@ def test_get_weather_valid_near_term():
     mock_owm_response.json.return_value = {
         "list": [
             {
-                "dt": int(tomorrow.strftime("%s") if hasattr(tomorrow, "strftime") else 1700000000),
+                "dt": int(datetime.combine(tomorrow, datetime.min.time()).timestamp()),
                 "weather": [{"main": "Sunny"}],
                 "main": {"temp_max": 32.0, "temp_min": 24.0},
             }

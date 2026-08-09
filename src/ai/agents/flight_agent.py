@@ -14,9 +14,10 @@ an unused LLM call here would just be dead weight. Flagged as a decision
 in the handoff message, not silently skipped.
 """
 
-from typing import Optional, TypedDict
+from typing import Any, Optional, TypedDict
 
 from langgraph.graph import END, StateGraph
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ai.mcp_client.client import call_tool
 
@@ -64,5 +65,6 @@ class FlightAgent:
     def __init__(self):
         self._graph = build_flight_agent_graph()
 
-    async def run(self, input_state: dict) -> dict:
+    async def run(self, input_state: dict, db: Optional[AsyncSession] = None, **kwargs: Any) -> dict:
         return await self._graph.ainvoke(input_state)
+
