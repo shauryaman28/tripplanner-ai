@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Claude Haiku · Gemini Flash · pgvector.
 
-**Status: Phase 6 / 30 — Agent Core (FlightAgent)**
+**Status: Phase 7 / 50 — Agent Core (Conditional Edges & Clarification)**
 
 ---
 
@@ -95,7 +95,7 @@ npx @modelcontextprotocol/inspector python -m src.ai.mcp_server.server
 
 ### 8. Run tests
 ```bash
-# Unit + contract tests (no Docker required)
+# Unit + contract tests (no Docker required) — 70 tests
 pytest tests/unit/ tests/contract/ -v
 
 # Integration tests (Docker must be running)
@@ -130,8 +130,11 @@ tripplanner-ai/
 │   └── ai/
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
 │       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
-│       ├── utils/                       ← Phase 6: run_logger.py writes agent_runs
-│       ├── agents/                      ← Phase 6–8 (LangGraph agents)
+│       ├── utils/
+│       │   ├── run_logger.py            ← Phase 6: writes agent_runs
+│       │   └── conversation.py          ← Phase 7B: Redis history + state helpers
+│       ├── agents/
+│       │   └── flight_agent.py          ← Phase 6–7: 3-node graph (parse → route → search/clarify)
 │       ├── builder/                     ← Phase 12 (ItineraryBuilder)
 │       └── orchestrator/                ← Phase 9 (OrchestratorAgent)
 ├── migrations/                          ← Alembic migrations
@@ -144,8 +147,9 @@ tripplanner-ai/
 │   └── e2e/                             ← Playwright (Phase 17)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
-├── prompts/                             ← versioned LLM prompts (Phase 6+)
-├── docs/                                ← phase build logs
+├── prompts/                             ← versioned LLM prompts (v1–v3)
+├── docs/                                ← phase build logs (1–7)
+├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
 ├── requirements.txt
@@ -157,18 +161,21 @@ tripplanner-ai/
 
 ## Phase Progress
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Repo & Local Infrastructure | ✅ Done |
-| 2 | MCP Server (protocol + mocked tools) | ✅ Done |
-| 3 | MCP Server (real APIs: Amadeus, GMaps, OWM) | ✅ Done |
-| 4 | Database schema & migrations | ✅ Done |
-| 5 | FastAPI gateway, JWT auth, SSE skeleton | ✅ Done |
-| 6 | FlightAgent — Dev A: LangGraph node + stub MCP client ✅ · Dev B: real MCP client + run logger | 🟡 In progress |
-| 7–12 | Agent Core (remaining) | ⏳ |
-| 13–20 | Storage & Frontend | ⏳ |
-| 21–25 | Intelligence Layer | ⏳ |
-| 26–30 | Production Readiness | ⏳ |
+| Phase | Description | Status | Tests |
+|-------|-------------|--------|-------|
+| 1 | Repo & Local Infrastructure | ✅ Done | 4 unit + 1 integration |
+| 2 | MCP Server (protocol + mocked tools) | ✅ Done | 23 tool tests |
+| 3 | MCP Server (real APIs: Amadeus, GMaps, OWM) | ✅ Done | 7 contract tests |
+| 4 | Database schema & migrations | ✅ Done | — |
+| 5 | FastAPI gateway, JWT auth, SSE skeleton | ✅ Done | 5 auth + 6 trip + 4 health |
+| 6 | FlightAgent: one agent, one tool | ✅ Done | 6 agent + 4 MCP client + 2 logger |
+| 7 | Conditional edges: ask instead of assume | ✅ Done | 8 router + 5 clarification API |
+| 8–12 | Agent Core (remaining) | ⏳ | |
+| 13–20 | Storage & Frontend | ⏳ | |
+| 21–25 | Intelligence Layer | ⏳ | |
+| 26–50 | Production & Polish | ⏳ | |
+
+**Total: 70 tests passing** (unit + contract), zero network calls in CI.
 
 ---
 

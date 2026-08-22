@@ -41,6 +41,7 @@ class TripState(TypedDict, total=False):
     # Phase 7 additions
     raw_input: Optional[str]          # original free-form user message
     clarification_question: Optional[str]  # set by clarify_node
+    conversation_history: list[dict]   # Phase 7B — multi-turn context
 
 
 # ── Prompts ────────────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ async def intent_parsing_node(state: TripState) -> TripState:
     updates: TripState = {}
     for field in ("origin", "destination", "date", "budget", "passengers"):
         value = parsed.get(field)
-        if value is not None and field not in state:
+        if value is not None and not state.get(field):   # handles key-exists-but-None
             updates[field] = value  # type: ignore[literal-required]
 
     return {**state, **updates}

@@ -41,3 +41,17 @@ class TripRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PlanRequest(BaseModel):
+    """Optional body for POST /trips/{id}/plan.
+
+    Omit entirely (or send {}) for structured-data trips.
+    Send raw_input for free-form queries that need intent parsing.
+    """
+    raw_input: Optional[str] = None
+
+
+class ClarifyRequest(BaseModel):
+    """Body for POST /trips/{id}/clarify."""
+    answer: str

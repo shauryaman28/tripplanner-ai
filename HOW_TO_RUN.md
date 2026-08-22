@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–6 (Dev A)
+# How to Run & Verify — Phases 1–7
 
 ## What changed vs the original codebase?
 
@@ -11,6 +11,8 @@
 | 5 | `main.py` +2 routers | `security.py`, `deps.py`, `auth.py`, `trips.py`, 4 schema files |
 | 6 (Dev A) | `requirements.txt` +1 line (`langgraph`) | `agents/flight_agent.py`, `mcp_client/client.py` (stub) + `__init__.py`, `tests/unit/test_flight_agent.py` |
 | — (fixes) | `docker-compose.yml`, `requirements.txt`, `README.md`, 5 model/security files (`timezone`-aware `datetime`) | 0 |
+| 7A | `flight_agent.py` (single → 3-node graph) | `test_flight_agent_router.py` (8 tests), `flight_agent_v2.md`, `flight_agent_v3.md` |
+| 7B | `trips.py` (rewired plan, added clarify), `trip.py` (+2 schemas), `flight_agent.py` (+2 lines) | `conversation.py`, `test_phase7b_clarification.py`, `DECISIONS.md` |
 
 The Phase 1 core — `health.py`, `session.py`, `redis.py`, `config.py` — was **zero-touch**.
 The notable rewrites: `tools.py` (mocks → real APIs) and `main.py` (added two routers).
@@ -259,7 +261,7 @@ Terminal 1 should show the event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–3, 6 (Dev A) check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–7 check
 
 Run from the **project root**:
 
@@ -267,7 +269,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: all pass, including 6 new FlightAgent tests (`tests/unit/test_flight_agent.py`).
+Expected: **70 passed** — includes FlightAgent tests (6), router tests (8), clarification API tests (5), and all previous tests.
 
 Integration tests (need Docker running):
 
@@ -309,8 +311,6 @@ Expected: 6 passed (4 happy path, 2 error cases). All mocks — no network, no D
 
 ### Dev B — real MCP client smoke test
 
-Once `src/ai/mcp_client/client.py` has been swapped from Dev A's stub to Dev B's real implementation:
-
 ```bash
 python3 -c "
 import asyncio
@@ -329,10 +329,53 @@ Expected: a dict with `total`, `flights`, `hotels`, etc. — no crash, no hang.
 ### Dev B — integration test (agent + logger + real DB row)
 
 ```bash
-RUN_INTEGRATION=1 pytest tests/integration/test_flight_agent_integration.py -v
+RUN_INTEGRATION=1 pytest tests/integration/test_phase6_integration.py -v
 ```
 
 Expected: 1 passed — confirms `FlightAgent.run()` + `log_agent_run()` together write exactly one correctly-shaped row to `agent_runs`.
+
+---
+
+## Step 14 — Verify Phase 7: Router & clarification flow
+
+### Router unit tests (8 tests)
+
+```bash
+pytest tests/unit/test_flight_agent_router.py -v
+```
+
+Expected: 8 passed — 5 router tests, 2 clarify_node tests, 1 intent_parsing pass-through. All deterministic, LLM mocked.
+
+### Clarification API tests (5 tests)
+
+```bash
+pytest tests/unit/test_phase7b_clarification.py -v
+```
+
+Expected: 5 passed — structured plan, ambiguous plan, clarify completes, multi-round clarify, auth required.
+
+### Manual verification (requires backend running + Docker)
+
+```bash
+# Create a trip and try the clarification flow
+TRIP_ID=$(curl -s -X POST http://localhost:8000/trips \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"destination":"Goa","start_date":"2026-12-10","end_date":"2026-12-17","budget":50000}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+# Plan with ambiguous input → may return clarification_needed
+curl -s -X POST "http://localhost:8000/trips/$TRIP_ID/plan" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"raw_input": "I want to go somewhere warm"}' | python3 -m json.tool
+
+# If clarification_needed, answer it:
+curl -s -X POST "http://localhost:8000/trips/$TRIP_ID/clarify" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"answer": "Goa, December 15, budget 30000"}' | python3 -m json.tool
+```
 
 ---
 
@@ -361,3 +404,5 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **5** | Omit the JWT → `401`. Use an expired/tampered JWT → `401`. Call `POST /trips` with `end_date` before `start_date` → `422`. Call `GET /trips/{id}/similar` → `501`. Publish a Redis message → it appears in the SSE stream within milliseconds. `GET /trips` → `200 []` before any trips exist, then the list after creating one. |
 | **6 (Dev A)** | Mock `call_tool` to return a `ToolError` → `search_flights_node` sets `state["error"]` and `state["flights"] == []`, never raises. Omit `passengers` from input → defaults to `1`. |
 | **6 (Dev B)** | Kill the MCP server subprocess mid-call → `call_tool` returns `ToolError(code="CONNECTION_REFUSED")`, never raises. `log_agent_run` writes a row with non-null `duration_ms` for every run, success or failure. |
+| **7 (Router)** | Pass state with `destination=None` → `router()` returns `"clarify"`, not `"search"`. Pass state with all fields → returns `"search"`. The router is a pure Python function — zero LLM calls, fully deterministic. |
+| **7 (Clarify API)** | `POST /plan` with `{"raw_input": "somewhere warm"}` → `{"status": "clarification_needed"}`. `POST /clarify` with `{"answer": "Goa, Dec 15, 30k"}` → fields filled → `planning_started`. Send state with `{"date": None}` through retry → `not state.get(field)` correctly refills it (the old `field not in state` bug would loop forever). |

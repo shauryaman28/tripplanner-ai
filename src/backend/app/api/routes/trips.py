@@ -15,7 +15,7 @@ import uuid
 from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
@@ -28,7 +28,13 @@ from app.models.trip import Trip, TripStatus
 from app.models.user import User
 from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
-from app.schemas.trip import TripCreate, TripRead
+from app.schemas.trip import ClarifyRequest, PlanRequest, TripCreate, TripRead
+from src.ai.agents.flight_agent import FlightAgent
+from src.ai.utils.conversation import (
+    append_history,
+    get_trip_state,
+    save_trip_state,
+)
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -82,40 +88,144 @@ async def create_trip(
 @router.post("/{trip_id}/plan", status_code=202)
 async def plan_trip(
     trip_id: uuid.UUID,
+    body: PlanRequest = Body(default_factory=PlanRequest),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
     """
-    Trigger async planning for a trip.
+    Kick off trip planning.
 
-    Returns 202 immediately. Agents will be wired in Phase 9.
-    For now: creates an orchestrator AgentRun row and publishes a
-    placeholder SSE event so you can verify the SSE pipeline works
-    before any agent code exists (roadmap Phase 5 done criterion).
+    - No body (or empty body): uses structured fields from the trip row.
+    - body.raw_input set: runs intent parser first; returns
+      clarification_needed if any required field is still missing.
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
+    # Build initial state from the trip row; raw_input overlays it
+    initial_state: dict = {
+        "destination": trip.destination,
+        "date":        str(trip.start_date),
+        "budget":      trip.budget,
+        "passengers":  trip.group_size,
+    }
+    if body.raw_input:
+        initial_state["raw_input"] = body.raw_input
+
+    agent = FlightAgent()
+    result = await agent.run(initial_state, db=db, trip_id=trip.id)
+
+    # ── Clarification needed ───────────────────────────────────────────
+    if result.get("clarification_question"):
+        await save_trip_state(redis, str(trip_id), result)
+        if body.raw_input:
+            await append_history(redis, str(trip_id), "user", body.raw_input)
+        await append_history(
+            redis, str(trip_id), "assistant", result["clarification_question"]
+        )
+        await redis.publish(
+            f"trip:{trip_id}:events",
+            json.dumps({
+                "agent": "flight_agent",
+                "status": "clarification_needed",
+                "question": result["clarification_question"],
+            }),
+        )
+        return {
+            "status": "clarification_needed",
+            "question": result["clarification_question"],
+            "trip_id": str(trip_id),
+        }
+
+    # ── Planning started ───────────────────────────────────────────────
     trip.status = TripStatus.PLANNING
     db.add(trip)
-
     run = AgentRun(
         trip_id=trip.id,
         agent_name="orchestrator",
         status="pending",
-        input={"destination": trip.destination, "budget": trip.budget},
+        input=initial_state,
         output={},
     )
     db.add(run)
     await db.commit()
 
-    # Publish event — SSE clients subscribed to this trip will receive it
     await redis.publish(
         f"trip:{trip_id}:events",
         json.dumps({
-            "agent": "orchestrator",
-            "status": "pending",
-            "summary": "Planning queued — agents wired in Phase 9",
+            "agent": "flight_agent",
+            "status": "completed" if not result.get("error") else "failed",
+            "summary": f"Found {len(result.get('flights', []))} flights",
+        }),
+    )
+    return {"status": "planning_started", "trip_id": str(trip_id)}
+
+
+@router.post("/{trip_id}/clarify", status_code=200)
+async def clarify_trip(
+    trip_id: uuid.UUID,
+    body: ClarifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis_dep),
+) -> dict:
+    """
+    Submit the user's answer to a clarifying question and re-trigger planning.
+
+    Loads the partial TripState saved by plan_trip, merges the answer as
+    raw_input, and re-runs FlightAgent from the top of the graph.
+    The intent-parsing node fills in only the still-missing fields.
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+
+    # Restore previous partial state; strip stale clarification fields
+    prev_state: dict = await get_trip_state(redis, str(trip_id)) or {}
+    prev_state.pop("clarification_question", None)
+    prev_state.pop("raw_input", None)
+    prev_state["raw_input"] = body.answer
+
+    await append_history(redis, str(trip_id), "user", body.answer)
+
+    agent = FlightAgent()
+    result = await agent.run(prev_state, db=db, trip_id=trip.id)
+
+    if result.get("clarification_question"):
+        await save_trip_state(redis, str(trip_id), result)
+        await append_history(
+            redis, str(trip_id), "assistant", result["clarification_question"]
+        )
+        await redis.publish(
+            f"trip:{trip_id}:events",
+            json.dumps({
+                "agent": "flight_agent",
+                "status": "clarification_needed",
+                "question": result["clarification_question"],
+            }),
+        )
+        return {
+            "status": "clarification_needed",
+            "question": result["clarification_question"],
+            "trip_id": str(trip_id),
+        }
+
+    trip.status = TripStatus.PLANNING
+    db.add(trip)
+    run = AgentRun(
+        trip_id=trip.id,
+        agent_name="orchestrator",
+        status="pending",
+        input=prev_state,
+        output={},
+    )
+    db.add(run)
+    await db.commit()
+
+    await redis.publish(
+        f"trip:{trip_id}:events",
+        json.dumps({
+            "agent": "flight_agent",
+            "status": "completed" if not result.get("error") else "failed",
+            "summary": f"Found {len(result.get('flights', []))} flights",
         }),
     )
     return {"status": "planning_started", "trip_id": str(trip_id)}
