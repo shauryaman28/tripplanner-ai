@@ -53,6 +53,7 @@ async def timed_run():
             result = await do_work()
         print(timer.duration_ms)
     """
+
     class _Timer:
         duration_ms: int = 0
 

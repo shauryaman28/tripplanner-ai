@@ -8,4 +8,4 @@ from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
 from app.models.user import User
 
-__all__ = ["User", "Trip", "TripStatus", "Itinerary", "AgentRun", "Embedding"]
+__all__ = ["AgentRun", "Embedding", "Itinerary", "Trip", "TripStatus", "User"]

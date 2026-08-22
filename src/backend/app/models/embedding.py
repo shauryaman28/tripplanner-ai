@@ -11,8 +11,7 @@ Dimension 1536 = OpenAI text-embedding-3-small output size.
 """
 
 import uuid
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column
@@ -25,11 +24,11 @@ class Embedding(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     itinerary_id: uuid.UUID = Field(foreign_key="itineraries.id", index=True)
 
-    embedding_model: str = Field(max_length=100)   # e.g. "text-embedding-3-small"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    embedding_model: str = Field(max_length=100)  # e.g. "text-embedding-3-small"
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # pgvector column — dimension must match the chosen embedding model
-    vector: Optional[list[float]] = Field(
+    vector: list[float] | None = Field(
         default=None,
         sa_column=Column(Vector(1536), nullable=True),
     )

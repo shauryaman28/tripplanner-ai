@@ -7,7 +7,6 @@ interests stored as JSONB list of strings.
 import uuid
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSONB
@@ -32,8 +31,6 @@ class Trip(SQLModel, table=True):
     end_date: date
     budget: float = Field(gt=0)
     group_size: int = Field(default=1, ge=1)
-    interests: Optional[list] = Field(
-        default=None, sa_column=Column(JSONB, nullable=True)
-    )
+    interests: list | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
     status: str = Field(default=TripStatus.PENDING, max_length=20)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

@@ -17,9 +17,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_PORT: int = 8000
 
-    DATABASE_URL: str = (
-        "postgresql://tripplanner:tripplanner_secret@localhost:5432/tripplanner_db"
-    )
+    DATABASE_URL: str = "postgresql://tripplanner:tripplanner_secret@localhost:5432/tripplanner_db"
     REDIS_URL: str = "redis://localhost:6379"
 
     # JWT (Phase 5)

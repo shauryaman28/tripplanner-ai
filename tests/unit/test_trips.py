@@ -46,6 +46,7 @@ def _make_user(user_id: uuid.UUID) -> MagicMock:
 def _override_get_db(mock_session):
     async def override():
         yield mock_session
+
     return override
 
 
@@ -55,12 +56,15 @@ async def test_create_trip_requires_auth():
 
     with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-            resp = await c.post("/trips", json={
-                "destination": "Goa",
-                "start_date": "2025-12-10",
-                "end_date": "2025-12-17",
-                "budget": 50000,
-            })
+            resp = await c.post(
+                "/trips",
+                json={
+                    "destination": "Goa",
+                    "start_date": "2025-12-10",
+                    "end_date": "2025-12-17",
+                    "budget": 50000,
+                },
+            )
     assert resp.status_code == 401
 
 
@@ -137,7 +141,7 @@ async def test_create_trip_end_date_before_start_returns_422():
                     json={
                         "destination": "Goa",
                         "start_date": "2025-12-17",
-                        "end_date": "2025-12-10",   # end before start
+                        "end_date": "2025-12-10",  # end before start
                         "budget": 50000,
                     },
                     headers=_auth_header(user_id),

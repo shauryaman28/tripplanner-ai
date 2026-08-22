@@ -14,7 +14,6 @@ Node responsibilities:
 """
 
 import uuid
-from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
@@ -24,7 +23,6 @@ from typing_extensions import TypedDict
 from src.ai.mcp_client.client import call_tool
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
-
 # ── State ──────────────────────────────────────────────────────────────────
 
 
@@ -33,15 +31,15 @@ class TripState(TypedDict, total=False):
     destination: str
     origin: str
     date: str
-    return_date: Optional[str]
+    return_date: str | None
     budget: float
     passengers: int
     flights: list[dict]
-    error: Optional[dict]
+    error: dict | None
     # Phase 7 additions
-    raw_input: Optional[str]          # original free-form user message
-    clarification_question: Optional[str]  # set by clarify_node
-    conversation_history: list[dict]   # Phase 7B — multi-turn context
+    raw_input: str | None  # original free-form user message
+    clarification_question: str | None  # set by clarify_node
+    conversation_history: list[dict]  # Phase 7B — multi-turn context
 
 
 # ── Prompts ────────────────────────────────────────────────────────────────
@@ -81,8 +79,8 @@ async def intent_parsing_node(state: TripState) -> TripState:
         # already structured — nothing to parse
         return state
 
-    from datetime import date
     import json
+    from datetime import date
 
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
     prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=raw)
@@ -93,8 +91,7 @@ async def intent_parsing_node(state: TripState) -> TripState:
     # strip markdown fences if the model adds them
     if text.startswith("```"):
         text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
+        text = text.removeprefix("json")
     text = text.strip()
 
     try:
@@ -107,7 +104,7 @@ async def intent_parsing_node(state: TripState) -> TripState:
     updates: TripState = {}
     for field in ("origin", "destination", "date", "budget", "passengers"):
         value = parsed.get(field)
-        if value is not None and not state.get(field):   # handles key-exists-but-None
+        if value is not None and not state.get(field):  # handles key-exists-but-None
             updates[field] = value  # type: ignore[literal-required]
 
     return {**state, **updates}
@@ -138,15 +135,20 @@ async def clarify_node(state: TripState) -> TripState:
     """
     missing_questions = {
         "destination": "Where would you like to fly to?",
-        "date":        "What date would you like to travel?",
-        "budget":      "What is your approximate budget for flights in INR?",
+        "date": "What date would you like to travel?",
+        "budget": "What is your approximate budget for flights in INR?",
     }
     for field, question in missing_questions.items():
         if not state.get(field):
             return {**state, "clarification_question": question, "flights": [], "error": None}
 
     # fallback — should not reach here if router is correct
-    return {**state, "clarification_question": "Could you provide more details about your trip?", "flights": [], "error": None}
+    return {
+        **state,
+        "clarification_question": "Could you provide more details about your trip?",
+        "flights": [],
+        "error": None,
+    }
 
 
 async def search_flights_node(state: TripState) -> TripState:
@@ -155,11 +157,11 @@ async def search_flights_node(state: TripState) -> TripState:
     Unchanged from Phase 6 — pure function, no side effects.
     """
     params = {
-        "origin":      state.get("origin", "DEL"),
+        "origin": state.get("origin", "DEL"),
         "destination": state["destination"],
-        "date":        state["date"],
-        "budget":      state["budget"],
-        "passengers":  state.get("passengers", 1),
+        "date": state["date"],
+        "budget": state["budget"],
+        "passengers": state.get("passengers", 1),
     }
 
     result = await call_tool("search_flights", params)
@@ -176,9 +178,9 @@ async def search_flights_node(state: TripState) -> TripState:
 def build_flight_agent_graph():
     graph = StateGraph(TripState)
 
-    graph.add_node("intent_parsing",   intent_parsing_node)
-    graph.add_node("search_flights",   search_flights_node)
-    graph.add_node("clarify",          clarify_node)
+    graph.add_node("intent_parsing", intent_parsing_node)
+    graph.add_node("search_flights", search_flights_node)
+    graph.add_node("clarify", clarify_node)
 
     graph.set_entry_point("intent_parsing")
 
@@ -190,7 +192,7 @@ def build_flight_agent_graph():
     )
 
     graph.add_edge("search_flights", END)
-    graph.add_edge("clarify",        END)
+    graph.add_edge("clarify", END)
 
     return graph.compile()
 
@@ -207,8 +209,8 @@ class FlightAgent:
     async def run(
         self,
         input_state: dict,
-        db: Optional[AsyncSession] = None,
-        trip_id: Optional[uuid.UUID] = None,
+        db: AsyncSession | None = None,
+        trip_id: uuid.UUID | None = None,
     ) -> dict:
         async with timed_run() as timer:
             result = await self._graph.ainvoke(input_state)

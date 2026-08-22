@@ -1,6 +1,5 @@
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -11,7 +10,7 @@ class TripCreate(BaseModel):
     end_date: date
     budget: float
     group_size: int = 1
-    interests: Optional[list[str]] = None
+    interests: list[str] | None = None
 
     @field_validator("end_date")
     @classmethod
@@ -36,7 +35,7 @@ class TripRead(BaseModel):
     end_date: date
     budget: float
     group_size: int
-    interests: Optional[list[str]]
+    interests: list[str] | None
     status: str
     created_at: datetime
 
@@ -49,9 +48,11 @@ class PlanRequest(BaseModel):
     Omit entirely (or send {}) for structured-data trips.
     Send raw_input for free-form queries that need intent parsing.
     """
-    raw_input: Optional[str] = None
+
+    raw_input: str | None = None
 
 
 class ClarifyRequest(BaseModel):
     """Body for POST /trips/{id}/clarify."""
+
     answer: str

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -8,9 +8,9 @@ from pydantic import BaseModel
 class ItineraryRead(BaseModel):
     id: uuid.UUID
     trip_id: uuid.UUID
-    content: Optional[str]
-    structured_data: Optional[Any]
-    total_cost: Optional[float]
+    content: str | None
+    structured_data: Any | None
+    total_cost: float | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

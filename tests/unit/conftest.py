@@ -33,10 +33,11 @@ async def test_client(mock_redis):
     Full test client with mocked Postgres and Redis.
     Suitable for health, auth, and trip route unit tests.
     """
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from app.db import redis as redis_module
     from app.db.session import AsyncSessionLocal
     from app.main import app
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     with patch.object(redis_module, "redis_client", mock_redis):
         mock_session = AsyncMock(spec=AsyncSession)
@@ -49,7 +50,5 @@ async def test_client(mock_redis):
         mock_session.refresh = AsyncMock()
 
         with patch.object(AsyncSessionLocal, "__call__", return_value=mock_session):
-            async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test"
-            ) as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 yield client

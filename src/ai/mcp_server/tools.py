@@ -16,10 +16,10 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 
-from amadeus import Client as AmadeusClient
-from amadeus import ResponseError as AmadeusError
 import googlemaps
 import httpx
+from amadeus import Client as AmadeusClient
+from amadeus import ResponseError as AmadeusError
 
 from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync
 from src.ai.mcp_server.config import mcp_settings
@@ -39,84 +39,158 @@ from src.ai.mcp_server.models import (
 
 logger = logging.getLogger(__name__)
 
-TTL_FLIGHTS = 300        # 5 min
-TTL_HOTELS = 900         # 15 min
+TTL_FLIGHTS = 300  # 5 min
+TTL_HOTELS = 900  # 15 min
 TTL_ATTRACTIONS = 21_600  # 6 hr
-TTL_WEATHER = 3_600      # 1 hr
+TTL_WEATHER = 3_600  # 1 hr
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 # Mapping of common Indian city names → Amadeus IATA city codes
 _CITY_IATA: dict[str, str] = {
-    "goa": "GOI", "mumbai": "BOM", "delhi": "DEL", "new delhi": "DEL",
-    "bangalore": "BLR", "bengaluru": "BLR", "chennai": "MAA",
-    "kolkata": "CCU", "hyderabad": "HYD", "jaipur": "JAI",
-    "kochi": "COK", "cochin": "COK", "pune": "PNQ", "ahmedabad": "AMD",
-    "agra": "AGR", "varanasi": "VNS", "amritsar": "ATQ", "guwahati": "GAU",
-    "leh": "IXL", "srinagar": "SXR", "udaipur": "UDR", "jodhpur": "JDH",
-    "aurangabad": "IXU", "nagpur": "NAG", "bhopal": "BHO", "indore": "IDR",
-    "lucknow": "LKO", "patna": "PAT", "ranchi": "IXR", "bhubaneswar": "BBI",
-    "visakhapatnam": "VTZ", "coimbatore": "CJB", "madurai": "IXM",
-    "tiruchirappalli": "TRZ", "port blair": "IXZ", "shimla": "SLV",
-    "dharamshala": "DHM", "dehradun": "DED", "raipur": "RPR",
-    "vadodara": "BDQ", "surat": "STV",
+    "goa": "GOI",
+    "mumbai": "BOM",
+    "delhi": "DEL",
+    "new delhi": "DEL",
+    "bangalore": "BLR",
+    "bengaluru": "BLR",
+    "chennai": "MAA",
+    "kolkata": "CCU",
+    "hyderabad": "HYD",
+    "jaipur": "JAI",
+    "kochi": "COK",
+    "cochin": "COK",
+    "pune": "PNQ",
+    "ahmedabad": "AMD",
+    "agra": "AGR",
+    "varanasi": "VNS",
+    "amritsar": "ATQ",
+    "guwahati": "GAU",
+    "leh": "IXL",
+    "srinagar": "SXR",
+    "udaipur": "UDR",
+    "jodhpur": "JDH",
+    "aurangabad": "IXU",
+    "nagpur": "NAG",
+    "bhopal": "BHO",
+    "indore": "IDR",
+    "lucknow": "LKO",
+    "patna": "PAT",
+    "ranchi": "IXR",
+    "bhubaneswar": "BBI",
+    "visakhapatnam": "VTZ",
+    "coimbatore": "CJB",
+    "madurai": "IXM",
+    "tiruchirappalli": "TRZ",
+    "port blair": "IXZ",
+    "shimla": "SLV",
+    "dharamshala": "DHM",
+    "dehradun": "DED",
+    "raipur": "RPR",
+    "vadodara": "BDQ",
+    "surat": "STV",
 }
 
 # Google Place type → our category system
 _PLACE_TYPE_MAP: dict[str, str] = {
-    "museum": "history", "tourist_attraction": "sightseeing",
-    "church": "history", "hindu_temple": "history", "mosque": "history",
-    "restaurant": "food", "food": "food", "cafe": "food",
-    "bar": "nightlife", "night_club": "nightlife",
-    "park": "nature", "natural_feature": "nature", "campground": "nature",
-    "amusement_park": "adventure", "zoo": "nature", "aquarium": "nature",
-    "spa": "wellness", "shopping_mall": "shopping",
-    "beach": "beach", "stadium": "sports",
+    "museum": "history",
+    "tourist_attraction": "sightseeing",
+    "church": "history",
+    "hindu_temple": "history",
+    "mosque": "history",
+    "restaurant": "food",
+    "food": "food",
+    "cafe": "food",
+    "bar": "nightlife",
+    "night_club": "nightlife",
+    "park": "nature",
+    "natural_feature": "nature",
+    "campground": "nature",
+    "amusement_park": "adventure",
+    "zoo": "nature",
+    "aquarium": "nature",
+    "spa": "wellness",
+    "shopping_mall": "shopping",
+    "beach": "beach",
+    "stadium": "sports",
 }
 
 # Monthly climate fallback for dates beyond OWM's 5-day window.
 # Tuple: (temp_high_c, temp_low_c, condition)
 _CLIMATE: dict[str, dict[int, tuple[float, float, str]]] = {
     "goa": {
-        1: (31, 22, "Sunny"), 2: (32, 23, "Sunny"), 3: (34, 25, "Sunny"),
-        4: (35, 27, "Partly Cloudy"), 5: (35, 28, "Partly Cloudy"),
-        6: (32, 27, "Rainy"), 7: (30, 26, "Rainy"), 8: (30, 26, "Rainy"),
-        9: (31, 26, "Partly Cloudy"), 10: (32, 26, "Partly Cloudy"),
-        11: (32, 25, "Sunny"), 12: (31, 24, "Sunny"),
+        1: (31, 22, "Sunny"),
+        2: (32, 23, "Sunny"),
+        3: (34, 25, "Sunny"),
+        4: (35, 27, "Partly Cloudy"),
+        5: (35, 28, "Partly Cloudy"),
+        6: (32, 27, "Rainy"),
+        7: (30, 26, "Rainy"),
+        8: (30, 26, "Rainy"),
+        9: (31, 26, "Partly Cloudy"),
+        10: (32, 26, "Partly Cloudy"),
+        11: (32, 25, "Sunny"),
+        12: (31, 24, "Sunny"),
     },
     "mumbai": {
-        1: (30, 20, "Sunny"), 2: (31, 21, "Sunny"), 3: (33, 23, "Sunny"),
-        4: (35, 26, "Partly Cloudy"), 5: (36, 28, "Partly Cloudy"),
-        6: (32, 27, "Rainy"), 7: (30, 26, "Rainy"), 8: (30, 26, "Rainy"),
-        9: (32, 26, "Rainy"), 10: (33, 25, "Partly Cloudy"),
-        11: (33, 23, "Sunny"), 12: (31, 21, "Sunny"),
+        1: (30, 20, "Sunny"),
+        2: (31, 21, "Sunny"),
+        3: (33, 23, "Sunny"),
+        4: (35, 26, "Partly Cloudy"),
+        5: (36, 28, "Partly Cloudy"),
+        6: (32, 27, "Rainy"),
+        7: (30, 26, "Rainy"),
+        8: (30, 26, "Rainy"),
+        9: (32, 26, "Rainy"),
+        10: (33, 25, "Partly Cloudy"),
+        11: (33, 23, "Sunny"),
+        12: (31, 21, "Sunny"),
     },
     "delhi": {
-        1: (20, 7, "Sunny"), 2: (23, 10, "Sunny"), 3: (28, 15, "Sunny"),
-        4: (36, 22, "Sunny"), 5: (40, 27, "Sunny"),
-        6: (39, 29, "Partly Cloudy"), 7: (35, 28, "Rainy"), 8: (33, 27, "Rainy"),
-        9: (33, 25, "Partly Cloudy"), 10: (32, 19, "Sunny"),
-        11: (26, 12, "Sunny"), 12: (21, 7, "Sunny"),
+        1: (20, 7, "Sunny"),
+        2: (23, 10, "Sunny"),
+        3: (28, 15, "Sunny"),
+        4: (36, 22, "Sunny"),
+        5: (40, 27, "Sunny"),
+        6: (39, 29, "Partly Cloudy"),
+        7: (35, 28, "Rainy"),
+        8: (33, 27, "Rainy"),
+        9: (33, 25, "Partly Cloudy"),
+        10: (32, 19, "Sunny"),
+        11: (26, 12, "Sunny"),
+        12: (21, 7, "Sunny"),
     },
     "jaipur": {
-        1: (21, 9, "Sunny"), 2: (24, 11, "Sunny"), 3: (30, 16, "Sunny"),
-        4: (36, 22, "Sunny"), 5: (40, 27, "Sunny"),
-        6: (39, 29, "Partly Cloudy"), 7: (35, 27, "Rainy"), 8: (33, 26, "Rainy"),
-        9: (34, 24, "Partly Cloudy"), 10: (33, 19, "Sunny"),
-        11: (27, 13, "Sunny"), 12: (22, 8, "Sunny"),
+        1: (21, 9, "Sunny"),
+        2: (24, 11, "Sunny"),
+        3: (30, 16, "Sunny"),
+        4: (36, 22, "Sunny"),
+        5: (40, 27, "Sunny"),
+        6: (39, 29, "Partly Cloudy"),
+        7: (35, 27, "Rainy"),
+        8: (33, 26, "Rainy"),
+        9: (34, 24, "Partly Cloudy"),
+        10: (33, 19, "Sunny"),
+        11: (27, 13, "Sunny"),
+        12: (22, 8, "Sunny"),
     },
     "kerala": {
-        1: (32, 23, "Sunny"), 2: (33, 24, "Sunny"), 3: (34, 26, "Sunny"),
-        4: (34, 27, "Partly Cloudy"), 5: (33, 27, "Rainy"),
-        6: (30, 25, "Rainy"), 7: (29, 24, "Rainy"), 8: (29, 24, "Rainy"),
-        9: (30, 25, "Rainy"), 10: (31, 25, "Partly Cloudy"),
-        11: (32, 24, "Partly Cloudy"), 12: (31, 23, "Sunny"),
+        1: (32, 23, "Sunny"),
+        2: (33, 24, "Sunny"),
+        3: (34, 26, "Sunny"),
+        4: (34, 27, "Partly Cloudy"),
+        5: (33, 27, "Rainy"),
+        6: (30, 25, "Rainy"),
+        7: (29, 24, "Rainy"),
+        8: (29, 24, "Rainy"),
+        9: (30, 25, "Rainy"),
+        10: (31, 25, "Partly Cloudy"),
+        11: (32, 24, "Partly Cloudy"),
+        12: (31, 23, "Sunny"),
     },
 }
-_CLIMATE_DEFAULT: dict[int, tuple[float, float, str]] = {
-    m: (32, 25, "Partly Cloudy") for m in range(1, 13)
-}
+_CLIMATE_DEFAULT: dict[int, tuple[float, float, str]] = {m: (32, 25, "Partly Cloudy") for m in range(1, 13)}
 
 
 def _city_to_iata(city: str) -> str | None:
@@ -144,12 +218,14 @@ def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayF
     for i in range(num_days):
         day = start + timedelta(days=i)
         high, low, cond = climate.get(day.month, (32, 25, "Partly Cloudy"))
-        out.append(DayForecast(
-            date=day.isoformat(),
-            condition=f"{cond} (climate estimate)",
-            temp_high_c=high,
-            temp_low_c=low,
-        ))
+        out.append(
+            DayForecast(
+                date=day.isoformat(),
+                condition=f"{cond} (climate estimate)",
+                temp_high_c=high,
+                temp_low_c=low,
+            )
+        )
     return out
 
 
@@ -199,15 +275,17 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
             itin = offer["itineraries"][0]
             seg = itin["segments"][0]
             price = float(offer["price"]["grandTotal"]) * input.passengers
-            flights.append(Flight(
-                airline=seg["carrierCode"],
-                flight_number=f"{seg['carrierCode']}-{seg['number']}",
-                departure=seg["departure"]["at"],
-                arrival=seg["arrival"]["at"],
-                duration_mins=_parse_iso_duration(itin["duration"]),
-                price_inr=price,
-                stops=len(itin["segments"]) - 1,
-            ))
+            flights.append(
+                Flight(
+                    airline=seg["carrierCode"],
+                    flight_number=f"{seg['carrierCode']}-{seg['number']}",
+                    departure=seg["departure"]["at"],
+                    arrival=seg["arrival"]["at"],
+                    duration_mins=_parse_iso_duration(itin["duration"]),
+                    price_inr=price,
+                    stops=len(itin["segments"]) - 1,
+                )
+            )
         set_cached_sync(cache_key, [f.model_dump() for f in flights], TTL_FLIGHTS)
         return flights
 
@@ -266,9 +344,7 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
         )
         hotel_ids = [h["hotelId"] for h in (hotels_resp.data or [])[:20]]
         if not hotel_ids:
-            return ToolError(
-                error=f"No hotels found in {input.destination}.", code="NO_RESULTS"
-            )
+            return ToolError(error=f"No hotels found in {input.destination}.", code="NO_RESULTS")
 
         # Step 2 — get offers for those hotels
         offers_resp = amadeus.shopping.hotel_offers_search.get(
@@ -292,18 +368,23 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
                 continue
             addr_parts = h_data.get("address", {})
             address = ", ".join(
-                filter(None, [
-                    (addr_parts.get("lines") or [""])[0],
-                    addr_parts.get("cityName", input.destination),
-                ])
+                filter(
+                    None,
+                    [
+                        (addr_parts.get("lines") or [""])[0],
+                        addr_parts.get("cityName", input.destination),
+                    ],
+                )
             )
-            hotels.append(Hotel(
-                name=h_data.get("name", "Unknown Hotel"),
-                stars=int(h_data.get("rating") or 3),
-                price_per_night_inr=price,
-                rating=float(h_data.get("rating") or 3.0),
-                address=address or input.destination,
-            ))
+            hotels.append(
+                Hotel(
+                    name=h_data.get("name", "Unknown Hotel"),
+                    stars=int(h_data.get("rating") or 3),
+                    price_per_night_inr=price,
+                    rating=float(h_data.get("rating") or 3.0),
+                    address=address or input.destination,
+                )
+            )
 
         if not hotels:
             return ToolError(
@@ -329,9 +410,7 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
     """Search attractions via Google Maps Places API. Caches for 6 hours."""
     # --- validation ---
     if input.limit > 10:
-        return ToolError(
-            error="Limit cannot exceed 10.", code="LIMIT_EXCEEDED"
-        )
+        return ToolError(error="Limit cannot exceed 10.", code="LIMIT_EXCEEDED")
 
     # --- API key check ---
     if not mcp_settings.GOOGLE_MAPS_API_KEY:
@@ -354,19 +433,21 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
         result = gmaps.places(query=query, language="en")
 
         attractions: list[Attraction] = []
-        for place in (result.get("results") or [])[:input.limit]:
+        for place in (result.get("results") or [])[: input.limit]:
             types = place.get("types", [])
             category = _infer_category(types, input.interests)
             loc = place.get("geometry", {}).get("location", {})
             editorial = place.get("editorial_summary", {}).get("overview")
-            attractions.append(Attraction(
-                name=place.get("name", ""),
-                category=category,
-                rating=float(place.get("rating") or 3.0),
-                description=editorial or f"A popular {category} attraction in {input.destination}.",
-                lat=loc.get("lat"),
-                lng=loc.get("lng"),
-            ))
+            attractions.append(
+                Attraction(
+                    name=place.get("name", ""),
+                    category=category,
+                    rating=float(place.get("rating") or 3.0),
+                    description=editorial or f"A popular {category} attraction in {input.destination}.",
+                    lat=loc.get("lat"),
+                    lng=loc.get("lng"),
+                )
+            )
 
         if not attractions:
             # Fall back gracefully — no error, empty list surfaced via NO_RESULTS
@@ -410,11 +491,7 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
     try:
         parts = input.date_range.split(" to ")
         start_date = date.fromisoformat(parts[0].strip())
-        end_date = (
-            date.fromisoformat(parts[1].strip())
-            if len(parts) > 1
-            else start_date + timedelta(days=6)
-        )
+        end_date = date.fromisoformat(parts[1].strip()) if len(parts) > 1 else start_date + timedelta(days=6)
     except (ValueError, IndexError):
         return ToolError(
             error="Invalid date_range format. Use 'YYYY-MM-DD to YYYY-MM-DD'.",
@@ -519,6 +596,6 @@ def estimate_budget(input: BudgetInput) -> BudgetEstimate | ToolError:
         notes=(
             "Budget is within typical range."
             if total < 80_000
-            else f"Budget is above ₹80,000 — consider cheaper alternatives."
+            else "Budget is above ₹80,000 — consider cheaper alternatives."
         ),
     )

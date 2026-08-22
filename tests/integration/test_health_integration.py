@@ -20,10 +20,15 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.asyncio
 async def test_ping_against_real_services():
+    from app.db.redis import close_redis, init_redis
     from app.main import app
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/ping")
+    await init_redis()
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/ping")
+    finally:
+        await close_redis()
 
     assert response.status_code == 200
     body = response.json()

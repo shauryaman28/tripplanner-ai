@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -10,9 +10,9 @@ class AgentRunRead(BaseModel):
     trip_id: uuid.UUID
     agent_name: str
     status: str
-    input: Optional[Any]
-    output: Optional[Any]
-    duration_ms: Optional[int]
+    input: Any | None
+    output: Any | None
+    duration_ms: int | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

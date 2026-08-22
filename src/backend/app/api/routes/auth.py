@@ -24,9 +24,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=UserRead, status_code=201)
 async def register(body: UserCreate, db: AsyncSession = Depends(get_db)) -> User:
     """Create a new user account. Returns 400 if email is already registered."""
-    existing = (
-        await db.execute(select(User).where(User.email == body.email))
-    ).scalar_one_or_none()
+    existing = (await db.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
 
     if existing:
         raise HTTPException(
@@ -50,9 +48,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Return a JWT. form.username should be the user's email address."""
-    user = (
-        await db.execute(select(User).where(User.email == form.username))
-    ).scalar_one_or_none()
+    user = (await db.execute(select(User).where(User.email == form.username))).scalar_one_or_none()
 
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(

@@ -12,11 +12,8 @@ Strategy:
     Pure arithmetic — no mocking ever needed. ✓
 """
 
-import os
 from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from src.ai.mcp_server.models import (
     Attraction,
@@ -60,17 +57,13 @@ def _fake_settings(client_id="fake_id", secret="fake_secret", gmaps="fake_key", 
 
 
 def test_search_flights_past_date():
-    result = search_flights(
-        FlightSearchInput(origin="DEL", destination="GOI", date=PAST, budget=20_000, passengers=1)
-    )
+    result = search_flights(FlightSearchInput(origin="DEL", destination="GOI", date=PAST, budget=20_000, passengers=1))
     assert isinstance(result, ToolError)
     assert result.code == "PAST_DATE"
 
 
 def test_search_flights_budget_too_low():
-    result = search_flights(
-        FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=500, passengers=1)
-    )
+    result = search_flights(FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=500, passengers=1))
     assert isinstance(result, ToolError)
     assert result.code == "BUDGET_TOO_LOW"
 
@@ -106,11 +99,12 @@ def test_search_flights_valid():
         }
     ]
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
+    ):
         MockClient.return_value.shopping.flight_offers_search.get.return_value = mock_response
         result = search_flights(
             FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1)
@@ -146,11 +140,12 @@ def test_search_flights_scales_with_passengers():
         }
     ]
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
+    ):
         MockClient.return_value.shopping.flight_offers_search.get.return_value = mock_response
 
         r1 = search_flights(
@@ -170,8 +165,11 @@ def test_search_flights_scales_with_passengers():
 def test_search_hotels_invalid_dates():
     result = search_hotels(
         HotelSearchInput(
-            destination="Goa", check_in="2025-12-15", check_out="2025-12-10",
-            budget_per_night=5_000, guests=1,
+            destination="Goa",
+            check_in="2025-12-15",
+            check_out="2025-12-10",
+            budget_per_night=5_000,
+            guests=1,
         )
     )
     assert isinstance(result, ToolError)
@@ -182,8 +180,11 @@ def test_search_hotels_no_api_key():
     with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(client_id="", secret="")):
         result = search_hotels(
             HotelSearchInput(
-                destination="Goa", check_in="2025-12-10", check_out="2025-12-15",
-                budget_per_night=5_000, guests=1,
+                destination="Goa",
+                check_in="2025-12-10",
+                check_out="2025-12-15",
+                budget_per_night=5_000,
+                guests=1,
             )
         )
     assert isinstance(result, ToolError)
@@ -194,8 +195,11 @@ def test_search_hotels_unknown_destination():
     with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()):
         result = search_hotels(
             HotelSearchInput(
-                destination="Atlantis", check_in="2025-12-10", check_out="2025-12-15",
-                budget_per_night=5_000, guests=1,
+                destination="Atlantis",
+                check_in="2025-12-10",
+                check_out="2025-12-15",
+                budget_per_night=5_000,
+                guests=1,
             )
         )
     assert isinstance(result, ToolError)
@@ -219,19 +223,23 @@ def test_search_hotels_valid():
         }
     ]
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
+    ):
         client = MockClient.return_value
         client.reference_data.locations.hotels.by_city.get.return_value = hotels_list_resp
         client.shopping.hotel_offers_search.get.return_value = offers_resp
 
         result = search_hotels(
             HotelSearchInput(
-                destination="Goa", check_in="2025-12-10", check_out="2025-12-15",
-                budget_per_night=5_000, guests=2,
+                destination="Goa",
+                check_in="2025-12-10",
+                check_out="2025-12-15",
+                budget_per_night=5_000,
+                guests=2,
             )
         )
 
@@ -258,19 +266,23 @@ def test_search_hotels_respects_budget():
         },
     ]
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
+    ):
         client = MockClient.return_value
         client.reference_data.locations.hotels.by_city.get.return_value = hotels_list_resp
         client.shopping.hotel_offers_search.get.return_value = offers_resp
 
         result = search_hotels(
             HotelSearchInput(
-                destination="Goa", check_in="2025-12-10", check_out="2025-12-15",
-                budget_per_night=2_000, guests=1,
+                destination="Goa",
+                check_in="2025-12-10",
+                check_out="2025-12-15",
+                budget_per_night=2_000,
+                guests=1,
             )
         )
 
@@ -308,11 +320,12 @@ def test_get_attractions_valid():
         ]
     }
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.googlemaps") as mock_gm:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.googlemaps") as mock_gm,
+    ):
         mock_gm.Client.return_value.places.return_value = mock_places_result
         result = get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=3))
 
@@ -335,15 +348,14 @@ def test_get_attractions_no_matching_interests_returns_results():
         ]
     }
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.googlemaps") as mock_gm:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.googlemaps") as mock_gm,
+    ):
         mock_gm.Client.return_value.places.return_value = mock_places_result
-        result = get_attractions(
-            AttractionInput(destination="Goa", interests=["nonexistent_interest"], limit=5)
-        )
+        result = get_attractions(AttractionInput(destination="Goa", interests=["nonexistent_interest"], limit=5))
 
     assert isinstance(result, list)
     assert len(result) > 0
@@ -378,10 +390,11 @@ def test_get_weather_future_dates_returns_climate_estimate():
     future_start = date.today() + timedelta(days=30)
     date_range = f"{future_start.isoformat()} to {(future_start + timedelta(days=6)).isoformat()}"
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"):
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+    ):
         result = get_weather(WeatherInput(destination="Goa", date_range=date_range))
 
     assert isinstance(result, list)
@@ -407,11 +420,12 @@ def test_get_weather_valid_near_term():
         ]
     }
 
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()), \
-         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None), \
-         patch("src.ai.mcp_server.tools.set_cached_sync"), \
-         patch("src.ai.mcp_server.tools.httpx") as mock_httpx:
-
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
+    ):
         mock_httpx.get.return_value = mock_owm_response
         result = get_weather(WeatherInput(destination="Goa", date_range=date_range))
 
@@ -423,17 +437,13 @@ def test_get_weather_valid_near_term():
 
 
 def test_estimate_budget_sums_correctly():
-    result = estimate_budget(
-        BudgetInput(flights=8_000, hotels=3_000, days=5, daily_spend=2_000)
-    )
+    result = estimate_budget(BudgetInput(flights=8_000, hotels=3_000, days=5, daily_spend=2_000))
     assert isinstance(result, BudgetEstimate)
     assert result.total == 8_000 + (3_000 * 5) + (2_000 * 5)
 
 
 def test_estimate_budget_high_budget_note():
-    result = estimate_budget(
-        BudgetInput(flights=50_000, hotels=10_000, days=7, daily_spend=5_000)
-    )
+    result = estimate_budget(BudgetInput(flights=50_000, hotels=10_000, days=7, daily_spend=5_000))
     assert isinstance(result, BudgetEstimate)
     assert "₹80,000" in result.notes
 

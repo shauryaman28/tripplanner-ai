@@ -12,7 +12,7 @@ GET    /trips/{id}/runs          all agent_runs for debugging
 
 import json
 import uuid
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -48,11 +48,7 @@ async def list_trips(
     db: AsyncSession = Depends(get_db),
 ) -> list[Trip]:
     """Return all trips belonging to the authenticated user, newest first."""
-    result = await db.execute(
-        select(Trip)
-        .where(Trip.user_id == current_user.id)
-        .order_by(Trip.created_at.desc())
-    )
+    result = await db.execute(select(Trip).where(Trip.user_id == current_user.id).order_by(Trip.created_at.desc()))
     return list(result.scalars().all())
 
 
@@ -105,9 +101,9 @@ async def plan_trip(
     # Build initial state from the trip row; raw_input overlays it
     initial_state: dict = {
         "destination": trip.destination,
-        "date":        str(trip.start_date),
-        "budget":      trip.budget,
-        "passengers":  trip.group_size,
+        "date": str(trip.start_date),
+        "budget": trip.budget,
+        "passengers": trip.group_size,
     }
     if body.raw_input:
         initial_state["raw_input"] = body.raw_input
@@ -120,16 +116,16 @@ async def plan_trip(
         await save_trip_state(redis, str(trip_id), result)
         if body.raw_input:
             await append_history(redis, str(trip_id), "user", body.raw_input)
-        await append_history(
-            redis, str(trip_id), "assistant", result["clarification_question"]
-        )
+        await append_history(redis, str(trip_id), "assistant", result["clarification_question"])
         await redis.publish(
             f"trip:{trip_id}:events",
-            json.dumps({
-                "agent": "flight_agent",
-                "status": "clarification_needed",
-                "question": result["clarification_question"],
-            }),
+            json.dumps(
+                {
+                    "agent": "flight_agent",
+                    "status": "clarification_needed",
+                    "question": result["clarification_question"],
+                }
+            ),
         )
         return {
             "status": "clarification_needed",
@@ -152,11 +148,13 @@ async def plan_trip(
 
     await redis.publish(
         f"trip:{trip_id}:events",
-        json.dumps({
-            "agent": "flight_agent",
-            "status": "completed" if not result.get("error") else "failed",
-            "summary": f"Found {len(result.get('flights', []))} flights",
-        }),
+        json.dumps(
+            {
+                "agent": "flight_agent",
+                "status": "completed" if not result.get("error") else "failed",
+                "summary": f"Found {len(result.get('flights', []))} flights",
+            }
+        ),
     )
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
@@ -191,16 +189,16 @@ async def clarify_trip(
 
     if result.get("clarification_question"):
         await save_trip_state(redis, str(trip_id), result)
-        await append_history(
-            redis, str(trip_id), "assistant", result["clarification_question"]
-        )
+        await append_history(redis, str(trip_id), "assistant", result["clarification_question"])
         await redis.publish(
             f"trip:{trip_id}:events",
-            json.dumps({
-                "agent": "flight_agent",
-                "status": "clarification_needed",
-                "question": result["clarification_question"],
-            }),
+            json.dumps(
+                {
+                    "agent": "flight_agent",
+                    "status": "clarification_needed",
+                    "question": result["clarification_question"],
+                }
+            ),
         )
         return {
             "status": "clarification_needed",
@@ -222,11 +220,13 @@ async def clarify_trip(
 
     await redis.publish(
         f"trip:{trip_id}:events",
-        json.dumps({
-            "agent": "flight_agent",
-            "status": "completed" if not result.get("error") else "failed",
-            "summary": f"Found {len(result.get('flights', []))} flights",
-        }),
+        json.dumps(
+            {
+                "agent": "flight_agent",
+                "status": "completed" if not result.get("error") else "failed",
+                "summary": f"Found {len(result.get('flights', []))} flights",
+            }
+        ),
     )
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
@@ -283,10 +283,7 @@ async def get_itinerary(
     await _get_trip_or_404(trip_id, current_user.id, db)
 
     result = await db.execute(
-        select(Itinerary)
-        .where(Itinerary.trip_id == trip_id)
-        .order_by(Itinerary.created_at.desc())
-        .limit(1)
+        select(Itinerary).where(Itinerary.trip_id == trip_id).order_by(Itinerary.created_at.desc()).limit(1)
     )
     itinerary = result.scalar_one_or_none()
     if not itinerary:
@@ -330,23 +327,15 @@ async def get_trip_runs(
     """
     await _get_trip_or_404(trip_id, current_user.id, db)
 
-    result = await db.execute(
-        select(AgentRun)
-        .where(AgentRun.trip_id == trip_id)
-        .order_by(AgentRun.created_at.asc())
-    )
+    result = await db.execute(select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc()))
     return list(result.scalars().all())
 
 
 # ── Private helpers ────────────────────────────────────────────────────────
 
 
-async def _get_trip_or_404(
-    trip_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
-) -> Trip:
-    result = await db.execute(
-        select(Trip).where(Trip.id == trip_id, Trip.user_id == user_id)
-    )
+async def _get_trip_or_404(trip_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> Trip:
+    result = await db.execute(select(Trip).where(Trip.id == trip_id, Trip.user_id == user_id))
     trip = result.scalar_one_or_none()
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found.")

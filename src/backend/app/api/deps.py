@@ -6,7 +6,6 @@ get_redis_dep         — thin wrapper so routes don't import redis directly
 """
 
 import uuid
-from typing import Optional
 
 import redis.asyncio as aioredis
 from fastapi import Depends, Header, HTTPException, Query, status
@@ -37,7 +36,7 @@ async def get_current_user(
     )
     try:
         payload = decode_access_token(token)
-        user_id: Optional[str] = payload.get("sub")
+        user_id: str | None = payload.get("sub")
         if not user_id:
             raise _unauth
     except JWTError:
@@ -50,8 +49,8 @@ async def get_current_user(
 
 
 async def get_current_user_sse(
-    authorization: Optional[str] = Header(None),
-    token: Optional[str] = Query(None),
+    authorization: str | None = Header(None),
+    token: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Like get_current_user but also accepts token as ?token= query param.
@@ -59,7 +58,7 @@ async def get_current_user_sse(
     Browsers cannot set custom headers for EventSource connections, so the
     SSE endpoint accepts the JWT as a query parameter as a fallback.
     """
-    raw: Optional[str] = None
+    raw: str | None = None
     if authorization and authorization.startswith("Bearer "):
         raw = authorization[7:]
     elif token:
@@ -77,7 +76,7 @@ async def get_current_user_sse(
     )
     try:
         payload = decode_access_token(raw)
-        user_id: Optional[str] = payload.get("sub")
+        user_id: str | None = payload.get("sub")
         if not user_id:
             raise _unauth
     except JWTError:

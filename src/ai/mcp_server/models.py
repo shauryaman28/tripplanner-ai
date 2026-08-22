@@ -6,7 +6,6 @@ can use server-side coordinates instead of client-side geocoding.
 
 from pydantic import BaseModel, Field
 
-
 # ── Inputs ─────────────────────────────────────────────────────────────────
 
 
@@ -71,7 +70,7 @@ class Attraction(BaseModel):
     category: str
     rating: float
     description: str
-    lat: float | None = None   # Phase 3 — used by Phase 18 map view
+    lat: float | None = None  # Phase 3 — used by Phase 18 map view
     lng: float | None = None
 
 

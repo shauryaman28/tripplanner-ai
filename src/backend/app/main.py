@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     await init_redis()
     yield
     await close_redis()
-    await close_session()   
+    await close_session()
 
 
 app = FastAPI(

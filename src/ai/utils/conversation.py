@@ -1,6 +1,7 @@
 """Redis-backed conversation history and planning state — Phase 7B."""
 
 import json
+
 import redis.asyncio as aioredis
 
 _TTL = 86_400  # 24 h — same as JWT expiry
@@ -19,9 +20,7 @@ async def get_history(r: aioredis.Redis, trip_id: str) -> list[dict]:
     return json.loads(raw) if raw else []
 
 
-async def append_history(
-    r: aioredis.Redis, trip_id: str, role: str, content: str
-) -> list[dict]:
+async def append_history(r: aioredis.Redis, trip_id: str, role: str, content: str) -> list[dict]:
     hist = await get_history(r, trip_id)
     hist.append({"role": role, "content": content})
     await r.setex(_hist_key(trip_id), _TTL, json.dumps(hist))

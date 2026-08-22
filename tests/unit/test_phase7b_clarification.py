@@ -5,7 +5,6 @@ All tests mock FlightAgent.run() and the conversation utilities so no
 MCP server, no Redis, and no Postgres are needed.
 """
 
-import json
 import uuid
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,8 +14,8 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.security import create_access_token
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
+
 
 def _auth(user_id: uuid.UUID) -> dict:
     return {"Authorization": f"Bearer {create_access_token(str(user_id))}"}
@@ -58,6 +57,7 @@ def _session_with_trip(trip: MagicMock) -> AsyncMock:
 def _override_get_db(session):
     async def _dep():
         yield session
+
     return _dep
 
 
@@ -106,12 +106,15 @@ async def test_plan_ambiguous_raw_input_returns_clarification():
 
     app.dependency_overrides[get_db] = _override_get_db(mock_session)
     try:
-        with patch("app.db.redis.redis_client", AsyncMock(
-            ping=AsyncMock(return_value=True),
-            publish=AsyncMock(),
-            get=AsyncMock(return_value=None),
-            setex=AsyncMock(),
-        )):
+        with patch(
+            "app.db.redis.redis_client",
+            AsyncMock(
+                ping=AsyncMock(return_value=True),
+                publish=AsyncMock(),
+                get=AsyncMock(return_value=None),
+                setex=AsyncMock(),
+            ),
+        ):
             with patch("app.api.routes.trips.save_trip_state", AsyncMock()):
                 with patch("app.api.routes.trips.append_history", AsyncMock(return_value=[])):
                     with patch("app.api.routes.trips.FlightAgent") as MockFA:
@@ -157,10 +160,13 @@ async def test_clarify_answer_completes_planning():
 
     app.dependency_overrides[get_db] = _override_get_db(mock_session)
     try:
-        with patch("app.db.redis.redis_client", AsyncMock(
-            ping=AsyncMock(return_value=True),
-            publish=AsyncMock(),
-        )):
+        with patch(
+            "app.db.redis.redis_client",
+            AsyncMock(
+                ping=AsyncMock(return_value=True),
+                publish=AsyncMock(),
+            ),
+        ):
             with patch("app.api.routes.trips.get_trip_state", AsyncMock(return_value=saved_state)):
                 with patch("app.api.routes.trips.append_history", AsyncMock(return_value=[])):
                     with patch("app.api.routes.trips.FlightAgent") as MockFA:
@@ -202,10 +208,13 @@ async def test_clarify_still_missing_field_returns_next_question():
 
     app.dependency_overrides[get_db] = _override_get_db(mock_session)
     try:
-        with patch("app.db.redis.redis_client", AsyncMock(
-            ping=AsyncMock(return_value=True),
-            publish=AsyncMock(),
-        )):
+        with patch(
+            "app.db.redis.redis_client",
+            AsyncMock(
+                ping=AsyncMock(return_value=True),
+                publish=AsyncMock(),
+            ),
+        ):
             with patch("app.api.routes.trips.get_trip_state", AsyncMock(return_value=saved_state)):
                 with patch("app.api.routes.trips.save_trip_state", AsyncMock()):
                     with patch("app.api.routes.trips.append_history", AsyncMock(return_value=[])):

@@ -45,17 +45,24 @@ async def test_flight_agent_run_writes_one_agent_run_row(db_session):
 
     # 2. mock call_tool so the test needs no live MCP server
     fake_flight = Flight(
-        airline="6E", flight_number="6E-204",
-        departure=f"{FUTURE}T06:00:00", arrival=f"{FUTURE}T08:15:00",
-        duration_mins=135, price_inr=4200.0, stops=0,
+        airline="6E",
+        flight_number="6E-204",
+        departure=f"{FUTURE}T06:00:00",
+        arrival=f"{FUTURE}T08:15:00",
+        duration_mins=135,
+        price_inr=4200.0,
+        stops=0,
     ).model_dump()
 
     with patch("src.ai.agents.flight_agent.call_tool", AsyncMock(return_value=[fake_flight])):
         agent = FlightAgent()
         result = await agent.run(
             {
-                "origin": "DEL", "destination": "GOI",
-                "date": FUTURE, "budget": 20_000, "passengers": 1,
+                "origin": "DEL",
+                "destination": "GOI",
+                "date": FUTURE,
+                "budget": 20_000,
+                "passengers": 1,
             },
             db=db_session,
             trip_id=trip.id,
@@ -67,11 +74,7 @@ async def test_flight_agent_run_writes_one_agent_run_row(db_session):
     assert result["flights"][0]["airline"] == "6E"
 
     # 4. exactly one agent_runs row, correctly shaped
-    rows = (
-        await db_session.execute(
-            select(AgentRun).where(AgentRun.trip_id == trip.id)
-        )
-    ).scalars().all()
+    rows = (await db_session.execute(select(AgentRun).where(AgentRun.trip_id == trip.id))).scalars().all()
 
     assert len(rows) == 1
     run = rows[0]

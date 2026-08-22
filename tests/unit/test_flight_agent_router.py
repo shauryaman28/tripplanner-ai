@@ -6,7 +6,7 @@ Tests the router() conditional edge, clarify_node() question selection,
 and intent_parsing_node() pass-through behavior.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +16,6 @@ from src.ai.agents.flight_agent import (
     intent_parsing_node,
     router,
 )
-
 
 # ── Router tests (5) ──────────────────────────────────────────────────────
 
