@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Claude Haiku · Gemini Flash · pgvector.
 
-**Status: Phase 10 / 50 — Agent Core (Budget Conflict & Re-Planning)**
+**Status: Phase 11 / 50 — Agent Core (Evaluator: Self-Checking)**
 
 ---
 
@@ -136,7 +136,9 @@ tripplanner-ai/
 │       ├── agents/
 │       │   ├── flight_agent.py          ← Phase 6–7: 3-node graph (parse → route → search/clarify)
 │       │   ├── hotel_agent.py           ← Phase 8 Dev A: 3-node graph, hotel-specific routing
-│       │   └── activities_agent.py      ← Phase 8 Dev B: 3-node graph, dual-requirement router
+│       │   ├── activities_agent.py      ← Phase 8 Dev B: 3-node graph, dual-requirement router
+│       │   ├── budget_decision.py       ← Phase 10: pure budget threshold logic
+│       │   └── evaluator.py             ← Phase 11: 4 deterministic itinerary checks + retry routing
 │       ├── builder/                     ← Phase 12 (ItineraryBuilder)
 │       └── orchestrator/                ← Phase 9 (OrchestratorAgent)
 ├── migrations/                          ← Alembic migrations
@@ -150,7 +152,7 @@ tripplanner-ai/
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (v1–v3 per agent)
-├── docs/                                ← phase build logs (1–10)
+├── docs/                                ← phase build logs (1–11)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -175,12 +177,13 @@ tripplanner-ai/
 | 8 | HotelAgent & ActivitiesAgent | ✅ Done | 6 hotel + 6 activities |
 | 9 | Orchestrator: Decomposition & Fan-Out | ✅ Done | 5 orchestrator |
 | 10 | Budget Conflict & Re-Planning | ✅ Done | 10 budget + 9 orchestrator |
-| 11–12 | Agent Core (remaining) | ⏳ | |
+| 11 | Evaluator Agent: Self-Checking | ✅ Done | 18 evaluator + 1 retry-chain |
+| 12 | Itinerary Builder | ⏳ | |
 | 13–20 | Storage & Frontend | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 101 tests passing** (unit + contract), zero network calls in CI.
+**Total: 120 tests passing** (unit + contract), zero network calls in CI.
 
 ---
 
