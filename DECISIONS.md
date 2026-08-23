@@ -72,3 +72,15 @@
 22. **Evaluator is not wired into `orchestrator.py` in Phase 11.** The roadmap places the Evaluator between ItineraryBuilder's draft output and final persistence — but ItineraryBuilder is Phase 12 and doesn't exist yet. Rather than build throwaway integration glue now (mocking a builder that doesn't exist) and rewrite it next phase, Phase 11 ships `EvaluatorAgent` as a fully standalone, fully-tested module validated against the exact draft-itinerary JSON schema Phase 12's roadmap entry defines. Wiring into the graph's conditional edges happens in Phase 12 alongside the builder node it needs to sit after.
 
 23. **`get_retry_chain()` derives attempt numbers from `created_at` ordering — no new DB column.** Rather than add a `retry_count` column to `agent_runs` (which would need an Alembic migration and would duplicate information already recoverable from row order), `get_retry_chain()` reconstructs per-agent attempt numbers by counting occurrences of each `agent_name` in chronological order. This keeps Phase 11 a zero-migration phase while still satisfying "retry is visible" in `GET /trips/{id}/runs`-style queries.
+
+---
+
+## Phase 12 — Itinerary Builder: Claude Haiku + Structured Synthesis
+
+24. **ItineraryBuilder validates data scope and budget math deterministically in Python, not via LLM self-report.** Mirrors the #21 evaluator precedent, but here the checks run *inside* the builder before the draft ever reaches EvaluatorAgent — cheaper to fail fast on a malformed draft than to round-trip it through a second LLM call first.
+
+25. **Builder failures with no draft share the Evaluator's retry cap.** Rather than a separate half-built failure lane, `route_after_evaluator` treats "no draft produced" as an automatic retry (bounded by `MAX_EVALUATOR_RETRIES`), keeping one retry cap for the whole build+evaluate loop instead of two independent caps that could double the effective retry budget.
+
+26. **Evaluator retry dispatch reruns only the implicated sub-agent** (`flight_agent` or `activities_agent`, via `next_agent_for_failures()`) and loops directly back to `build_itinerary_node`, skipping `budget_decision`/`hotel_activities` entirely. Cheaper than re-deriving unrelated data, and matches the roadmap's "loop back to the relevant agent" wording literally.
+
+27. **Itinerary persistence is one non-branching node (`persist_node`) using a single `AsyncSession` and a single `commit()`.** The itinerary row and the trip-status update are queued on the same session and committed together — a failure before commit leaves neither write applied (verified in `test_phase12_integration.py`). `generate_embeddings()` runs as a same-node call rather than a FastAPI `BackgroundTask` because there is no request context inside the orchestrator; Phase 14 revisits this boundary when it implements real embedding generation.

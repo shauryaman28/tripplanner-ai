@@ -32,6 +32,7 @@ mcp[cli]>=1.0.0
 
 # ── Agents (Phase 6+) ────────────────────────────────────────────
 langgraph>=0.2.0
+langchain-anthropic>=0.2.0   # Phase 12 — ItineraryBuilder (Claude Haiku)
 
 # ── External APIs (Phase 3) ───────────────────────────────────
 amadeus>=9.0.0
