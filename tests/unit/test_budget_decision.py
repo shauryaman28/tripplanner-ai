@@ -4,7 +4,6 @@ Unit tests for Phase 10 budget decision pure function.
 All tests call make_budget_decision() directly — no mocks, no network.
 """
 
-import pytest
 
 from src.ai.agents.budget_decision import (
     MAX_REPLAN_ATTEMPTS,

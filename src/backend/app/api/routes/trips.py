@@ -36,7 +36,6 @@ from src.ai.orchestrator.orchestrator import OrchestratorAgent
 from src.ai.utils.conversation import (
     append_history,
     get_trip_state,
-    save_trip_state,
 )
 
 router = APIRouter(prefix="/trips", tags=["trips"])

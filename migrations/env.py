@@ -21,8 +21,8 @@ from sqlmodel import SQLModel
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "backend"))
 
 # Import all models — they self-register with SQLModel.metadata on import
-from app.models import AgentRun, Embedding, Itinerary, Trip, User  # noqa: F401
 from app.core.config import settings
+from app.models import AgentRun, Embedding, Itinerary, Trip, User  # noqa: F401
 
 # ── Alembic config ────────────────────────────────────────────────────────
 
