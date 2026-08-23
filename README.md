@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Claude Haiku · Gemini Flash · pgvector.
 
-**Status: Phase 9 / 50 — Agent Core (Orchestrator: Decomposition & Fan-Out)**
+**Status: Phase 10 / 50 — Agent Core (Budget Conflict & Re-Planning)**
 
 ---
 
@@ -150,7 +150,7 @@ tripplanner-ai/
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (v1–v3 per agent)
-├── docs/                                ← phase build logs (1–9)
+├── docs/                                ← phase build logs (1–10)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -174,12 +174,13 @@ tripplanner-ai/
 | 7 | Conditional edges: ask instead of assume | ✅ Done | 8 router + 5 clarification API |
 | 8 | HotelAgent & ActivitiesAgent | ✅ Done | 6 hotel + 6 activities |
 | 9 | Orchestrator: Decomposition & Fan-Out | ✅ Done | 5 orchestrator |
-| 10–12 | Agent Core (remaining) | ⏳ | |
+| 10 | Budget Conflict & Re-Planning | ✅ Done | 10 budget + 9 orchestrator |
+| 11–12 | Agent Core (remaining) | ⏳ | |
 | 13–20 | Storage & Frontend | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 87 tests passing** (unit + contract), zero network calls in CI.
+**Total: 101 tests passing** (unit + contract), zero network calls in CI.
 
 ---
 

@@ -50,3 +50,15 @@
 15. **`asyncio.gather` over LangGraph `Send` API for concurrent fan-out.** LangGraph's `Send` API is designed for dynamic fan-out to the same node type with different inputs. For three different agent types (FlightAgent, HotelAgent, ActivitiesAgent) with different state shapes, `Send` requires compiled subgraphs and makes merge logic significantly more complex. `asyncio.gather(return_exceptions=True)` gives identical wall-clock concurrency (all three sub-agents start in the same event loop iteration), simpler error handling per-result, and unit tests that need no LangGraph infrastructure. Concurrency is verified by overlapping `agent_runs.created_at` timestamps in integration tests.
 
 16. **`publish_fn` injected into `OrchestratorState` rather than importing Redis directly in the agent.** The Orchestrator publishes SSE progress events via an async callable passed in by the route. This keeps the agent layer infrastructure-agnostic — unit tests pass a plain `AsyncMock` with no Redis setup. The route creates the closure over the Redis client before calling `agent.run()`. The pattern is the same as the `db` and `trip_id` injection used by sub-agents since Phase 6, keeping all agents consistent.
+
+---
+
+## Phase 10 — Budget Conflict & Re-Planning
+
+17. **Sequential flight → budget check → hotel+activities over concurrent fan-out.** Phase 9's `fan_out_node` ran all 3 agents concurrently. Phase 10 splits this into `run_flight_node → budget_decision_node → hotel_activities_node`. The extra sequential step is justified: (a) hotels need `remaining_budget` as their nightly cap, not the full trip budget; (b) if the budget check fails we skip hotel + activities API calls entirely; (c) flights are typically the costliest and most variable line item.
+
+18. **`make_budget_decision()` as a pure function.** All threshold logic, cap enforcement, and percentage calculations live in a zero-I/O function. The LangGraph node wraps it with DB logging. This means 10 budget-decision tests run with zero mocks — the fastest and most trustworthy kind.
+
+19. **Thresholds: 35% / 50% remaining.** `< 35%` remaining → escalate; `35–49%` → replan; `≥ 50%` → continue. These satisfy both acceptance criteria: ₹40k budget / ₹28k flights (30% remaining) → escalate; ₹40k / ₹16k (60% remaining) → continue. The 35% floor ensures at least ₹14,000 remains on a ₹40k budget — enough for a 5-day trip at ₹1,000/night hotels + ₹500/day activities.
+
+20. **Replan budget reduction: 65% → 55% of original.** On attempt 1 the flight budget cap drops to 65% (finds connecting/budget-carrier options); on attempt 2 to 55% (last resort). `replan_attempts` is incremented in `budget_decision_node` before routing so `run_flight_node` sees the correct attempt number and applies the right cap via `replan_flight_budget()`.

@@ -8,12 +8,14 @@ GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
 GET    /trips/{id}/itinerary     latest itinerary for the trip
 GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
 GET    /trips/{id}/runs          all agent_runs for debugging
+POST   /trips/{id}/replan        Phase 10: re-trigger with budget conflict choice
 """
 
 import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
+from datetime import timedelta
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -29,7 +31,7 @@ from app.models.trip import Trip, TripStatus
 from app.models.user import User
 from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
-from app.schemas.trip import ClarifyRequest, PlanRequest, TripCreate, TripRead
+from app.schemas.trip import ClarifyRequest, PlanRequest, ReplanRequest, TripCreate, TripRead
 from src.ai.orchestrator.orchestrator import OrchestratorAgent
 from src.ai.utils.conversation import (
     append_history,
@@ -48,7 +50,6 @@ async def list_trips(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Trip]:
-    """Return all trips belonging to the authenticated user, newest first."""
     result = await db.execute(select(Trip).where(Trip.user_id == current_user.id).order_by(Trip.created_at.desc()))
     return list(result.scalars().all())
 
@@ -62,7 +63,6 @@ async def create_trip(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Trip:
-    """Create a new trip. Authenticated user is the owner."""
     trip = Trip(
         user_id=current_user.id,
         destination=body.destination,
@@ -90,19 +90,8 @@ async def plan_trip(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
-    """
-    Kick off trip planning via OrchestratorAgent (Phase 9).
-
-    - Publishes planning_started SSE event immediately.
-    - Runs OrchestratorAgent: intent parsing → concurrent fan-out to
-      FlightAgent, HotelAgent, ActivitiesAgent → merge.
-    - Each sub-agent publishes its own SSE progress event on completion.
-    - Publishes planning_complete SSE event when the Orchestrator finishes.
-    - Runs in a background task so the HTTP response returns 202 immediately.
-    """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
-    # Build initial state from the trip row; raw_input overlays if present
     initial_state: dict = {
         "destination": trip.destination,
         "start_date": str(trip.start_date),
@@ -114,12 +103,10 @@ async def plan_trip(
     if body.raw_input:
         initial_state["raw_input"] = body.raw_input
 
-    # Mark trip as planning
     trip.status = TripStatus.PLANNING
     db.add(trip)
     await db.commit()
 
-    # Publish planning_started immediately so SSE clients see it at once
     await redis.publish(
         f"trip:{trip_id}:events",
         json.dumps({
@@ -130,14 +117,9 @@ async def plan_trip(
         }),
     )
 
-    # Build SSE publish helper that serialises events to the Redis channel
     async def publish_fn(event: dict) -> None:
-        await redis.publish(
-            f"trip:{trip_id}:events",
-            json.dumps(event),
-        )
+        await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    # Run the Orchestrator in a background task so we return 202 immediately
     asyncio.create_task(
         _run_orchestrator(
             trip_id=trip_id,
@@ -151,25 +133,11 @@ async def plan_trip(
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
-async def _run_orchestrator(
-    trip_id: uuid.UUID,
-    initial_state: dict,
-    db: AsyncSession,
-    redis: aioredis.Redis,
-    publish_fn,
-) -> None:
-    """Background task: run OrchestratorAgent and publish final status."""
+async def _run_orchestrator(trip_id, initial_state, db, redis, publish_fn) -> None:
     try:
         agent = OrchestratorAgent()
-        await agent.run(
-            initial_state,
-            db=db,
-            trip_id=trip_id,
-            publish_fn=publish_fn,
-        )
+        await agent.run(initial_state, db=db, trip_id=trip_id, publish_fn=publish_fn)
     except Exception as exc:
-        # Surface unhandled orchestrator exceptions via SSE so the frontend
-        # doesn't hang waiting for a planning_complete event that never arrives.
         try:
             await publish_fn({
                 "event": "planning_failed",
@@ -192,12 +160,6 @@ async def clarify_trip(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
-    """
-    Submit the user's answer to a clarifying question and re-trigger planning.
-
-    Loads partial state saved by a previous /plan call, merges the answer
-    as raw_input, and re-runs the OrchestratorAgent from the top.
-    """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
     prev_state: dict = await get_trip_state(redis, str(trip_id)) or {}
@@ -237,6 +199,75 @@ async def clarify_trip(
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
+# ── POST /trips/{id}/replan — Phase 10 ────────────────────────────────────
+
+
+@router.post("/{trip_id}/replan", status_code=200)
+async def replan_trip(
+    trip_id: uuid.UUID,
+    body: ReplanRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis_dep),
+) -> dict:
+    """Re-trigger planning with a user-chosen budget conflict resolution.
+
+    cheaper_flights  → start replan_attempts at 1 (65% budget cap on flights)
+    reduce_days      → shorten trip by 2 days, re-run from scratch
+    increase_budget  → add 25% to total budget, re-run from scratch
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+
+    initial_state: dict = {
+        "destination": trip.destination,
+        "start_date": str(trip.start_date),
+        "end_date": str(trip.end_date),
+        "budget": trip.budget,
+        "group_size": trip.group_size,
+        "interests": trip.interests or [],
+        "replan_attempts": 0,
+    }
+
+    if body.choice == "cheaper_flights":
+        # Skip straight to replan-budget logic on first flight run
+        initial_state["replan_attempts"] = 1
+    elif body.choice == "reduce_days":
+        new_end = trip.end_date - timedelta(days=2)
+        initial_state["end_date"] = str(new_end)
+    elif body.choice == "increase_budget":
+        initial_state["budget"] = round(trip.budget * 1.25, 2)
+
+    trip.status = TripStatus.PLANNING
+    db.add(trip)
+    await db.commit()
+
+    await redis.publish(
+        f"trip:{trip_id}:events",
+        json.dumps({
+            "event": "planning_started",
+            "agent": "orchestrator",
+            "status": "planning",
+            "trip_id": str(trip_id),
+            "choice": body.choice,
+        }),
+    )
+
+    async def publish_fn(event: dict) -> None:
+        await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
+
+    asyncio.create_task(
+        _run_orchestrator(
+            trip_id=trip_id,
+            initial_state=initial_state,
+            db=db,
+            redis=redis,
+            publish_fn=publish_fn,
+        )
+    )
+
+    return {"status": "replanning_started", "trip_id": str(trip_id), "choice": body.choice}
+
+
 # ── GET /trips/{id}/stream ─────────────────────────────────────────────────
 
 
@@ -247,22 +278,12 @@ async def stream_trip_events(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> EventSourceResponse:
-    """
-    Server-Sent Events stream for live agent progress.
-
-    Subscribes to Redis channel trip:<id>:events and forwards every
-    message as an SSE event.  Browsers connect via:
-        new EventSource('/trips/<id>/stream?token=<jwt>')
-    """
     await _get_trip_or_404(trip_id, current_user.id, db)
 
     async def generator() -> AsyncGenerator:
         pubsub = redis.pubsub()
         await pubsub.subscribe(f"trip:{trip_id}:events")
-        yield {
-            "event": "connected",
-            "data": json.dumps({"trip_id": str(trip_id), "status": "listening"}),
-        }
+        yield {"event": "connected", "data": json.dumps({"trip_id": str(trip_id), "status": "listening"})}
         try:
             async for message in pubsub.listen():
                 if message["type"] == "message":
@@ -283,18 +304,13 @@ async def get_itinerary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Itinerary:
-    """Return the most recently generated itinerary for the trip."""
     await _get_trip_or_404(trip_id, current_user.id, db)
-
     result = await db.execute(
         select(Itinerary).where(Itinerary.trip_id == trip_id).order_by(Itinerary.created_at.desc()).limit(1)
     )
     itinerary = result.scalar_one_or_none()
     if not itinerary:
-        raise HTTPException(
-            status_code=404,
-            detail="No itinerary has been generated for this trip yet.",
-        )
+        raise HTTPException(status_code=404, detail="No itinerary has been generated for this trip yet.")
     return itinerary
 
 
@@ -307,12 +323,8 @@ async def get_similar_trips(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """pgvector similarity search — implemented in Phase 23."""
     await _get_trip_or_404(trip_id, current_user.id, db)
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Similarity search will be wired in Phase 23 (pgvector).",
-    )
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Similarity search — Phase 23.")
 
 
 # ── GET /trips/{id}/runs ───────────────────────────────────────────────────
@@ -324,13 +336,7 @@ async def get_trip_runs(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[AgentRun]:
-    """Return all agent_run rows for a trip, oldest first.
-
-    This is the primary debugging endpoint — use it to trace every
-    agent decision without writing extra logging code.
-    """
     await _get_trip_or_404(trip_id, current_user.id, db)
-
     result = await db.execute(select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc()))
     return list(result.scalars().all())
 

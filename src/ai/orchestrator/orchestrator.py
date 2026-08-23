@@ -1,32 +1,35 @@
 """
-Phase 9 — OrchestratorAgent: decomposition & fan-out.
+Phase 10 — OrchestratorAgent: Budget Conflict & Re-Planning.
 
-Three-node LangGraph graph:
-  1. intent_parsing_node  : Gemini Flash extracts structured TripState fields
-                            from free-form input. Normalises dates and currency.
-                            Policy: ask vs. assume documented in prompts/orchestrator_v3.md
-  2. fan_out_node         : fires FlightAgent, HotelAgent, ActivitiesAgent
-                            concurrently via asyncio.gather (not LangGraph Send,
-                            which requires compiled subgraphs — gather gives the
-                            same wall-clock concurrency with simpler state merge).
-                            Each sub-agent receives only its relevant state slice.
-  3. merge_node           : collects results into OrchestratorState. Partial
-                            failure is not fatal — one agent failed → log it,
-                            continue with what succeeded. Caller sees which
-                            agents succeeded via the per-agent status fields.
+Graph structure (updated from Phase 9 — fan_out split into 3 nodes):
 
-SSE publishing:
-  publish_fn is an optional async callable injected by the route so that
-  the Orchestrator can stream live progress events without importing Redis
-  directly (keeps the agent layer infrastructure-agnostic and testable).
+    intent_parsing_node
+          ↓
+    run_flight_node         ← FlightAgent only
+          ↓
+    budget_decision_node    ← pure budget check + DB log
+          ↓ (conditional edge: route_after_budget_decision)
+    ┌─── "continue" ──────→ hotel_activities_node → merge_node → END
+    ├─── "replan"   ──────→ run_flight_node (loop, cap = MAX_REPLAN_ATTEMPTS)
+    └─── "escalate" ──────→ escalate_node → END
 
-  Signature: async def publish_fn(event: dict) -> None
+Phase 9 fan_out_node split so the budget check sits between flight search
+and hotel/activities — hotels need the remaining_budget as their nightly cap,
+and there's no point calling hotel+activities APIs when the budget is blown.
+
+SSE events (happy path):
+    planning_started → flight_agent → hotel_agent → activities_agent → planning_complete
+
+SSE events (escalate):
+    planning_started → flight_agent → budget_conflict → planning_failed
 """
 
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
+from datetime import date
 from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -35,6 +38,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
 from src.ai.agents.activities_agent import ActivitiesAgent
+from src.ai.agents.budget_decision import (
+    make_budget_decision,
+    replan_flight_budget,
+)
 from src.ai.agents.flight_agent import FlightAgent
 from src.ai.agents.hotel_agent import HotelAgent
 from src.ai.utils.run_logger import log_agent_run, timed_run
@@ -44,17 +51,17 @@ from src.ai.utils.run_logger import log_agent_run, timed_run
 
 
 class OrchestratorState(TypedDict, total=False):
-    # ── Raw input (optional — for free-text queries) ───────────────────
+    # ── Raw input (optional — free-text queries) ───────────────────────
     raw_input: str | None
 
     # ── Extracted trip fields ──────────────────────────────────────────
     destination: str | None
-    origin: str | None               # default DEL if absent
-    start_date: str | None           # ISO date
-    end_date: str | None             # ISO date
-    budget: float | None             # total trip budget INR
-    group_size: int | None           # number of travellers (default 1)
-    interests: list[str] | None      # activity interests
+    origin: str | None
+    start_date: str | None
+    end_date: str | None
+    budget: float | None
+    group_size: int | None
+    interests: list[str] | None
 
     # ── Sub-agent results ──────────────────────────────────────────────
     flights: list[dict]
@@ -71,10 +78,15 @@ class OrchestratorState(TypedDict, total=False):
     hotel_error: dict | None
     activities_error: dict | None
 
-    # ── Runtime helpers (not stored in DB) ────────────────────────────
-    publish_fn: Any | None   # async callable for SSE progress events
-    db: Any | None           # AsyncSession (injected by route)
-    trip_id: Any | None      # uuid.UUID
+    # ── Phase 10: budget conflict & re-planning ────────────────────────
+    replan_attempts: int                        # incremented on each replan loop
+    budget_decision: dict | None                # serialised BudgetDecision
+    budget_conflict_options: list[dict] | None  # shown to user on escalate
+
+    # ── Runtime helpers (never stored in DB) ──────────────────────────
+    publish_fn: Any | None
+    db: Any | None
+    trip_id: Any | None
 
 
 # ── Intent parsing prompt ─────────────────────────────────────────────────
@@ -93,14 +105,13 @@ Return ONLY a valid JSON object with these exact keys (use null for missing valu
 }}
 
 Rules:
-- Today is {today}. Convert all relative dates (\"next month\", \"in December\", \"for 5 days from Jan 10\") to absolute ISO dates.
-- Convert vague date ranges: \"7 days\" from a known start → compute end_date. If only duration given with no start, use null for both.
-- Budget normalisation: convert \"50k\" → 50000, \"2 lakhs\" → 200000. Always store as INR integer. Never split budget by sub-category — store the TOTAL trip budget.
-- group_size: \"solo\" → 1, \"couple\" → 2, \"family of 4\" → 4. If not mentioned, use null (caller defaults to 1).
-- interests: extract as short English keyword phrases (e.g. \"beach\", \"history\", \"street food\", \"adventure\"). Translate non-English interest words to English.
+- Today is {today}. Convert all relative dates to absolute ISO dates.
+- Budget normalisation: convert \"50k\" → 50000, \"2 lakhs\" → 200000. Always store as INR integer.
+- group_size: \"solo\" → 1, \"couple\" → 2, \"family of 4\" → 4. If not mentioned, use null.
+- interests: extract as short English keyword phrases. Translate non-English to English.
 - origin: if not mentioned, use null (caller defaults to \"DEL\").
-- Ask vs. assume policy: if destination is completely absent, set it to null — do NOT guess. Ambiguous dates (\"sometime in December\") → set start_date to first day of mentioned month, end_date to null.
-- Return ONLY the JSON object. No explanation, no markdown fences, no preamble.
+- destination absent → set null, do NOT guess.
+- Return ONLY the JSON object. No explanation, no markdown fences.
 
 User message: {message}"""
 
@@ -109,92 +120,183 @@ User message: {message}"""
 
 
 async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
-    """Extract structured trip fields from free-form text via Gemini Flash.
-
-    If raw_input is absent (caller already provided structured fields),
-    passes state through unchanged — backward-compatible with structured callers.
-    Normalises dates, currency, and group size per the ask-vs-assume policy.
-    """
+    """Unchanged from Phase 9 — extract structured fields from free-form text."""
     raw = state.get("raw_input")
     if not raw:
         return state
 
     import json
-    from datetime import date
 
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
     prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=raw)
 
     response = await llm.ainvoke(prompt)
     text = response.content.strip()
-
-    # strip markdown fences if the model wraps its output
     if text.startswith("```"):
-        text = text.split("```")[1]
-        text = text.removeprefix("json")
-    text = text.strip()
+        text = text.split("```")[1].removeprefix("json").strip()
 
     try:
         parsed = json.loads(text)
     except Exception:
-        # unparseable → leave state as-is; sub-agents may clarify
         return state
 
     updates: OrchestratorState = {}
-    field_map = {
-        "destination": "destination",
-        "origin": "origin",
-        "start_date": "start_date",
-        "end_date": "end_date",
-        "budget": "budget",
-        "group_size": "group_size",
-        "interests": "interests",
-    }
-    for json_key, state_key in field_map.items():
-        value = parsed.get(json_key)
-        if value is not None and not state.get(state_key):
-            updates[state_key] = value  # type: ignore[literal-required]
+    for key in ("destination", "origin", "start_date", "end_date", "budget", "group_size", "interests"):
+        value = parsed.get(key)
+        if value is not None and not state.get(key):
+            updates[key] = value  # type: ignore[literal-required]
 
     return {**state, **updates}
 
 
-async def fan_out_node(state: OrchestratorState) -> OrchestratorState:
-    """Run FlightAgent, HotelAgent, and ActivitiesAgent concurrently.
+async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
+    """Run FlightAgent only.
 
-    Each sub-agent receives only the state slice it needs. Results are
-    collected into OrchestratorState. One agent failing never blocks the
-    other two — asyncio.gather(return_exceptions=True) ensures all three
-    always complete.
+    On re-plan (replan_attempts > 0), uses a progressively lower budget cap
+    via replan_flight_budget() to find cheaper connecting flights.
+    Called once on the initial pass and again on each re-plan loop.
+    """
+    publish_fn = state.get("publish_fn")
+    db = state.get("db")
+    trip_id = state.get("trip_id")
 
-    SSE progress events are published after each agent finishes via the
-    injected publish_fn.
+    replan_attempts = state.get("replan_attempts", 0)
+    total_budget = state.get("budget") or 0.0
+    flight_budget = replan_flight_budget(total_budget, replan_attempts) if replan_attempts > 0 else total_budget
+
+    flight_input = {
+        "destination": state.get("destination", ""),
+        "origin": state.get("origin") or "DEL",
+        "date": state.get("start_date", ""),
+        "return_date": state.get("end_date") or None,
+        "budget": flight_budget,
+        "passengers": state.get("group_size") or 1,
+    }
+
+    result = await FlightAgent().run(flight_input, db=db, trip_id=trip_id)
+
+    if result.get("error"):
+        flights, flight_error, flight_status = [], result["error"], "failed"
+    else:
+        flights, flight_error, flight_status = result.get("flights", []), None, "completed"
+
+    if publish_fn and flight_status == "completed":
+        try:
+            summary = f"Found {len(flights)} flights"
+            if replan_attempts > 0:
+                summary += f" (re-plan attempt {replan_attempts})"
+            await publish_fn({"agent": "flight_agent", "status": flight_status, "summary": summary})
+        except Exception:
+            pass
+
+    return {**state, "flights": flights, "flight_error": flight_error, "flight_status": flight_status}
+
+
+async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
+    """Evaluate remaining budget after cheapest available flight.
+
+    Wraps the pure make_budget_decision() with DB logging and SSE option generation.
+    Increments replan_attempts when routing back to run_flight_node.
+    """
+    db = state.get("db")
+    trip_id = state.get("trip_id")
+
+    flights = state.get("flights", [])
+    total_budget = state.get("budget") or 0.0
+    replan_attempts = state.get("replan_attempts", 0)
+
+    start = time.monotonic()
+    decision = make_budget_decision(flights, total_budget, replan_attempts)
+    duration_ms = int((time.monotonic() - start) * 1000)
+
+    budget_conflict_options: list[dict] | None = None
+    if decision.decision == "escalate":
+        budget_conflict_options = [
+            {
+                "choice": "cheaper_flights",
+                "description": "Search for cheaper connecting flights",
+                "estimated_saving": f"₹{decision.flight_cost * 0.35:,.0f}",
+            },
+            {
+                "choice": "reduce_days",
+                "description": "Shorten the trip by 2 days to reduce hotel costs",
+                "estimated_saving": "~₹8,000–15,000",
+            },
+            {
+                "choice": "increase_budget",
+                "description": "Increase total budget by 25%",
+                "estimated_saving": f"Additional ₹{total_budget * 0.25:,.0f}",
+            },
+        ]
+
+    if db is not None and trip_id is not None:
+        await log_agent_run(
+            db=db,
+            trip_id=trip_id,
+            agent_name="budget_decision",
+            input={
+                "flights_evaluated": len(flights),
+                "cheapest_flight": decision.flight_cost,
+                "total_budget": total_budget,
+                "replan_attempts": replan_attempts,
+            },
+            output=decision.model_dump(),
+            duration_ms=duration_ms,
+            status="completed",
+        )
+
+    return {
+        **state,
+        "budget_decision": decision.model_dump(),
+        "budget_conflict_options": budget_conflict_options,
+        # Increment only when routing back to run_flight_node
+        "replan_attempts": replan_attempts + (1 if decision.decision == "replan" else 0),
+    }
+
+
+def route_after_budget_decision(state: OrchestratorState) -> str:
+    """Conditional edge: map budget decision to next node.
+
+    Returns one of: "continue" | "replan" | "escalate"
+    These keys are mapped to node names in add_conditional_edges.
+    """
+    bd = state.get("budget_decision")
+    if not bd:
+        return "continue"
+    return bd.get("decision", "continue")
+
+
+async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
+    """Run HotelAgent and ActivitiesAgent concurrently.
+
+    Called only when budget_decision returned "continue".
+    Uses remaining_budget from budget_decision as the hotel nightly cap,
+    which is more accurate than dividing the total budget.
     """
     publish_fn = state.get("publish_fn")
     db = state.get("db")
     trip_id = state.get("trip_id")
 
     destination = state.get("destination", "")
-    origin = state.get("origin") or "DEL"
     start_date = state.get("start_date", "")
     end_date = state.get("end_date", "")
-    budget = state.get("budget", 0.0)
     group_size = state.get("group_size") or 1
     interests = state.get("interests") or []
 
-    # ── Build sub-agent input slices ───────────────────────────────────
-    flight_input = {
-        "destination": destination,
-        "origin": origin,
-        "date": start_date,
-        "return_date": end_date or None,
-        "budget": budget,
-        "passengers": group_size,
-    }
+    # Derive per-night cap from remaining budget (after flights)
+    bd = state.get("budget_decision") or {}
+    remaining_budget = bd.get("remaining_budget") or (state.get("budget") or 0.0)
+    try:
+        days = max(1, (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days)
+    except Exception:
+        days = 7
+    budget_per_night = round(remaining_budget / days, 2)
+
     hotel_input = {
         "destination": destination,
         "check_in": start_date,
         "check_out": end_date,
-        "budget_per_night": round(budget / max(1, (group_size or 1)) / 7, 2),
+        "budget_per_night": budget_per_night,
         "guests": group_size,
     }
     activities_input = {
@@ -203,25 +305,13 @@ async def fan_out_node(state: OrchestratorState) -> OrchestratorState:
         "limit": 5,
     }
 
-    # ── Run concurrently ───────────────────────────────────────────────
     results = await asyncio.gather(
-        FlightAgent().run(flight_input, db=db, trip_id=trip_id),
         HotelAgent().run(hotel_input, db=db, trip_id=trip_id),
         ActivitiesAgent().run(activities_input, db=db, trip_id=trip_id),
         return_exceptions=True,
     )
+    hotel_result, activities_result = results
 
-    flight_result, hotel_result, activities_result = results
-
-    # ── Process flight result ──────────────────────────────────────────
-    if isinstance(flight_result, Exception):
-        flights, flight_error, flight_status = [], {"error": str(flight_result), "code": "AGENT_EXCEPTION"}, "failed"
-    elif flight_result.get("error"):
-        flights, flight_error, flight_status = [], flight_result["error"], "failed"
-    else:
-        flights, flight_error, flight_status = flight_result.get("flights", []), None, "completed"
-
-    # ── Process hotel result ───────────────────────────────────────────
     if isinstance(hotel_result, Exception):
         hotels, hotel_error, hotel_status = [], {"error": str(hotel_result), "code": "AGENT_EXCEPTION"}, "failed"
     elif hotel_result.get("error"):
@@ -229,7 +319,6 @@ async def fan_out_node(state: OrchestratorState) -> OrchestratorState:
     else:
         hotels, hotel_error, hotel_status = hotel_result.get("hotels", []), None, "completed"
 
-    # ── Process activities result ──────────────────────────────────────
     if isinstance(activities_result, Exception):
         attractions, activities_error, activities_status = [], {"error": str(activities_result), "code": "AGENT_EXCEPTION"}, "failed"
     elif activities_result.get("error"):
@@ -237,10 +326,8 @@ async def fan_out_node(state: OrchestratorState) -> OrchestratorState:
     else:
         attractions, activities_error, activities_status = activities_result.get("attractions", []), None, "completed"
 
-    # ── Publish SSE progress events ────────────────────────────────────
     if publish_fn:
         for agent_name, status, summary, error in [
-            ("flight_agent", flight_status, f"Found {len(flights)} flights", flight_error),
             ("hotel_agent", hotel_status, f"Found {len(hotels)} hotels", hotel_error),
             ("activities_agent", activities_status, f"Found {len(attractions)} attractions", activities_error),
         ]:
@@ -251,13 +338,10 @@ async def fan_out_node(state: OrchestratorState) -> OrchestratorState:
                     "summary": summary if status == "completed" else (error or {}).get("error", "Failed"),
                 })
             except Exception:
-                pass  # SSE publish failure never blocks planning
+                pass
 
     return {
         **state,
-        "flights": flights,
-        "flight_error": flight_error,
-        "flight_status": flight_status,
         "hotels": hotels,
         "hotel_error": hotel_error,
         "hotel_status": hotel_status,
@@ -267,33 +351,54 @@ async def fan_out_node(state: OrchestratorState) -> OrchestratorState:
     }
 
 
-async def merge_node(state: OrchestratorState) -> OrchestratorState:
-    """Validate the merged state and publish planning_complete event.
+async def escalate_node(state: OrchestratorState) -> OrchestratorState:
+    """Publish budget_conflict SSE event and terminate planning gracefully.
 
-    Partial failure is acceptable — if at least one agent succeeded,
-    the orchestration is considered successful enough to proceed to the
-    ItineraryBuilder (Phase 12). Full failure (all three agents failed)
-    is surfaced via the status fields for the route to handle.
+    Publishes both budget_conflict (with options) and planning_failed so
+    the frontend doesn't hang waiting for a planning_complete that never arrives.
     """
     publish_fn = state.get("publish_fn")
+    bd = state.get("budget_decision") or {}
+    options = state.get("budget_conflict_options") or []
 
+    if publish_fn:
+        try:
+            await publish_fn({
+                "event": "budget_conflict",
+                "reason": bd.get("reason", "Flights exceed available budget."),
+                "flight_cost": bd.get("flight_cost", 0),
+                "remaining_budget": bd.get("remaining_budget", 0),
+                "options": options,
+            })
+            await publish_fn({
+                "event": "planning_failed",
+                "agent": "orchestrator",
+                "status": "failed",
+                "error": "budget_conflict",
+            })
+        except Exception:
+            pass
+
+    return {**state, "hotel_status": "skipped", "activities_status": "skipped"}
+
+
+async def merge_node(state: OrchestratorState) -> OrchestratorState:
+    """Publish planning_complete. Called only on the 'continue' path."""
+    publish_fn = state.get("publish_fn")
     agents_done = sum(
         1 for s in [state.get("flight_status"), state.get("hotel_status"), state.get("activities_status")]
         if s == "completed"
     )
-    agents_total = 3
-
     if publish_fn:
         try:
             await publish_fn({
                 "event": "planning_complete",
                 "agents_done": agents_done,
-                "agents_total": agents_total,
+                "agents_total": 3,
                 "status": "completed" if agents_done > 0 else "failed",
             })
         except Exception:
             pass
-
     return state
 
 
@@ -304,13 +409,27 @@ def build_orchestrator_graph():
     graph = StateGraph(OrchestratorState)
 
     graph.add_node("intent_parsing", intent_parsing_node)
-    graph.add_node("fan_out", fan_out_node)
+    graph.add_node("run_flight", run_flight_node)
+    graph.add_node("budget_decision", budget_decision_node)
+    graph.add_node("hotel_activities", hotel_activities_node)
     graph.add_node("merge", merge_node)
+    graph.add_node("escalate", escalate_node)
 
     graph.set_entry_point("intent_parsing")
-    graph.add_edge("intent_parsing", "fan_out")
-    graph.add_edge("fan_out", "merge")
+    graph.add_edge("intent_parsing", "run_flight")
+    graph.add_edge("run_flight", "budget_decision")
+    graph.add_conditional_edges(
+        "budget_decision",
+        route_after_budget_decision,
+        {
+            "continue": "hotel_activities",
+            "replan": "run_flight",   # cycles back for cheaper flight search
+            "escalate": "escalate",
+        },
+    )
+    graph.add_edge("hotel_activities", "merge")
     graph.add_edge("merge", END)
+    graph.add_edge("escalate", END)
 
     return graph.compile()
 
@@ -319,7 +438,7 @@ def build_orchestrator_graph():
 
 
 class OrchestratorAgent:
-    """Thin wrapper so callers (routes) don't need to touch LangGraph directly."""
+    """Thin wrapper so callers don't need to touch LangGraph directly."""
 
     def __init__(self):
         self._graph = build_orchestrator_graph()
@@ -331,13 +450,12 @@ class OrchestratorAgent:
         trip_id: uuid.UUID | None = None,
         publish_fn=None,
     ) -> dict:
-        # Inject runtime helpers into state
         full_state = {
             **input_state,
             "db": db,
             "trip_id": trip_id,
             "publish_fn": publish_fn,
-            # Ensure list/error fields have defaults so merge_node never KeyErrors
+            # List/error defaults so merge/escalate never KeyErrors
             "flights": [],
             "hotels": [],
             "attractions": [],
@@ -347,12 +465,15 @@ class OrchestratorAgent:
             "flight_error": None,
             "hotel_error": None,
             "activities_error": None,
+            # Phase 10 defaults
+            "replan_attempts": 0,
+            "budget_decision": None,
+            "budget_conflict_options": None,
         }
 
         async with timed_run() as timer:
             result = await self._graph.ainvoke(full_state)
 
-        # Write orchestrator-level agent_run row
         if db is not None and trip_id is not None:
             agents_done = sum(
                 1 for s in [result.get("flight_status"), result.get("hotel_status"), result.get("activities_status")]
@@ -370,11 +491,11 @@ class OrchestratorAgent:
                     "flight_status": result.get("flight_status"),
                     "hotel_status": result.get("hotel_status"),
                     "activities_status": result.get("activities_status"),
+                    "budget_decision": result.get("budget_decision"),
+                    "replan_attempts": result.get("replan_attempts", 0),
                 },
                 duration_ms=timer.duration_ms,
                 status="completed" if agents_done > 0 else "failed",
             )
 
-        # Strip non-serialisable runtime helpers before returning
-        clean = {k: v for k, v in result.items() if k not in ("db", "trip_id", "publish_fn")}
-        return clean
+        return {k: v for k, v in result.items() if k not in ("db", "trip_id", "publish_fn")}

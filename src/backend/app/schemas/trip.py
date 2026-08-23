@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -43,16 +44,21 @@ class TripRead(BaseModel):
 
 
 class PlanRequest(BaseModel):
-    """Optional body for POST /trips/{id}/plan.
-
-    Omit entirely (or send {}) for structured-data trips.
-    Send raw_input for free-form queries that need intent parsing.
-    """
-
+    """Optional body for POST /trips/{id}/plan."""
     raw_input: str | None = None
 
 
 class ClarifyRequest(BaseModel):
     """Body for POST /trips/{id}/clarify."""
-
     answer: str
+
+
+class ReplanRequest(BaseModel):
+    """Body for POST /trips/{id}/replan — Phase 10.
+
+    choice meanings:
+      cheaper_flights  → re-run flight search with reduced budget cap
+      reduce_days      → shorten trip by 2 days (lower hotel cost)
+      increase_budget  → bump total budget by 25% and retry
+    """
+    choice: Literal["cheaper_flights", "reduce_days", "increase_budget"]
