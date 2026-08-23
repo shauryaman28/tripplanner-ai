@@ -111,10 +111,11 @@ async def test_persist_node_failure_leaves_neither_row_written(db_session):
     """Forced failure inside persist_node before commit → full rollback:
     no itinerary row, trip.status stays at its pre-persist value."""
     trip = await _make_trip(db_session)
+    trip_id = trip.id
     state = {
         "draft_itinerary": {"days": [], "total_cost": 0, "currency": "INR"},
         "db": db_session,
-        "trip_id": trip.id,
+        "trip_id": trip_id,
     }
 
     with patch.object(db_session, "commit", AsyncMock(side_effect=RuntimeError("simulated failure"))):
@@ -123,8 +124,8 @@ async def test_persist_node_failure_leaves_neither_row_written(db_session):
 
     await db_session.rollback()
 
-    rows = (await db_session.execute(select(Itinerary).where(Itinerary.trip_id == trip.id))).scalars().all()
+    rows = (await db_session.execute(select(Itinerary).where(Itinerary.trip_id == trip_id))).scalars().all()
     assert len(rows) == 0
 
-    refreshed = await db_session.get(Trip, trip.id)
+    refreshed = await db_session.get(Trip, trip_id)
     assert refreshed.status == TripStatus.PLANNING

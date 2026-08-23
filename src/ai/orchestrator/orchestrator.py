@@ -525,7 +525,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     draft = state.get("draft_itinerary") or {}
 
     if db is None or trip_id is None:
-        return state
+        return {**state, "itinerary_id": None}
 
     itinerary = Itinerary(
         trip_id=trip_id,
@@ -667,10 +667,6 @@ class OrchestratorAgent:
         publish_fn=None,
     ) -> dict:
         full_state = {
-            **input_state,
-            "db": db,
-            "trip_id": trip_id,
-            "publish_fn": publish_fn,
             "flights": [],
             "hotels": [],
             "attractions": [],
@@ -688,6 +684,10 @@ class OrchestratorAgent:
             "evaluator_verdict": None,
             "evaluator_retry_count": 0,
             "itinerary_id": None,
+            **input_state,
+            "db": db if db is not None else input_state.get("db"),
+            "trip_id": trip_id if trip_id is not None else input_state.get("trip_id"),
+            "publish_fn": publish_fn if publish_fn is not None else input_state.get("publish_fn"),
         }
 
         async with timed_run() as timer:

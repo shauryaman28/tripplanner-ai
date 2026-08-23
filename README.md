@@ -185,7 +185,7 @@ tripplanner-ai/
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 134 tests passing** (unit + contract), zero network calls in CI.
+**Total: 132 tests passing** (unit + contract), 137 with integration tests. Zero network calls in CI.
 
 ---
 
