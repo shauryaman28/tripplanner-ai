@@ -3,13 +3,14 @@ Trip routes — all require JWT.
 
 GET    /trips                    list all trips for authenticated user
 POST   /trips                    create a trip
-POST   /trips/{id}/plan          kick off planning (202, agents wired Phase 9)
+POST   /trips/{id}/plan          kick off planning (Phase 9: OrchestratorAgent)
 GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
 GET    /trips/{id}/itinerary     latest itinerary for the trip
 GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
 GET    /trips/{id}/runs          all agent_runs for debugging
 """
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
@@ -29,7 +30,7 @@ from app.models.user import User
 from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
 from app.schemas.trip import ClarifyRequest, PlanRequest, TripCreate, TripRead
-from src.ai.agents.flight_agent import FlightAgent
+from src.ai.orchestrator.orchestrator import OrchestratorAgent
 from src.ai.utils.conversation import (
     append_history,
     get_trip_state,
@@ -90,73 +91,97 @@ async def plan_trip(
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
     """
-    Kick off trip planning.
+    Kick off trip planning via OrchestratorAgent (Phase 9).
 
-    - No body (or empty body): uses structured fields from the trip row.
-    - body.raw_input set: runs intent parser first; returns
-      clarification_needed if any required field is still missing.
+    - Publishes planning_started SSE event immediately.
+    - Runs OrchestratorAgent: intent parsing → concurrent fan-out to
+      FlightAgent, HotelAgent, ActivitiesAgent → merge.
+    - Each sub-agent publishes its own SSE progress event on completion.
+    - Publishes planning_complete SSE event when the Orchestrator finishes.
+    - Runs in a background task so the HTTP response returns 202 immediately.
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
-    # Build initial state from the trip row; raw_input overlays it
+    # Build initial state from the trip row; raw_input overlays if present
     initial_state: dict = {
         "destination": trip.destination,
-        "date": str(trip.start_date),
+        "start_date": str(trip.start_date),
+        "end_date": str(trip.end_date),
         "budget": trip.budget,
-        "passengers": trip.group_size,
+        "group_size": trip.group_size,
+        "interests": trip.interests or [],
     }
     if body.raw_input:
         initial_state["raw_input"] = body.raw_input
 
-    agent = FlightAgent()
-    result = await agent.run(initial_state, db=db, trip_id=trip.id)
-
-    # ── Clarification needed ───────────────────────────────────────────
-    if result.get("clarification_question"):
-        await save_trip_state(redis, str(trip_id), result)
-        if body.raw_input:
-            await append_history(redis, str(trip_id), "user", body.raw_input)
-        await append_history(redis, str(trip_id), "assistant", result["clarification_question"])
-        await redis.publish(
-            f"trip:{trip_id}:events",
-            json.dumps(
-                {
-                    "agent": "flight_agent",
-                    "status": "clarification_needed",
-                    "question": result["clarification_question"],
-                }
-            ),
-        )
-        return {
-            "status": "clarification_needed",
-            "question": result["clarification_question"],
-            "trip_id": str(trip_id),
-        }
-
-    # ── Planning started ───────────────────────────────────────────────
+    # Mark trip as planning
     trip.status = TripStatus.PLANNING
     db.add(trip)
-    run = AgentRun(
-        trip_id=trip.id,
-        agent_name="orchestrator",
-        status="pending",
-        input=initial_state,
-        output={},
-    )
-    db.add(run)
     await db.commit()
 
+    # Publish planning_started immediately so SSE clients see it at once
     await redis.publish(
         f"trip:{trip_id}:events",
-        json.dumps(
-            {
-                "agent": "flight_agent",
-                "status": "completed" if not result.get("error") else "failed",
-                "summary": f"Found {len(result.get('flights', []))} flights",
-            }
-        ),
+        json.dumps({
+            "event": "planning_started",
+            "agent": "orchestrator",
+            "status": "planning",
+            "trip_id": str(trip_id),
+        }),
     )
+
+    # Build SSE publish helper that serialises events to the Redis channel
+    async def publish_fn(event: dict) -> None:
+        await redis.publish(
+            f"trip:{trip_id}:events",
+            json.dumps(event),
+        )
+
+    # Run the Orchestrator in a background task so we return 202 immediately
+    asyncio.create_task(
+        _run_orchestrator(
+            trip_id=trip_id,
+            initial_state=initial_state,
+            db=db,
+            redis=redis,
+            publish_fn=publish_fn,
+        )
+    )
+
     return {"status": "planning_started", "trip_id": str(trip_id)}
+
+
+async def _run_orchestrator(
+    trip_id: uuid.UUID,
+    initial_state: dict,
+    db: AsyncSession,
+    redis: aioredis.Redis,
+    publish_fn,
+) -> None:
+    """Background task: run OrchestratorAgent and publish final status."""
+    try:
+        agent = OrchestratorAgent()
+        await agent.run(
+            initial_state,
+            db=db,
+            trip_id=trip_id,
+            publish_fn=publish_fn,
+        )
+    except Exception as exc:
+        # Surface unhandled orchestrator exceptions via SSE so the frontend
+        # doesn't hang waiting for a planning_complete event that never arrives.
+        try:
+            await publish_fn({
+                "event": "planning_failed",
+                "agent": "orchestrator",
+                "status": "failed",
+                "error": str(exc),
+            })
+        except Exception:
+            pass
+
+
+# ── POST /trips/{id}/clarify ───────────────────────────────────────────────
 
 
 @router.post("/{trip_id}/clarify", status_code=200)
@@ -170,13 +195,11 @@ async def clarify_trip(
     """
     Submit the user's answer to a clarifying question and re-trigger planning.
 
-    Loads the partial TripState saved by plan_trip, merges the answer as
-    raw_input, and re-runs FlightAgent from the top of the graph.
-    The intent-parsing node fills in only the still-missing fields.
+    Loads partial state saved by a previous /plan call, merges the answer
+    as raw_input, and re-runs the OrchestratorAgent from the top.
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
-    # Restore previous partial state; strip stale clarification fields
     prev_state: dict = await get_trip_state(redis, str(trip_id)) or {}
     prev_state.pop("clarification_question", None)
     prev_state.pop("raw_input", None)
@@ -184,50 +207,33 @@ async def clarify_trip(
 
     await append_history(redis, str(trip_id), "user", body.answer)
 
-    agent = FlightAgent()
-    result = await agent.run(prev_state, db=db, trip_id=trip.id)
-
-    if result.get("clarification_question"):
-        await save_trip_state(redis, str(trip_id), result)
-        await append_history(redis, str(trip_id), "assistant", result["clarification_question"])
-        await redis.publish(
-            f"trip:{trip_id}:events",
-            json.dumps(
-                {
-                    "agent": "flight_agent",
-                    "status": "clarification_needed",
-                    "question": result["clarification_question"],
-                }
-            ),
-        )
-        return {
-            "status": "clarification_needed",
-            "question": result["clarification_question"],
-            "trip_id": str(trip_id),
-        }
-
     trip.status = TripStatus.PLANNING
     db.add(trip)
-    run = AgentRun(
-        trip_id=trip.id,
-        agent_name="orchestrator",
-        status="pending",
-        input=prev_state,
-        output={},
-    )
-    db.add(run)
     await db.commit()
 
     await redis.publish(
         f"trip:{trip_id}:events",
-        json.dumps(
-            {
-                "agent": "flight_agent",
-                "status": "completed" if not result.get("error") else "failed",
-                "summary": f"Found {len(result.get('flights', []))} flights",
-            }
-        ),
+        json.dumps({
+            "event": "planning_started",
+            "agent": "orchestrator",
+            "status": "planning",
+            "trip_id": str(trip_id),
+        }),
     )
+
+    async def publish_fn(event: dict) -> None:
+        await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
+
+    asyncio.create_task(
+        _run_orchestrator(
+            trip_id=trip_id,
+            initial_state=prev_state,
+            db=db,
+            redis=redis,
+            publish_fn=publish_fn,
+        )
+    )
+
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
@@ -248,13 +254,11 @@ async def stream_trip_events(
     message as an SSE event.  Browsers connect via:
         new EventSource('/trips/<id>/stream?token=<jwt>')
     """
-    # Verify trip belongs to user before streaming
     await _get_trip_or_404(trip_id, current_user.id, db)
 
     async def generator() -> AsyncGenerator:
         pubsub = redis.pubsub()
         await pubsub.subscribe(f"trip:{trip_id}:events")
-        # Send an immediate connected confirmation
         yield {
             "event": "connected",
             "data": json.dumps({"trip_id": str(trip_id), "status": "listening"}),
