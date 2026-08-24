@@ -145,10 +145,14 @@ def _build_user_prompt(
 
 
 async def _call_claude_llm(system_prompt: str, user_prompt: str) -> str:
-    """Isolated so tests can patch this single seam instead of mocking the SDK."""
-    from langchain_anthropic import ChatAnthropic
+    """Isolated so tests can patch this single seam instead of mocking the SDK.
 
-    llm = ChatAnthropic(model="claude-haiku-4-5-20251001", temperature=0, max_tokens=4096)
+    Swapped from Anthropic Claude Haiku to Groq (free tier, no card) —
+    function name kept for now so existing tests/callers don't need renaming.
+    """
+    from langchain_groq import ChatGroq
+
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_tokens=4096)
     response = await llm.ainvoke([("system", system_prompt), ("user", user_prompt)])
     return response.content
 

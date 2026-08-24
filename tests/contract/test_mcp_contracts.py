@@ -31,11 +31,11 @@ from src.ai.mcp_server.tools import (
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 
 
-def _settings(client_id="k", secret="s", gmaps="k", owm="k"):
+def _settings(client_id="k", secret="s", otm="k", owm="k"):
     s = MagicMock()
     s.AMADEUS_CLIENT_ID = client_id
     s.AMADEUS_CLIENT_SECRET = secret
-    s.GOOGLE_MAPS_API_KEY = gmaps
+    s.OPENTRIPMAP_API_KEY = otm
     s.OPENWEATHER_API_KEY = owm
     return s
 
@@ -148,25 +148,28 @@ class TestHotelContract:
 class TestAttractionContract:
     def test_attraction_has_all_required_fields_including_lat_lng(self):
         """Attraction shape: name, category, rating, description, lat?, lng?."""
-        mock_places = {
-            "results": [
-                {
-                    "name": "Fort Aguada",
-                    "types": ["tourist_attraction"],
-                    "rating": 4.5,
-                    "geometry": {"location": {"lat": 15.5, "lng": 73.7}},
-                    "editorial_summary": {"overview": "A fort."},
-                }
-            ]
-        }
+        geo_response = MagicMock()
+        geo_response.raise_for_status = MagicMock()
+        geo_response.json.return_value = {"lat": 15.4909, "lon": 73.8278}
+
+        radius_response = MagicMock()
+        radius_response.raise_for_status = MagicMock()
+        radius_response.json.return_value = [
+            {
+                "name": "Fort Aguada",
+                "kinds": "historic,fortifications",
+                "rate": 4,
+                "point": {"lat": 15.5, "lon": 73.7},
+            }
+        ]
 
         with (
             patch("src.ai.mcp_server.tools.mcp_settings", _settings()),
             patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
             patch("src.ai.mcp_server.tools.set_cached_sync"),
-            patch("src.ai.mcp_server.tools.googlemaps") as mg,
+            patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
         ):
-            mg.Client.return_value.places.return_value = mock_places
+            mock_httpx.get.side_effect = [geo_response, radius_response]
             result = get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=3))
 
         assert isinstance(result, list)

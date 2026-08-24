@@ -16,7 +16,6 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 
-import googlemaps
 import httpx
 from amadeus import Client as AmadeusClient
 from amadeus import ResponseError as AmadeusError
@@ -92,28 +91,38 @@ _CITY_IATA: dict[str, str] = {
     "surat": "STV",
 }
 
-# Google Place type → our category system
-_PLACE_TYPE_MAP: dict[str, str] = {
-    "museum": "history",
-    "tourist_attraction": "sightseeing",
-    "church": "history",
-    "hindu_temple": "history",
-    "mosque": "history",
-    "restaurant": "food",
-    "food": "food",
-    "cafe": "food",
-    "bar": "nightlife",
-    "night_club": "nightlife",
-    "park": "nature",
-    "natural_feature": "nature",
-    "campground": "nature",
-    "amusement_park": "adventure",
-    "zoo": "nature",
-    "aquarium": "nature",
-    "spa": "wellness",
-    "shopping_mall": "shopping",
-    "beach": "beach",
-    "stadium": "sports",
+# OpenTripMap kind → our category system
+_OTM_KIND_MAP: dict[str, str] = {
+    "museums": "history",
+    "historic": "history",
+    "religion": "history",
+    "architecture": "sightseeing",
+    "cultural": "history",
+    "foods": "food",
+    "restaurants": "food",
+    "cafes": "food",
+    "nightclubs": "nightlife",
+    "natural": "nature",
+    "national_parks": "nature",
+    "beaches": "beach",
+    "amusements": "adventure",
+    "sport": "sports",
+    "adult": "nightlife",
+    "shops": "shopping",
+    "spas": "wellness",
+}
+
+_INTEREST_TO_OTM_KIND: dict[str, str] = {
+    "history": "historic,museums,cultural",
+    "food": "foods,restaurants,cafes",
+    "beach": "beaches",
+    "nature": "natural,national_parks",
+    "adventure": "amusements,sport",
+    "nightlife": "nightclubs",
+    "shopping": "shops",
+    "wellness": "spas",
+    "sightseeing": "interesting_places",
+    "culture": "cultural,museums",
 }
 
 # Monthly climate fallback for dates beyond OWM's 5-day window.
@@ -204,12 +213,12 @@ def _parse_iso_duration(duration: str) -> int:
     return (int(hours.group(1)) if hours else 0) * 60 + (int(mins.group(1)) if mins else 0)
 
 
-def _infer_category(types: list[str], interests: list[str]) -> str:
-    for t in types:
-        cat = _PLACE_TYPE_MAP.get(t)
+def _otm_kind_to_category(kinds: str) -> str:
+    for k in kinds.split(","):
+        cat = _OTM_KIND_MAP.get(k.strip())
         if cat:
             return cat
-    return interests[0] if interests else "sightseeing"
+    return "sightseeing"
 
 
 def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayForecast]:
@@ -407,61 +416,84 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
 
 
 def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
-    """Search attractions via Google Maps Places API. Caches for 6 hours."""
-    # --- validation ---
+    """Search attractions via OpenTripMap. Caches for 6 hours."""
     if input.limit > 10:
         return ToolError(error="Limit cannot exceed 10.", code="LIMIT_EXCEEDED")
 
-    # --- API key check ---
-    if not mcp_settings.GOOGLE_MAPS_API_KEY:
+    if not mcp_settings.OPENTRIPMAP_API_KEY:
         return ToolError(
-            error="Google Maps API not configured. Set GOOGLE_MAPS_API_KEY in .env.",
+            error="OpenTripMap API not configured. Set OPENTRIPMAP_API_KEY in .env.",
             code="API_NOT_CONFIGURED",
         )
 
-    # --- cache ---
     cache_key = make_cache_key("attractions", input.model_dump())
     cached = get_cached_sync(cache_key)
     if cached is not None:
         return [Attraction(**a) for a in cached]
 
-    # --- real API call ---
     try:
-        gmaps = googlemaps.Client(key=mcp_settings.GOOGLE_MAPS_API_KEY)
-        interest_str = ", ".join(input.interests) if input.interests else "tourist"
-        query = f"top {interest_str} attractions in {input.destination} India"
-        result = gmaps.places(query=query, language="en")
+        # Step 1 — geocode destination name to lat/lon
+        geo_resp = httpx.get(
+            "https://api.opentripmap.com/0.1/en/places/geoname",
+            params={"name": input.destination, "apikey": mcp_settings.OPENTRIPMAP_API_KEY},
+            timeout=10,
+        )
+        geo_resp.raise_for_status()
+        geo = geo_resp.json()
+        if "lat" not in geo or "lon" not in geo:
+            return ToolError(error=f"Could not geocode destination: {input.destination}", code="NOT_FOUND")
 
-        attractions: list[Attraction] = []
-        for place in (result.get("results") or [])[: input.limit]:
-            types = place.get("types", [])
-            category = _infer_category(types, input.interests)
-            loc = place.get("geometry", {}).get("location", {})
-            editorial = place.get("editorial_summary", {}).get("overview")
-            attractions.append(
-                Attraction(
-                    name=place.get("name", ""),
-                    category=category,
-                    rating=float(place.get("rating") or 3.0),
-                    description=editorial or f"A popular {category} attraction in {input.destination}.",
-                    lat=loc.get("lat"),
-                    lng=loc.get("lng"),
-                )
-            )
+        # Step 2 — map interests to OTM kinds
+        kinds = ",".join(
+            {_INTEREST_TO_OTM_KIND.get(i.strip().lower(), "interesting_places") for i in input.interests}
+        ) if input.interests else "interesting_places"
 
-        if not attractions:
-            # Fall back gracefully — no error, empty list surfaced via NO_RESULTS
+        radius_resp = httpx.get(
+            "https://api.opentripmap.com/0.1/en/places/radius",
+            params={
+                "radius": 15000,
+                "lon": geo["lon"],
+                "lat": geo["lat"],
+                "kinds": kinds,
+                "limit": input.limit,
+                "rate": 2,
+                "format": "json",
+                "apikey": mcp_settings.OPENTRIPMAP_API_KEY,
+            },
+            timeout=10,
+        )
+        radius_resp.raise_for_status()
+        places = radius_resp.json()
+
+        if not places:
             return ToolError(
                 error=f"No attractions found for {input.interests} in {input.destination}.",
                 code="NO_RESULTS",
             )
 
+        attractions: list[Attraction] = []
+        for place in places[: input.limit]:
+            category = _otm_kind_to_category(place.get("kinds", ""))
+            attractions.append(
+                Attraction(
+                    name=place.get("name") or "Unnamed attraction",
+                    category=category,
+                    rating=float(place.get("rate") or 3.0),
+                    description=f"A popular {category} attraction in {input.destination}.",
+                    lat=place.get("point", {}).get("lat"),
+                    lng=place.get("point", {}).get("lon"),
+                )
+            )
+
         set_cached_sync(cache_key, [a.model_dump() for a in attractions], TTL_ATTRACTIONS)
         return attractions
 
+    except httpx.HTTPStatusError as exc:
+        logger.error("OpenTripMap error: %s", exc)
+        return ToolError(error=f"OpenTripMap API error: {exc}", code="OTM_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in get_attractions")
-        return ToolError(error=f"Google Maps error: {exc}", code="MAPS_ERROR")
+        return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
 
 
 # ── Tool: get_weather ──────────────────────────────────────────────────────

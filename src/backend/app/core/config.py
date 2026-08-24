@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # LLMs (Phase 6+)
     GOOGLE_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
 
     # External APIs (Phase 3)
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     AMADEUS_CLIENT_SECRET: str = ""
     AMADEUS_BASE_URL: str = "https://test.api.amadeus.com"
     AMADEUS_HOTEL_ENABLED: bool = True
-    GOOGLE_MAPS_API_KEY: str = ""
+    OPENTRIPMAP_API_KEY: str = ""
     OPENWEATHER_API_KEY: str = ""
 
     # Observability (Phase 26+)

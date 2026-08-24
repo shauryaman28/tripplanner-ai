@@ -23,8 +23,8 @@ class MCPSettings(BaseSettings):
     AMADEUS_CLIENT_SECRET: str = ""
     AMADEUS_BASE_URL: str = "https://test.api.amadeus.com"
 
-    # Google Maps (attractions)
-    GOOGLE_MAPS_API_KEY: str = ""
+    # OpenTripMap (attractions)
+    OPENTRIPMAP_API_KEY: str = ""
 
     # OpenWeatherMap (weather)
     OPENWEATHER_API_KEY: str = ""

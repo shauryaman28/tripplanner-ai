@@ -43,12 +43,12 @@ PAST = (date.today() - timedelta(days=1)).isoformat()
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
-def _fake_settings(client_id="fake_id", secret="fake_secret", gmaps="fake_key", owm="fake_key"):
+def _fake_settings(client_id="fake_id", secret="fake_secret", otm="fake_key", owm="fake_key"):
     """Return a MagicMock that looks like a configured mcp_settings."""
     s = MagicMock()
     s.AMADEUS_CLIENT_ID = client_id
     s.AMADEUS_CLIENT_SECRET = secret
-    s.GOOGLE_MAPS_API_KEY = gmaps
+    s.OPENTRIPMAP_API_KEY = otm
     s.OPENWEATHER_API_KEY = owm
     return s
 
@@ -300,65 +300,94 @@ def test_get_attractions_limit_exceeded():
 
 
 def test_get_attractions_no_api_key():
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(gmaps="")):
+    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(otm="")):
         result = get_attractions(AttractionInput(destination="Goa", interests=[], limit=3))
     assert isinstance(result, ToolError)
     assert result.code == "API_NOT_CONFIGURED"
 
 
 def test_get_attractions_valid():
-    """Happy path — Google Maps mocked."""
-    mock_places_result = {
-        "results": [
-            {
-                "name": "Fort Aguada",
-                "types": ["tourist_attraction"],
-                "rating": 4.5,
-                "geometry": {"location": {"lat": 15.5009, "lng": 73.7655}},
-                "editorial_summary": {"overview": "17th-century fort."},
-            }
-        ]
-    }
+    """Happy path — OpenTripMap geocode + radius search mocked via httpx."""
+    geo_response = MagicMock()
+    geo_response.raise_for_status = MagicMock()
+    geo_response.json.return_value = {"lat": 15.4909, "lon": 73.8278}
+
+    radius_response = MagicMock()
+    radius_response.raise_for_status = MagicMock()
+    radius_response.json.return_value = [
+        {
+            "name": "Fort Aguada",
+            "kinds": "historic,fortifications,tourist_facilities",
+            "rate": 4,
+            "point": {"lat": 15.5009, "lon": 73.7655},
+        }
+    ]
 
     with (
         patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
         patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.googlemaps") as mock_gm,
+        patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
     ):
-        mock_gm.Client.return_value.places.return_value = mock_places_result
+        mock_httpx.get.side_effect = [geo_response, radius_response]
         result = get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=3))
 
     assert isinstance(result, list)
     assert len(result) <= 3
     assert all(isinstance(a, Attraction) for a in result)
     assert result[0].lat is not None  # lat/lng present (Phase 18 map)
+    assert result[0].name == "Fort Aguada"
+    assert result[0].category == "history"
 
 
 def test_get_attractions_no_matching_interests_returns_results():
-    """Even with niche interests, tool returns what Google Maps gives back."""
-    mock_places_result = {
-        "results": [
-            {
-                "name": "Some Place",
-                "types": ["tourist_attraction"],
-                "rating": 4.0,
-                "geometry": {"location": {"lat": 15.0, "lng": 73.0}},
-            }
-        ]
-    }
+    """Even with niche interests, tool returns what OpenTripMap gives back
+    (unmapped interests fall back to 'interesting_places' kind)."""
+    geo_response = MagicMock()
+    geo_response.raise_for_status = MagicMock()
+    geo_response.json.return_value = {"lat": 15.4909, "lon": 73.8278}
+
+    radius_response = MagicMock()
+    radius_response.raise_for_status = MagicMock()
+    radius_response.json.return_value = [
+        {
+            "name": "Some Place",
+            "kinds": "interesting_places",
+            "rate": 3,
+            "point": {"lat": 15.0, "lon": 73.0},
+        }
+    ]
 
     with (
         patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
         patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.googlemaps") as mock_gm,
+        patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
     ):
-        mock_gm.Client.return_value.places.return_value = mock_places_result
+        mock_httpx.get.side_effect = [geo_response, radius_response]
         result = get_attractions(AttractionInput(destination="Goa", interests=["nonexistent_interest"], limit=5))
 
     assert isinstance(result, list)
     assert len(result) > 0
+
+
+def test_get_attractions_geocode_not_found():
+    """Destination that OpenTripMap can't geocode → NOT_FOUND ToolError."""
+    geo_response = MagicMock()
+    geo_response.raise_for_status = MagicMock()
+    geo_response.json.return_value = {}  # no lat/lon → geocode failed
+
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
+    ):
+        mock_httpx.get.return_value = geo_response
+        result = get_attractions(AttractionInput(destination="Nowhereville", interests=[], limit=3))
+
+    assert isinstance(result, ToolError)
+    assert result.code == "NOT_FOUND"
 
 
 # ── get_weather ────────────────────────────────────────────────────────────

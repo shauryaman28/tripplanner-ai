@@ -194,10 +194,13 @@ tripplanner-ai/
 | Variable | Service | Sign-up |
 |---|---|---|
 | `AMADEUS_CLIENT_ID` + `AMADEUS_CLIENT_SECRET` | Flights + Hotels | https://developers.amadeus.com |
-| `GOOGLE_MAPS_API_KEY` | Attractions | https://console.cloud.google.com |
+| `OPENTRIPMAP_API_KEY` | Attractions | https://opentripmap.io |
 | `OPENWEATHER_API_KEY` | Weather | https://openweathermap.org/api |
+| `GROQ_API_KEY` | Itinerary Builder (Llama 3.3) | https://console.groq.com |
+| `GOOGLE_API_KEY` | Agents (Gemini Flash) | https://aistudio.google.com/apikey |
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
+All keys above are available on free tiers with no credit card required.
 
 ---
 
