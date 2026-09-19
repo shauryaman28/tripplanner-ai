@@ -14,11 +14,11 @@ categories of correctness failure:
 
 Design decision (DECISIONS.md #21): all four checks are pure, deterministic
 functions — not an LLM call. These are objectively verifiable conditions
-(date comparison, arithmetic, set membership, duplicate detection); an LLM
-adds cost, latency, and non-determinism for zero benefit. This mirrors the
-Phase 7 router and Phase 10 make_budget_decision precedent already in this
-codebase. Claude Haiku 4.5 remains reserved for genuinely subjective quality
-judgments (see Phase 33's eval-suite grader in the roadmap).
+(date comparison, arithmetic within a tolerance, set membership, duplicate
+detection); an LLM adds cost, latency, and non-determinism for zero benefit.
+This mirrors the Phase 7 router and Phase 10 make_budget_decision precedent
+already in this codebase. Claude Haiku 4.5 remains reserved for genuinely
+subjective quality judgments (see Phase 33's eval-suite grader in the roadmap).
 
 Retry loop:
   - next_agent_for_failures() maps failure types to the sub-agent whose
@@ -52,6 +52,11 @@ from src.ai.utils.run_logger import log_agent_run, timed_run
 
 MAX_EVALUATOR_RETRIES = 3
 BUDGET_TOLERANCE_PCT = 0.05  # 5%
+
+# Phrases the ItineraryBuilder is documented to write when source data is
+# missing (see builder.py _ALLOWED_FALLBACK_PHRASES and itinerary_builder_v1.md).
+# These must NOT be flagged as hallucinations — they are intentional fallbacks.
+_ALLOWED_FALLBACK_PHRASES: frozenset[str] = frozenset({"Explore the area"})
 
 
 # ── Models ───────────────────────────────────────────────────────────────
@@ -172,7 +177,14 @@ def check_duplicate_activities(draft: dict) -> EvaluatorFailure | None:
 
 
 def check_hallucinated_activities(draft: dict, attractions: list[dict]) -> EvaluatorFailure | None:
-    known_names = {a.get("name") for a in attractions if a.get("name")}
+    # Build the set of names the builder is allowed to reference:
+    #   (a) names actually returned by get_attractions
+    #   (b) documented fallback phrases the builder writes when attractions
+    #       are empty for a slot (e.g. "Explore the area" from builder.py)
+    known_names = (
+        {a.get("name") for a in attractions if a.get("name")}
+        | _ALLOWED_FALLBACK_PHRASES
+    )
     hallucinated = []
     for _day_num, _slot_name, slot in _iter_slots(draft):
         name = slot.get("activity")

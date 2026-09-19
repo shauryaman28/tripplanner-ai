@@ -1,5 +1,5 @@
 """
-Phase 12 Dev A — ItineraryBuilder: Claude Haiku + Structured Synthesis.
+Phase 12 Dev A — ItineraryBuilder: Groq (Llama 3.3) + Structured Synthesis.
 
 Produces the day-by-day JSON schema defined in the roadmap:
 
@@ -35,6 +35,11 @@ runs afterward and independently re-checks hallucination + budget-vs-
 estimate_budget consistency — the two checks are not redundant: this
 module validates internal consistency of the JSON itself; the Evaluator
 validates the draft against trip dates and the wider budget estimate.
+
+LLM note: originally designed for Claude Haiku 4.5 but swapped to
+Groq (llama-3.3-70b-versatile) for free-tier usage. The function is
+named _call_llm to be model-agnostic. Swap the ChatGroq line for any
+LangChain-compatible chat model without touching callers.
 """
 
 from __future__ import annotations
@@ -51,6 +56,9 @@ from src.ai.utils.run_logger import log_agent_run, timed_run
 logger = logging.getLogger(__name__)
 
 BUDGET_MATH_TOLERANCE_INR = 500.0
+# Phrases this builder is documented to write when source data is empty for
+# a slot. The Evaluator's hallucination check (evaluator.py) maintains an
+# identical copy of this set so both layers stay in sync.
 _ALLOWED_FALLBACK_PHRASES = {"Explore the area"}
 
 
@@ -123,6 +131,9 @@ CRITICAL DATA SCOPE RULE:
 CRITICAL BUDGET RULE:
 - total_cost MUST equal the sum of every activity cost + every hotel cost_per_night
   (one charge per day) + the flight cost, within ₹500. Do not round loosely.
+- Compute total_cost as the final step: add up every activity cost, every
+  hotel cost_per_night (once per night), and the flight cost. Do not state
+  total_cost as an independent guess.
 
 Return ONLY the JSON object. No explanation, no markdown code fences."""
 
@@ -144,11 +155,13 @@ def _build_user_prompt(
     )
 
 
-async def _call_claude_llm(system_prompt: str, user_prompt: str) -> str:
-    """Isolated so tests can patch this single seam instead of mocking the SDK.
+async def _call_llm(system_prompt: str, user_prompt: str) -> str:
+    """Call the configured LLM and return the raw text response.
 
-    Swapped from Anthropic Claude Haiku to Groq (free tier, no card) —
-    function name kept for now so existing tests/callers don't need renaming.
+    Using Groq (llama-3.3-70b-versatile) — free tier, no credit card required.
+    Swap ChatGroq for any LangChain-compatible chat model (e.g. ChatAnthropic,
+    ChatOpenAI) without changing any other code; this function is the single
+    seam that tests patch.
     """
     from langchain_groq import ChatGroq
 
@@ -222,7 +235,7 @@ async def build_itinerary(
     user_prompt = _build_user_prompt(trip_meta, flights, hotels, attractions)
 
     try:
-        raw = await _call_claude_llm(system_prompt, user_prompt)
+        raw = await _call_llm(system_prompt, user_prompt)
     except Exception as exc:
         logger.exception("ItineraryBuilder LLM call failed")
         return BuilderError(error=f"LLM call failed: {exc}", code="LLM_ERROR")

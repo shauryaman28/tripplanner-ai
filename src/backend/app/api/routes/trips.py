@@ -24,7 +24,7 @@ from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep
-from app.db.session import get_db
+from app.db.session import AsyncSessionLocal, get_db
 from app.models.agent_run import AgentRun
 from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
@@ -39,6 +39,24 @@ from src.ai.utils.conversation import (
 )
 
 router = APIRouter(prefix="/trips", tags=["trips"])
+
+# ── Background task GC protection ─────────────────────────────────────────
+# asyncio.create_task() returns a weak reference — if nothing else holds the
+# task, the GC can cancel it mid-run. Keep a strong reference until done.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _fire_and_forget(coro) -> asyncio.Task:
+    """Schedule a coroutine as a fire-and-forget background task.
+
+    Stores a strong reference in _background_tasks so the GC cannot cancel
+    the task while it is still running. The reference is released automatically
+    via the done-callback once the task completes or raises.
+    """
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 # ── GET /trips ─────────────────────────────────────────────────────────────
@@ -105,6 +123,8 @@ async def plan_trip(
     trip.status = TripStatus.PLANNING
     db.add(trip)
     await db.commit()
+    # db (from Depends) is closed here when the response is sent — the
+    # background task must NOT reuse it. _run_orchestrator opens its own session.
 
     await redis.publish(
         f"trip:{trip_id}:events",
@@ -119,12 +139,10 @@ async def plan_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    asyncio.create_task(
+    _fire_and_forget(
         _run_orchestrator(
             trip_id=trip_id,
             initial_state=initial_state,
-            db=db,
-            redis=redis,
             publish_fn=publish_fn,
         )
     )
@@ -132,20 +150,30 @@ async def plan_trip(
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
-async def _run_orchestrator(trip_id, initial_state, db, redis, publish_fn) -> None:
-    try:
-        agent = OrchestratorAgent()
-        await agent.run(initial_state, db=db, trip_id=trip_id, publish_fn=publish_fn)
-    except Exception as exc:
+async def _run_orchestrator(trip_id, initial_state, publish_fn) -> None:
+    """Run OrchestratorAgent in a background task with its own DB session.
+
+    WHY a fresh session: the `db` dependency from `Depends(get_db)` is
+    scoped to the HTTP request and is closed by FastAPI once the response
+    has been sent. This background task outlives the request, so reusing
+    the request's session would cause "session is closed" errors under
+    any load. Opening AsyncSessionLocal() here gives the task an independent
+    connection from the pool for its entire lifespan.
+    """
+    async with AsyncSessionLocal() as db:
         try:
-            await publish_fn({
-                "event": "planning_failed",
-                "agent": "orchestrator",
-                "status": "failed",
-                "error": str(exc),
-            })
-        except Exception:
-            pass
+            agent = OrchestratorAgent()
+            await agent.run(initial_state, db=db, trip_id=trip_id, publish_fn=publish_fn)
+        except Exception as exc:
+            try:
+                await publish_fn({
+                    "event": "planning_failed",
+                    "agent": "orchestrator",
+                    "status": "failed",
+                    "error": str(exc),
+                })
+            except Exception:
+                pass
 
 
 # ── POST /trips/{id}/clarify ───────────────────────────────────────────────
@@ -185,12 +213,10 @@ async def clarify_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    asyncio.create_task(
+    _fire_and_forget(
         _run_orchestrator(
             trip_id=trip_id,
             initial_state=prev_state,
-            db=db,
-            redis=redis,
             publish_fn=publish_fn,
         )
     )
@@ -254,12 +280,10 @@ async def replan_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    asyncio.create_task(
+    _fire_and_forget(
         _run_orchestrator(
             trip_id=trip_id,
             initial_state=initial_state,
-            db=db,
-            redis=redis,
             publish_fn=publish_fn,
         )
     )

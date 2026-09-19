@@ -3,7 +3,7 @@ Integration test for Phase 12 — build → evaluate → persist against a real
 Postgres DB. Requires Docker. Run with:
     RUN_INTEGRATION=1 pytest tests/integration/
 
-Mocks the Claude Haiku call only — everything else (DB writes, Evaluator's
+Mocks the _call_llm seam only — everything else (DB writes, Evaluator's
 deterministic checks, atomic commit) runs for real.
 """
 
@@ -88,7 +88,7 @@ async def test_build_evaluate_persist_writes_itinerary_and_completes_trip(db_ses
     }
 
     with patch(
-        "src.ai.builder.builder._call_claude_llm",
+        "src.ai.builder.builder._call_llm",
         AsyncMock(return_value=_good_draft_json(str(trip.start_date))),
     ):
         s1 = await build_itinerary_node(state)

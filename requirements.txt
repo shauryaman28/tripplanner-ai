@@ -30,9 +30,10 @@ sse-starlette>=2.1.0
 # ── MCP ───────────────────────────────────────────────────────
 mcp[cli]>=1.0.0
 
-# ── Agents (Phase 6+) ────────────────────────────────────────────
+# ── Agents (Phase 6+) ─────────────────────────────────────────
 langgraph>=0.2.0
-langchain-groq>=0.2.0        # Phase 12 — ItineraryBuilder (Groq/Llama 3.3)
+langchain-google-genai>=1.0.0  # Gemini Flash — FlightAgent, HotelAgent, ActivitiesAgent, Orchestrator
+langchain-groq>=0.2.0          # Phase 12 — ItineraryBuilder (Groq/Llama 3.3, free tier)
 
 # ── External APIs (Phase 3) ───────────────────────────────────
 amadeus>=9.0.0
