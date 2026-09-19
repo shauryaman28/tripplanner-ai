@@ -17,7 +17,7 @@ class FlightSearchInput(BaseModel):
     budget: float = Field(..., description="Max total price in INR")
     passengers: int = Field(1, ge=1, le=9)
     preferred_airlines: list[str] | None = Field(
-        None, description="Optional 2-character IATA carrier codes, soft-ranked first"
+        None, description="IATA carrier codes ranked first (soft preference, not a filter), e.g. ['6E', 'AI']"
     )
 
 

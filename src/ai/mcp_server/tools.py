@@ -296,8 +296,10 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
                 )
             )
         if input.preferred_airlines:
-            pref_set = {a.strip().upper() for a in input.preferred_airlines if a and str(a).strip()}
-            flights.sort(key=lambda f: 0 if f.airline.upper() in pref_set else 1)
+            preferred = {code.strip().upper() for code in input.preferred_airlines}
+            # Soft preference: list.sort is stable, so preferred carriers move to the front
+            # while Amadeus' original order is preserved within each group. Nothing is dropped.
+            flights.sort(key=lambda f: f.airline.upper() not in preferred)
         set_cached_sync(cache_key, [f.model_dump() for f in flights], TTL_FLIGHTS)
         return flights
 
