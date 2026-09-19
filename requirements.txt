@@ -34,6 +34,7 @@ mcp[cli]>=1.0.0
 langgraph>=0.2.0
 langchain-google-genai>=1.0.0  # Gemini Flash — FlightAgent, HotelAgent, ActivitiesAgent, Orchestrator
 langchain-groq>=0.2.0          # Phase 12 — ItineraryBuilder (Groq/Llama 3.3, free tier)
+langchain-anthropic>=0.2.0     # Phase 16 — PreferenceExtractor (Claude Haiku 4.5)
 
 # ── External APIs (Phase 3) ───────────────────────────────────
 amadeus>=9.0.0
