@@ -132,3 +132,15 @@
 42. **`home_city` is resolved to an IATA code with the MCP server's own `_city_to_iata` table (lazy import), city table first, then 3-letter pass-through.** One source of truth beats a second copy of 40 cities. The city table goes first because some cities are valid 3-letter strings ("Goa" must map to `GOI`, not `GOA`). This imports a private helper across the backend/MCP boundary — accepted for now; follow-up is to move the table to a shared module. An unresolvable city leaves `origin` unset, so the existing `"DEL"` default still applies.
 
 
+## Phase 17 — Frontend: Chat Interface & SSE Streaming
+
+43. **Next.js `/api/*` rewrite proxies requests to FastAPI server-side; SSE connects directly via `NEXT_PUBLIC_API_URL`.** Browser fetch requests target `/api/...` on the same origin (`localhost:3000`), completely avoiding browser CORS complications in local dev. In production, changing `BACKEND_URL` redirects API calls without touching client-side code. SSE (`EventSource`) cannot be proxied through standard Next.js rewrites without buffering/connection termination issues, so it connects directly to the backend URL with the auth token passed via query parameter (`?token=`), which was already supported by `get_current_user_sse` (Phase 5).
+
+44. **`useSSE` hook implements exponential backoff (1s → 30s cap) and preserves received event history across reconnects.** If the network drops or the connection drops during agent execution, resetting state would wipe the progress panel and show a blank screen. Retaining the event history ensures the UI always presents the latest known agent progress and status indicators while the hook silently attempts reconnection.
+
+45. **Frontend planning state is governed by an explicit `PlanningPhase` state machine (`idle` → `planning` → `complete` / `clarifying` / `failed` → `refining`).** Rather than managing disparate boolean flags (`isPlanning`, `isRefining`, `isClarifying`), a single discrete phase drives the `ChatInput` placeholder, button states, and thread interactions. This prevents invalid UI states (such as submitting a refinement while a clarification prompt is active).
+
+46. **`GET /trips/{id}/status` derives per-agent progress dynamically from `agent_runs` rows rather than adding state columns to `Trip`.** A single indexed query on `ix_agent_runs_trip_id` extracts the latest status of `flight_agent`, `hotel_agent`, and `activities_agent`. This provides an immediate polling fallback for clients where SSE is blocked or unsupported, without altering database schemas or introducing dual-state synchronization bugs.
+
+
+

@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Claude Haiku · Gemini Flash · pgvector.
 
-**Status: Phase 12 / 50 — Agent Core (Itinerary Builder: Claude Haiku)**
+**Status: Phase 17 / 50 — Frontend: Chat Interface & SSE Streaming**
 
 ---
 
@@ -35,6 +35,7 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
 ### Prerequisites
 - Docker Desktop
 - Python 3.11+ (3.9+ also works for local dev; CI/Docker use 3.11)
+- Node.js 18+ (for Next.js frontend)
 
 ### 1. Clone & configure
 ```bash
@@ -58,48 +59,31 @@ alembic upgrade head
 ### 4. Run the backend
 ```bash
 cd src/backend
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8000
 ```
 
-### 5. Verify Phase 1 done criterion
+### 5. Run the frontend (Phase 17)
+```bash
+cd src/frontend
+npm install
+npm run dev
+# Open http://localhost:3000 in your browser
+```
+
+### 6. Verify Phase 1 done criterion
 ```bash
 curl http://localhost:8000/ping
 # → {"postgres": "ok", "redis": "ok"}
 ```
 
-### 6. Test auth (Phase 5)
+### 7. Run tests
 ```bash
-# Register
-curl -X POST http://localhost:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"you@example.com","password":"yourpassword"}'
+# Unit + contract tests (no Docker required) — 239 tests
+pytest tests/unit/ -v
 
-# Login → get token
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -d "username=you@example.com&password=yourpassword" | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-
-# Create trip
-curl -X POST http://localhost:8000/trips \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"destination":"Goa","start_date":"2025-12-10","end_date":"2025-12-17","budget":50000}'
-```
-
-### 7. Run MCP server (Phase 3)
-```bash
-python -m src.ai.mcp_server.server
-
-# Inspect via MCP Inspector:
-npx @modelcontextprotocol/inspector python -m src.ai.mcp_server.server
-```
-
-### 8. Run tests
-```bash
-# Unit + contract tests (no Docker required) — 82 tests
-pytest tests/unit/ tests/contract/ -v
-
-# Integration tests (Docker must be running)
-RUN_INTEGRATION=1 pytest tests/integration/ -v
+# E2E Playwright tests (backend & frontend running)
+cd src/frontend
+npx playwright test
 ```
 
 ---
@@ -109,6 +93,23 @@ RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 tripplanner-ai/
 ├── src/
+│   ├── frontend/                        ← Phase 17: Next.js 14 App Router
+│   │   ├── package.json
+│   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
+│   │   ├── tailwind.config.ts           ← brand palette: indigo + saffron
+│   │   ├── tsconfig.json
+│   │   ├── playwright.config.ts
+│   │   └── src/
+│   │       ├── app/
+│   │       │   ├── globals.css          ← design tokens & custom keyframes
+│   │       │   ├── layout.tsx
+│   │       │   ├── page.tsx             ← redirects → /trips
+│   │       │   ├── login/page.tsx       ← auth login/register
+│   │       │   └── trips/
+│   │       │       ├── page.tsx         ← trip listing & inline creation
+│   │       │       └── [id]/page.tsx    ← live chat, SSE, itinerary view
+│   │       ├── components/              ← AgentProgressPanel, ChatInput, DayCard, ItineraryView
+│   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), types.ts
 │   ├── backend/
 │   │   ├── Dockerfile
 │   │   └── app/
@@ -118,7 +119,7 @@ tripplanner-ai/
 │   │       │   └── routes/
 │   │       │       ├── auth.py          ← POST /auth/register, /auth/login
 │   │       │       ├── health.py        ← GET /ping
-│   │       │       └── trips.py         ← All trip routes + SSE
+│   │       │       └── trips.py         ← All trip routes + SSE + GET /status
 │   │       ├── core/
 │   │       │   ├── config.py            ← pydantic-settings
 │   │       │   └── security.py         ← JWT + password hashing
@@ -138,23 +139,26 @@ tripplanner-ai/
 │       │   ├── hotel_agent.py           ← Phase 8 Dev A: 3-node graph, hotel-specific routing
 │       │   ├── activities_agent.py      ← Phase 8 Dev B: 3-node graph, dual-requirement router
 │       │   ├── budget_decision.py       ← Phase 10: pure budget threshold logic
-│       │   └── evaluator.py             ← Phase 11: 4 deterministic itinerary checks + retry routing
+│       │   ├── evaluator.py             ← Phase 11: 4 deterministic itinerary checks + retry routing
+│       │   └── preference_extractor.py  ← Phase 16: learning lasting preferences from trips
 │       ├── builder/
 │       │   └── builder.py               ← Phase 12: ItineraryBuilder (Claude Haiku), data-scope + budget-math validation
 │       └── orchestrator/
-│           └── orchestrator.py          ← Phase 9–12: full graph with build/evaluate/retry/persist loop
+│           └── orchestrator.py          ← Phase 9–16: full graph with preference injection, refinement & loops
 ├── migrations/                          ← Alembic migrations
 │   └── versions/
-│       └── 001_initial_schema.py        ← All 5 tables + pgvector
+│       ├── 001_initial_schema.py        ← All 5 tables + pgvector
+│       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
+│       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything
+│   ├── unit/                            ← Fast, no network, mock everything (239 tests)
 │   ├── contract/                        ← Response shape tests (mocked)
 │   ├── integration/                     ← Real Docker (RUN_INTEGRATION=1)
-│   └── e2e/                             ← Playwright (Phase 17)
+│   └── e2e/                             ← Playwright E2E smoke tests (Phase 17)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (v1–v3 per agent)
-├── docs/                                ← phase build logs (1–12)
+├── docs/                                ← phase build logs (1–17)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -183,13 +187,14 @@ tripplanner-ai/
 | 12 | Itinerary Builder | ✅ Done | 6 builder + 8 orchestrator (new) + 2 integration |
 | 13 | Persistence: Storing Every Run | ✅ Done | 9 agent_runs + timeline |
 | 14 | Embedding Generation (OpenAI) | ✅ Done | 9 embedding unit tests |
-| 15 | Multi-Turn Refinement | ✅ Done | 16 unit tests |
-| 16 | User Preferences & Personalisation | ✅ Done | 21 unit tests |
-| 17–20 | Frontend & E2E | ⏳ | |
+| 15 | Multi-Turn Refinement | ✅ Done | 18 unit tests |
+| 16 | User Preferences & Personalisation | ✅ Done | 54 unit tests |
+| 17 | Frontend: Chat Interface & SSE Streaming | ✅ Done | 6 status unit + Playwright E2E |
+| 18–20 | Frontend: Map & Polishing | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 132 tests passing** (unit + contract), 137 with integration tests. Zero network calls in CI.
+**Total: 239 unit tests passing**. Zero network calls in CI.
 
 ---
 

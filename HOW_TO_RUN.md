@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–7
+# How to Run & Verify — Phases 1–17
 
 ## What changed vs the original codebase?
 
@@ -13,6 +13,10 @@
 | — (fixes) | `docker-compose.yml`, `requirements.txt`, `README.md`, 5 model/security files (`timezone`-aware `datetime`) | 0 |
 | 7A | `flight_agent.py` (single → 3-node graph) | `test_flight_agent_router.py` (8 tests), `flight_agent_v2.md`, `flight_agent_v3.md` |
 | 7B | `trips.py` (rewired plan, added clarify), `trip.py` (+2 schemas), `flight_agent.py` (+2 lines) | `conversation.py`, `test_phase7b_clarification.py`, `DECISIONS.md` |
+| 8–12 | `orchestrator.py`, `builder.py`, `evaluator.py`, `budget_decision.py` | `hotel_agent.py`, `activities_agent.py`, tests |
+| 13–16 | `agent_runs`, `orchestrator.py`, `models.py`, `tools.py` | `preference_extractor.py`, `user_preferences.py`, migrations 002 & 003, unit tests |
+| 17 | `trips.py` (+ `GET /trips/{id}/status`) | Next.js 14 frontend in `src/frontend/`, `tests/unit/test_phase17_backend.py`, `tests/e2e/planning.spec.ts` |
+
 
 The Phase 1 core — `health.py`, `session.py`, `redis.py`, `config.py` — was **zero-touch**.
 The notable rewrites: `tools.py` (mocks → real APIs) and `main.py` (added two routers).
@@ -406,3 +410,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **6 (Dev B)** | Kill the MCP server subprocess mid-call → `call_tool` returns `ToolError(code="CONNECTION_REFUSED")`, never raises. `log_agent_run` writes a row with non-null `duration_ms` for every run, success or failure. |
 | **7 (Router)** | Pass state with `destination=None` → `router()` returns `"clarify"`, not `"search"`. Pass state with all fields → returns `"search"`. The router is a pure Python function — zero LLM calls, fully deterministic. |
 | **7 (Clarify API)** | `POST /plan` with `{"raw_input": "somewhere warm"}` → `{"status": "clarification_needed"}`. `POST /clarify` with `{"answer": "Goa, Dec 15, 30k"}` → fields filled → `planning_started`. Send state with `{"date": None}` through retry → `not state.get(field)` correctly refills it (the old `field not in state` bug would loop forever). |
+| **17 (Frontend & SSE)** | Run `npm run dev` in `src/frontend/` → register/login → create trip → trigger planning in chat → observe SSE agent update pills changing in `AgentProgressPanel` in real time → itinerary day cards and cost pills render upon `planning_complete`. Drop connection → `useSSE` reconnects with exponential backoff preserving state. Run `pytest tests/unit/test_phase17_backend.py` (6 passed). Run Playwright smoke test: `npx playwright test`. |

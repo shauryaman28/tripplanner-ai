@@ -380,7 +380,68 @@ async def list_itineraries(
     return list(result.scalars().all())
 
 
+# ── GET /trips/{id}/status ─────────────────────────────────────────────────
+
+
+@router.get("/{trip_id}/status")
+async def get_trip_status(
+    trip_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return current planning status + per-agent progress (SSE polling fallback).
+
+    Response:
+        {
+            "status": "pending" | "planning" | "completed" | "failed",
+            "trip_id": "<uuid>",
+            "progress": {
+                "agents_done": 0–3,
+                "agents_total": 3,
+                "agents": {
+                    "flight_agent":     "completed" | "failed" | "running" | "pending",
+                    "hotel_agent":      "...",
+                    "activities_agent": "..."
+                }
+            }
+        }
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+
+    result = await db.execute(
+        select(AgentRun)
+        .where(AgentRun.trip_id == trip_id)
+        .where(AgentRun.agent_name.in_(["flight_agent", "hotel_agent", "activities_agent"]))
+        .order_by(AgentRun.created_at.desc())
+    )
+    runs = result.scalars().all()
+
+    # Keep only the most recent status per agent name.
+    latest: dict[str, str] = {}
+    for run in runs:
+        if run.agent_name not in latest:
+            latest[run.agent_name] = run.status
+
+    agent_statuses = {
+        "flight_agent":     latest.get("flight_agent",     "pending"),
+        "hotel_agent":      latest.get("hotel_agent",      "pending"),
+        "activities_agent": latest.get("activities_agent", "pending"),
+    }
+    agents_done = sum(1 for s in agent_statuses.values() if s == "completed")
+
+    return {
+        "status": trip.status,
+        "trip_id": str(trip_id),
+        "progress": {
+            "agents_done":  agents_done,
+            "agents_total": 3,
+            "agents":       agent_statuses,
+        },
+    }
+
+
 # ── GET /trips/{id}/similar ────────────────────────────────────────────────
+
 
 
 @router.get("/{trip_id}/similar")
