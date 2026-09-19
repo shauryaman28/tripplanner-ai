@@ -344,8 +344,6 @@ async def test_generate_embeddings_calls_write_embedding_rows():
     mock_db.__aenter__ = AsyncMock(return_value=mock_db)
     mock_db.__aexit__ = AsyncMock(return_value=False)
 
-    mock_session_maker = MagicMock(return_value=mock_db)
-
     with (
         patch("app.db.session.AsyncSessionLocal") as MockSL,
         patch("src.ai.embeddings.embedder._call_openai_embed", AsyncMock(return_value=_FAKE_VECTOR)),

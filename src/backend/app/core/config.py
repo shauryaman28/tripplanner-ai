@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # LLMs (Phase 6+)
     GOOGLE_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""  # Phase 16 — PreferenceExtractor (Claude Haiku 4.5)
     OPENAI_API_KEY: str = ""
 
     # External APIs (Phase 3)

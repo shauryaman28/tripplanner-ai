@@ -7,5 +7,6 @@ from app.models.embedding import Embedding
 from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
 from app.models.user import User
+from app.models.user_preferences import UserPreferences
 
-__all__ = ["AgentRun", "Embedding", "Itinerary", "Trip", "TripStatus", "User"]
+__all__ = ["AgentRun", "Embedding", "Itinerary", "Trip", "TripStatus", "User", "UserPreferences"]

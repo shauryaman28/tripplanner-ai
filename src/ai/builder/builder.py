@@ -1,6 +1,8 @@
 """
 Phase 12 Dev A — ItineraryBuilder: Groq (Llama 3.3) + Structured Synthesis.
 Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
+Phase 16: saved traveller preferences (trip_meta["preferences"]) are added to
+          the user prompt as context; see prompts/itinerary_builder_v4.md.
 
 All other logic is unchanged from Phase 12/13.
 """
@@ -98,6 +100,27 @@ CRITICAL BUDGET RULE:
 Return ONLY the JSON object. No explanation, no markdown code fences."""
 
 
+def _preferences_block(prefs: dict | None) -> str:
+    """Prompt paragraph for saved traveller preferences ('' when there are none)."""
+    if not prefs:
+        return ""
+    parts = []
+    if prefs.get("travel_style"):
+        parts.append(f"travel style: {prefs['travel_style']}")
+    if prefs.get("dietary_restrictions"):
+        parts.append("dietary restrictions: " + ", ".join(prefs["dietary_restrictions"]))
+    if prefs.get("preferred_airlines"):
+        parts.append("preferred airlines: " + ", ".join(prefs["preferred_airlines"]))
+    if prefs.get("home_city"):
+        parts.append(f"home city: {prefs['home_city']}")
+    if not parts:
+        return ""
+    return (
+        "Traveller preferences (context only — use them to choose among the PROVIDED hotels, flights and "
+        "attractions; never introduce a name that is not in the data above): " + "; ".join(parts) + ".\n\n"
+    )
+
+
 def _build_user_prompt(
     trip_meta: dict,
     flights: list[dict],
@@ -111,6 +134,7 @@ def _build_user_prompt(
         f"Available flights (JSON): {json.dumps(flights)}\n\n"
         f"Available hotels (JSON): {json.dumps(hotels)}\n\n"
         f"Available attractions (JSON): {json.dumps(attractions)}\n\n"
+        f"{_preferences_block(trip_meta.get('preferences'))}"
         "Build the itinerary now, respecting the data-scope and budget rules exactly."
     )
 

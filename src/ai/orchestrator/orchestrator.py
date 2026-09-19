@@ -41,6 +41,7 @@ flight cost is already known and acceptable.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from datetime import date
@@ -66,9 +67,19 @@ from src.ai.agents.evaluator import (
 )
 from src.ai.agents.flight_agent import FlightAgent
 from src.ai.agents.hotel_agent import HotelAgent
+from src.ai.agents.preference_extractor import PreferenceExtractor
 from src.ai.builder.builder import ItineraryBuilder
 from src.ai.utils.embeddings import generate_embeddings
+from src.ai.utils.preferences import (
+    build_preference_updates,
+    get_trip_user_id,
+    load_preferences,
+    preferences_to_dict,
+    preferred_airlines_from,
+)
 from src.ai.utils.run_logger import log_agent_run, timed_run
+
+logger = logging.getLogger(__name__)
 
 try:
     from app.models.itinerary import Itinerary
@@ -116,6 +127,9 @@ class OrchestratorState(TypedDict, total=False):
 
     # Phase 15: conversation turn (1-indexed). Forwarded to every log_agent_run call.
     turn: int
+
+    # Phase 16: traveller preferences context
+    preferences: dict | None
 
     # Runtime helpers — never stored in DB
     publish_fn: Any | None
@@ -203,6 +217,50 @@ async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
     return result_state
 
 
+async def apply_preferences_node(state: OrchestratorState) -> OrchestratorState:
+    """Inject saved user preferences into orchestrator state (Phase 16).
+
+    Runs after intent parsing. Idempotent and pure: only fills origin if
+    unset, appends dietary restrictions to interests, and applies travel_style
+    defaults only when interests are otherwise empty.
+    """
+    db = state.get("db")
+    trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
+
+    if db is None or trip_id is None:
+        return state
+
+    user_id = await get_trip_user_id(db, trip_id)
+    if not isinstance(user_id, uuid.UUID):
+        return state
+
+    async with timed_run() as timer:
+        prefs = await load_preferences(db, user_id)
+        if prefs is not None:
+            updates = build_preference_updates(state, preferences_to_dict(prefs))
+            result_state = {**state, **updates}
+            applied = updates
+            loaded = True
+        else:
+            result_state = state
+            applied = {}
+            loaded = False
+
+    await log_agent_run(
+        db=db,
+        trip_id=trip_id,
+        agent_name="preferences",
+        input={"user_id": str(user_id)},
+        output={"loaded": loaded, "applied": applied},
+        duration_ms=timer.duration_ms,
+        status="completed",
+        turn=turn,
+    )
+
+    return result_state
+
+
 async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
     publish_fn = state.get("publish_fn")
     db = state.get("db")
@@ -220,6 +278,7 @@ async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
         "return_date": state.get("end_date") or None,
         "budget": flight_budget,
         "passengers": state.get("group_size") or 1,
+        "preferred_airlines": preferred_airlines_from(state),
     }
 
     result = await FlightAgent().run(flight_input, db=db, trip_id=trip_id, turn=turn)
@@ -454,6 +513,7 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         "start_date": state.get("start_date", ""),
         "end_date": state.get("end_date", ""),
         "group_size": state.get("group_size") or 1,
+        "preferences": state.get("preferences"),
     }
 
     result = await ItineraryBuilder().run(
@@ -527,6 +587,7 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
                 "return_date": state.get("end_date") or None,
                 "budget": state.get("budget") or 0.0,
                 "passengers": state.get("group_size") or 1,
+                "preferred_airlines": preferred_airlines_from(state),
             },
             db=db,
             trip_id=trip_id,
@@ -678,6 +739,40 @@ async def merge_node(state: OrchestratorState) -> OrchestratorState:
     return state
 
 
+async def extract_preferences_node(state: OrchestratorState) -> OrchestratorState:
+    """Extract lasting preferences from finished trip state and additive-merge (Phase 16).
+
+    Runs after merge_node. Swallows all errors and rolls back on failure so that
+    a preference extraction failure never fails a trip or leaves the session dirty.
+    """
+    db = state.get("db")
+    trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
+
+    if db is None or trip_id is None:
+        return state
+
+    try:
+        user_id = await get_trip_user_id(db, trip_id)
+        if isinstance(user_id, uuid.UUID):
+            await PreferenceExtractor().run(
+                state=state,
+                db=db,
+                user_id=user_id,
+                trip_id=trip_id,
+                turn=turn,
+            )
+    except Exception as exc:
+        logger.warning("Preference extraction failed (non-fatal): %s", exc)
+        if db is not None:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    return state
+
+
 # ── Graph ─────────────────────────────────────────────────────────────────
 
 
@@ -685,6 +780,7 @@ def build_orchestrator_graph():
     graph = StateGraph(OrchestratorState)
 
     graph.add_node("intent_parsing", intent_parsing_node)
+    graph.add_node("apply_preferences", apply_preferences_node)
     graph.add_node("run_flight", run_flight_node)
     graph.add_node("budget_decision", budget_decision_node)
     graph.add_node("hotel_activities", hotel_activities_node)
@@ -694,10 +790,12 @@ def build_orchestrator_graph():
     graph.add_node("persist", persist_node)
     graph.add_node("builder_failed", builder_failed_node)
     graph.add_node("merge", merge_node)
+    graph.add_node("extract_preferences", extract_preferences_node)
     graph.add_node("escalate", escalate_node)
 
     graph.set_entry_point("intent_parsing")
-    graph.add_edge("intent_parsing", "run_flight")
+    graph.add_edge("intent_parsing", "apply_preferences")
+    graph.add_edge("apply_preferences", "run_flight")
     graph.add_edge("run_flight", "budget_decision")
     graph.add_conditional_edges(
         "budget_decision",
@@ -713,7 +811,8 @@ def build_orchestrator_graph():
     )
     graph.add_edge("retry_dispatch", "build_itinerary")
     graph.add_edge("persist", "merge")
-    graph.add_edge("merge", END)
+    graph.add_edge("merge", "extract_preferences")
+    graph.add_edge("extract_preferences", END)
     graph.add_edge("builder_failed", END)
     graph.add_edge("escalate", END)
 
@@ -749,6 +848,7 @@ class OrchestratorAgent:
             "evaluator_retry_count": 0,
             "itinerary_id": None,
             "turn": 1,
+            "preferences": None,
         }
 
     async def run(
@@ -831,7 +931,8 @@ class OrchestratorAgent:
             # Extend end_date by 1 day and re-run everything.
             extended = dict(prior_state)
             try:
-                from datetime import date as _date, timedelta
+                from datetime import date as _date
+                from datetime import timedelta
                 new_end = _date.fromisoformat(prior_state["end_date"]) + timedelta(days=1)
                 extended["end_date"] = new_end.isoformat()
             except Exception:
@@ -863,6 +964,7 @@ class OrchestratorAgent:
                 "return_date": prior_state.get("end_date") or None,
                 "budget": prior_state.get("budget") or 0.0,
                 "passengers": prior_state.get("group_size") or 1,
+                "preferred_airlines": preferred_airlines_from(prior_state),
             }
             result = await FlightAgent().run(flight_input, db=db, trip_id=trip_id, turn=turn)
             if not result.get("error"):
@@ -958,7 +1060,7 @@ class OrchestratorAgent:
                     "attractions_count": len(final.get("attractions", [])),
                     "itinerary_id": str(final["itinerary_id"]) if final.get("itinerary_id") else None,
                 },
-                duration_ms=0,
+                duration_ms=timer.duration_ms,
                 status="completed" if final.get("itinerary_id") else "failed",
                 turn=turn,
             )

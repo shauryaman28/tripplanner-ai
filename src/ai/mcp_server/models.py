@@ -16,6 +16,9 @@ class FlightSearchInput(BaseModel):
     return_date: str | None = Field(None, description="Return date for round-trip")
     budget: float = Field(..., description="Max total price in INR")
     passengers: int = Field(1, ge=1, le=9)
+    preferred_airlines: list[str] | None = Field(
+        None, description="Optional 2-character IATA carrier codes, soft-ranked first"
+    )
 
 
 class HotelSearchInput(BaseModel):

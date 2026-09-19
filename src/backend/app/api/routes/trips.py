@@ -585,7 +585,7 @@ async def refine_trip(
     The turn number is derived from the conversation history (current_turn + 1)
     so every agent_runs row written during this pass is labelled correctly.
     """
-    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+    await _get_trip_or_404(trip_id, current_user.id, db)
 
     # Load prior state — required for carry-forward logic
     prior_state = await get_trip_state(r, str(trip_id))
@@ -601,7 +601,6 @@ async def refine_trip(
 
     # Classify the refinement message
     from src.ai.agents.refinement_classifier import classify_refinement
-    from src.ai.utils.conversation import get_history
 
     history = await get_history(r, str(trip_id))
     classification = await classify_refinement(body.message, history)

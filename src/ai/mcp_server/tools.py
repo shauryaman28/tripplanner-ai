@@ -295,6 +295,9 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
                     stops=len(itin["segments"]) - 1,
                 )
             )
+        if input.preferred_airlines:
+            pref_set = {a.strip().upper() for a in input.preferred_airlines if a and str(a).strip()}
+            flights.sort(key=lambda f: 0 if f.airline.upper() in pref_set else 1)
         set_cached_sync(cache_key, [f.model_dump() for f in flights], TTL_FLIGHTS)
         return flights
 

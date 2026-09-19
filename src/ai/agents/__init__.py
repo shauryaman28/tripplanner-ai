@@ -10,11 +10,13 @@ from src.ai.agents.evaluator import (
 )
 from src.ai.agents.flight_agent import FlightAgent
 from src.ai.agents.hotel_agent import HotelAgent
+from src.ai.agents.preference_extractor import PreferenceExtractor
 
 __all__ = [
     "FlightAgent",
     "HotelAgent",
     "ActivitiesAgent",
+    "PreferenceExtractor",
     "BudgetDecision",
     "make_budget_decision",
     "EvaluatorAgent",

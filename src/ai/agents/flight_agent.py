@@ -1,6 +1,7 @@
 """
 Phase 6/7 — FlightAgent: intent parsing, routing, and flight search.
 Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
+Phase 16: optional `preferred_airlines` forwarded to the search_flights tool.
 
 Phase 6: single-node graph — structured input → search_flights via MCP.
 Phase 7: three-node graph — free text → intent parse → route → search or clarify.
@@ -26,6 +27,7 @@ class TripState(TypedDict, total=False):
     return_date: str | None
     budget: float
     passengers: int
+    preferred_airlines: list[str]
     flights: list[dict]
     error: dict | None
     raw_input: str | None
@@ -125,6 +127,9 @@ async def search_flights_node(state: TripState) -> TripState:
         "budget": state["budget"],
         "passengers": state.get("passengers", 1),
     }
+    # Only sent when set, so the tool call is byte-identical for users without the preference.
+    if state.get("preferred_airlines"):
+        params["preferred_airlines"] = state["preferred_airlines"]
 
     result = await call_tool("search_flights", params)
 

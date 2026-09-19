@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
 from app.api.routes.trips import router as trips_router
+from app.api.routes.users import router as users_router
 from app.core.config import settings
 from app.db.redis import close_redis, init_redis
 from src.ai.mcp_client.client import close_session
@@ -37,9 +38,10 @@ async def _recover_pending_embeddings() -> None:
     regardless of whether the embeddings table is reachable.
     """
     try:
+        from sqlmodel import select
+
         from app.db.session import AsyncSessionLocal
         from app.models.embedding import Embedding
-        from sqlmodel import select
         from src.ai.utils.embeddings import generate_embeddings
 
         async with AsyncSessionLocal() as db:
@@ -92,3 +94,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(trips_router)
+app.include_router(users_router)   # Phase 16

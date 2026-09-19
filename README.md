@@ -181,7 +181,11 @@ tripplanner-ai/
 | 10 | Budget Conflict & Re-Planning | ✅ Done | 10 budget + 9 orchestrator |
 | 11 | Evaluator Agent: Self-Checking | ✅ Done | 18 evaluator + 1 retry-chain |
 | 12 | Itinerary Builder | ✅ Done | 6 builder + 8 orchestrator (new) + 2 integration |
-| 13–20 | Storage & Frontend | ⏳ | |
+| 13 | Persistence: Storing Every Run | ✅ Done | 9 agent_runs + timeline |
+| 14 | Embedding Generation (OpenAI) | ✅ Done | 9 embedding unit tests |
+| 15 | Multi-Turn Refinement | ✅ Done | 16 unit tests |
+| 16 | User Preferences & Personalisation | ✅ Done | 21 unit tests |
+| 17–20 | Frontend & E2E | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 

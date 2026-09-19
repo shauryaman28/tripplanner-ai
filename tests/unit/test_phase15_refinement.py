@@ -43,7 +43,6 @@ from src.ai.agents.refinement_classifier import (
 )
 from src.ai.utils.conversation import append_history, get_current_turn, get_history
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
 
@@ -188,7 +187,7 @@ async def test_log_agent_run_writes_turn():
     db.refresh = AsyncMock()
 
     trip_id = uuid.uuid4()
-    run = await log_agent_run(
+    await log_agent_run(
         db=db,
         trip_id=trip_id,
         agent_name="flight_agent",
@@ -273,8 +272,8 @@ def _make_app_mocks(user_id: uuid.UUID, trip_id: uuid.UUID):
 @pytest.mark.asyncio
 async def test_get_trip_runs_turn_filter():
     """GET /trips/{id}/runs?turn=1 returns only turn-1 rows."""
-    from src.backend.app.main import app
     from app.api.deps import get_current_user, get_db
+    from src.backend.app.main import app
 
     user_id = uuid.uuid4()
     trip_id = uuid.uuid4()
@@ -310,8 +309,8 @@ async def test_get_trip_runs_turn_filter():
 @pytest.mark.asyncio
 async def test_get_trip_runs_no_filter_returns_all():
     """GET /trips/{id}/runs without ?turn returns all rows."""
-    from src.backend.app.main import app
     from app.api.deps import get_current_user, get_db
+    from src.backend.app.main import app
 
     user_id = uuid.uuid4()
     trip_id = uuid.uuid4()
@@ -346,8 +345,8 @@ async def test_get_trip_runs_no_filter_returns_all():
 @pytest.mark.asyncio
 async def test_refine_409_when_no_prior_state():
     """POST /trips/{id}/refine returns 409 if no Redis planning state exists."""
-    from src.backend.app.main import app
     from app.api.deps import get_current_user, get_db, get_redis_dep
+    from src.backend.app.main import app
 
     user_id = uuid.uuid4()
     trip_id = uuid.uuid4()
@@ -384,8 +383,9 @@ async def test_refine_409_when_no_prior_state():
 async def test_refine_returns_refinement_started():
     """POST /trips/{id}/refine returns 200 with refinement_started and correct turn."""
     import json as _json
-    from src.backend.app.main import app
+
     from app.api.deps import get_current_user, get_db, get_redis_dep
+    from src.backend.app.main import app
 
     user_id = uuid.uuid4()
     trip_id = uuid.uuid4()
@@ -447,10 +447,11 @@ async def test_refine_returns_refinement_started():
 @pytest.mark.asyncio
 async def test_list_itineraries_returns_all_versions_newest_first():
     """GET /trips/{id}/itineraries returns all rows ordered newest first."""
-    from src.backend.app.main import app
+    from datetime import datetime, timezone
+
     from app.api.deps import get_current_user, get_db
     from app.models.itinerary import Itinerary
-    from datetime import datetime, timezone
+    from src.backend.app.main import app
 
     user_id = uuid.uuid4()
     trip_id = uuid.uuid4()
@@ -495,6 +496,7 @@ async def test_list_itineraries_returns_all_versions_newest_first():
 async def test_run_orchestrator_saves_state_to_redis():
     """_run_orchestrator saves the final planning state to Redis after completion."""
     import json as _json
+
     from src.backend.app.api.routes.trips import _run_orchestrator
 
     trip_id = uuid.uuid4()
