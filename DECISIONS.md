@@ -100,3 +100,18 @@
 30. **`generate_embeddings()` opens its own `AsyncSessionLocal` rather than reusing the orchestrator's session.** `persist_node` commits the itinerary and immediately closes its transaction. If `generate_embeddings()` were called on the same session after the commit, it would operate on a closed transaction context. By opening a fresh session, the embedder is independent of the caller's lifecycle and can be safely called from startup recovery, background tasks, or any other context without coordination.
 
 31. **`pending_retry` row as the graceful-degradation signal — not a raised exception.** When OpenAI fails after all tenacity retries, the embedder writes one row with `embedding_model="pending_retry"` and `vector=NULL`, then commits it. The trip status remains `completed` — a missing vector is a degraded but not broken state. The startup recovery in `main.py` re-queues these rows on next boot, making recovery automatic with zero operator intervention. Raising an exception here would surface a non-fatal embedding failure to the planning pipeline, potentially marking a fully-valid itinerary as `failed`.
+
+---
+
+## Phase 15 — Multi-Turn Refinement
+
+32. **`turn` is an integer column (not a foreign key, not an enum) because conversation turns are naturally 1-indexed integers and the primary query pattern is `WHERE turn = N`.** A foreign key to a `turns` table would add a join for every `/runs` query with no benefit — the turn number is already self-describing. A `SERIAL` or enum would over-engineer a simple counter. The composite index `(trip_id, turn)` makes `GET /trips/{id}/runs?turn=N` index-only for the common case.
+
+33. **`RefinementClassifier` uses Gemini Flash at `temperature=0`, not a rule-based classifier.** A rule-based classifier (keyword matching) would need constant maintenance as users rephrase requests. LLM classification at temperature=0 generalises across languages and phrasings. Hard rules are embedded in the prompt (not code) so they can be updated without deployments. The fallback to `full_replan` on any parse failure means a buggy LLM response never corrupts the state — it just triggers a safe full re-run.
+
+34. **`OrchestratorAgent.refine()` does NOT run the LangGraph — it calls nodes directly in a short inline loop.** Running the full graph for a targeted refinement would re-execute `intent_parsing_node` and `budget_decision_node`, which are irrelevant when only one agent needs to re-run. The inline approach (`targeted_agent → build_itinerary_node → evaluate_node → retry loop → persist_node`) is ~40 lines versus rebuilding a parameterised sub-graph in LangGraph. For targeted refinements the overhead of graph compilation is not worth it; the full graph is still used for `full_replan` and `add_day`.
+
+35. **`persist_node` always INSERTs a new `Itinerary` row per turn — it never UPDATEs.** This preserves the full planning history: turn 1 and turn 2 itineraries both exist in the DB with different `created_at` timestamps. `GET /trips/{id}/itinerary` returns the latest by `created_at` (existing behaviour unchanged). The alternative — a single mutable row — would destroy the turn 1 plan as soon as turn 2 completes, making it impossible to diff the two plans or roll back. The storage overhead is negligible (one JSONB row per turn per trip).
+
+36. **`turn` is added to `AgentRunRead` (the API schema) with `default=1` so the field is non-breaking for existing API consumers.** Any client that was consuming `/runs` before Phase 15 will now see `"turn": 1` on all rows — old rows get the default via the migration's `server_default="1"`. New rows written by Phase 15 carry the actual turn number. Clients that don't read `turn` are unaffected; clients that want to filter by turn use `?turn=N`.
+

@@ -286,7 +286,9 @@ class EvaluatorAgent:
         retry_count: int = 0,
         db: AsyncSession | None = None,
         trip_id: uuid.UUID | None = None,
+        turn: int = 1,
     ) -> EvaluatorVerdict:
+        """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
             verdict = evaluate_itinerary(
                 draft=draft,
@@ -312,6 +314,7 @@ class EvaluatorAgent:
                 output=verdict.model_dump(),
                 duration_ms=timer.duration_ms,
                 status="completed" if verdict.passed else "failed",
+                turn=turn,
             )
 
         return verdict

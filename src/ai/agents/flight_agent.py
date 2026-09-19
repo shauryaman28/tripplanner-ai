@@ -1,16 +1,9 @@
 """
 Phase 6/7 — FlightAgent: intent parsing, routing, and flight search.
+Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
 
 Phase 6: single-node graph — structured input → search_flights via MCP.
 Phase 7: three-node graph — free text → intent parse → route → search or clarify.
-
-Node responsibilities:
-- intent_parsing_node : LLM extracts structured fields from free-form text.
-                        With already-structured input, passes fields through unchanged.
-- router              : deterministic Python — no LLM. Checks required fields,
-                        returns "search" or "clarify". Never non-deterministic.
-- search_flights_node : unchanged from Phase 6. Pure function, no side effects.
-- clarify_node        : returns a clarifying question, no tool call.
 """
 
 import uuid
@@ -27,7 +20,6 @@ from src.ai.utils.run_logger import log_agent_run, timed_run
 
 
 class TripState(TypedDict, total=False):
-    # existing Phase 6 fields
     destination: str
     origin: str
     date: str
@@ -36,10 +28,9 @@ class TripState(TypedDict, total=False):
     passengers: int
     flights: list[dict]
     error: dict | None
-    # Phase 7 additions
-    raw_input: str | None  # original free-form user message
-    clarification_question: str | None  # set by clarify_node
-    conversation_history: list[dict]  # Phase 7B — multi-turn context
+    raw_input: str | None
+    clarification_question: str | None
+    conversation_history: list[dict]
 
 
 # ── Prompts ────────────────────────────────────────────────────────────────
@@ -68,15 +59,8 @@ User message: {message}"""
 
 
 async def intent_parsing_node(state: TripState) -> TripState:
-    """Extract structured fields from free-form text via Gemini Flash.
-
-    If raw_input is absent (caller already provided structured fields),
-    passes state through unchanged — so Phase 6 structured callers
-    still work without modification.
-    """
     raw = state.get("raw_input")
     if not raw:
-        # already structured — nothing to parse
         return state
 
     import json
@@ -88,7 +72,6 @@ async def intent_parsing_node(state: TripState) -> TripState:
     response = await llm.ainvoke(prompt)
     text = response.content.strip()
 
-    # strip markdown fences if the model adds them
     if text.startswith("```"):
         text = text.split("```")[1]
         text = text.removeprefix("json")
@@ -97,29 +80,18 @@ async def intent_parsing_node(state: TripState) -> TripState:
     try:
         parsed = json.loads(text)
     except Exception:
-        # unparseable LLM output — treat all fields as missing → clarify
         return state
 
-    # only overwrite fields that are still absent in state
     updates: TripState = {}
     for field in ("origin", "destination", "date", "budget", "passengers"):
         value = parsed.get(field)
-        if value is not None and not state.get(field):  # handles key-exists-but-None
+        if value is not None and not state.get(field):
             updates[field] = value  # type: ignore[literal-required]
 
     return {**state, **updates}
 
 
 def router(state: TripState) -> str:
-    """Deterministic routing — no LLM, no network calls.
-
-    Returns "search" if all required fields are present and non-null.
-    Returns "clarify" if any required field is missing.
-
-    Required fields: destination, date, budget.
-    origin defaults to DEL if absent (most users are in Delhi).
-    passengers defaults to 1 if absent.
-    """
     required = ("destination", "date", "budget")
     for field in required:
         if not state.get(field):
@@ -128,11 +100,6 @@ def router(state: TripState) -> str:
 
 
 async def clarify_node(state: TripState) -> TripState:
-    """Return a plain-English clarifying question for the first missing field.
-
-    No tool call, no LLM — question is deterministic based on which
-    field is missing. Keeps the node fast and unit-testable.
-    """
     missing_questions = {
         "destination": "Where would you like to fly to?",
         "date": "What date would you like to travel?",
@@ -142,7 +109,6 @@ async def clarify_node(state: TripState) -> TripState:
         if not state.get(field):
             return {**state, "clarification_question": question, "flights": [], "error": None}
 
-    # fallback — should not reach here if router is correct
     return {
         **state,
         "clarification_question": "Could you provide more details about your trip?",
@@ -152,10 +118,6 @@ async def clarify_node(state: TripState) -> TripState:
 
 
 async def search_flights_node(state: TripState) -> TripState:
-    """Call search_flights via the MCP client; populate flights or error.
-
-    Unchanged from Phase 6 — pure function, no side effects.
-    """
     params = {
         "origin": state.get("origin", "DEL"),
         "destination": state["destination"],
@@ -166,7 +128,7 @@ async def search_flights_node(state: TripState) -> TripState:
 
     result = await call_tool("search_flights", params)
 
-    if hasattr(result, "code"):  # ToolError instance
+    if hasattr(result, "code"):
         return {**state, "error": result.model_dump(), "flights": []}
 
     return {**state, "flights": result, "error": None}
@@ -184,7 +146,6 @@ def build_flight_agent_graph():
 
     graph.set_entry_point("intent_parsing")
 
-    # router is a conditional edge — not a node
     graph.add_conditional_edges(
         "intent_parsing",
         router,
@@ -201,8 +162,6 @@ def build_flight_agent_graph():
 
 
 class FlightAgent:
-    """Thin wrapper so callers don't need to touch LangGraph directly."""
-
     def __init__(self):
         self._graph = build_flight_agent_graph()
 
@@ -211,7 +170,9 @@ class FlightAgent:
         input_state: dict,
         db: AsyncSession | None = None,
         trip_id: uuid.UUID | None = None,
+        turn: int = 1,
     ) -> dict:
+        """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
             result = await self._graph.ainvoke(input_state)
 
@@ -224,6 +185,7 @@ class FlightAgent:
                 output={"flights": result.get("flights", []), "error": result.get("error")},
                 duration_ms=timer.duration_ms,
                 status="failed" if result.get("error") is not None else "completed",
+                turn=turn,
             )
 
         return result

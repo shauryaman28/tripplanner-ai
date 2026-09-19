@@ -13,6 +13,8 @@ class AgentRunRead(BaseModel):
     input: Any | None
     output: Any | None
     duration_ms: int | None
+    # Phase 15: conversation turn (1-indexed).
+    turn: int = 1
     created_at: datetime
 
     model_config = {"from_attributes": True}

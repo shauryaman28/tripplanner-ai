@@ -1,23 +1,6 @@
 """
 Phase 8 Dev B — ActivitiesAgent: intent parsing, routing, and attraction search.
-
-Three-node graph (same pattern as FlightAgent / HotelAgent):
-  - intent_parsing_node  : LLM extracts destination and interests from free-form text.
-                           Includes a translation hint for non-English inputs (e.g. "खाना").
-  - router               : deterministic Python — checks destination AND interests.
-                           Both are required; an empty interests list → clarify.
-  - get_attractions_node : calls get_attractions via MCP client. Pure function.
-  - clarify_node         : returns a clarifying question, no tool call.
-
-Required fields: destination, at least one interest in interests list.
-Optional:        limit (defaults to 5).
-
-Non-English interest handling:
-  The prompt instructs the LLM to translate non-English interests where possible
-  (e.g. Hindi "खाना" → "food"). However, the get_attractions_node does NOT validate
-  or filter — it passes whatever interests are in state directly to the MCP tool,
-  which embeds them into the Google Maps query string. Results may degrade for
-  untranslated terms, but the system never crashes. See prompts/activities_agent_v2.md.
+Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
 """
 
 from __future__ import annotations
@@ -36,14 +19,11 @@ from src.ai.utils.run_logger import log_agent_run, timed_run
 
 
 class ActivitiesState(TypedDict, total=False):
-    # search fields
     destination: str
-    interests: list[str]  # e.g. ["history", "street food", "beach"]
-    limit: int            # max attractions to return (default 5)
-    # results
+    interests: list[str]
+    limit: int
     attractions: list[dict]
     error: dict | None
-    # free-form input and clarification (Phase 8)
     raw_input: str | None
     clarification_question: str | None
     conversation_history: list[dict]
@@ -75,11 +55,6 @@ User message: {message}"""
 
 
 async def intent_parsing_node(state: ActivitiesState) -> ActivitiesState:
-    """Extract destination and interests from free-form text via Gemini Flash.
-
-    If raw_input is absent (caller already provided structured fields),
-    passes state through unchanged — backward-compatible with structured callers.
-    """
     raw = state.get("raw_input")
     if not raw:
         return state
@@ -92,7 +67,6 @@ async def intent_parsing_node(state: ActivitiesState) -> ActivitiesState:
     response = await llm.ainvoke(prompt)
     text = response.content.strip()
 
-    # strip markdown fences if the model wraps its output
     if text.startswith("```"):
         text = text.split("```")[1]
         text = text.removeprefix("json")
@@ -108,8 +82,6 @@ async def intent_parsing_node(state: ActivitiesState) -> ActivitiesState:
     if parsed.get("destination") and not state.get("destination"):
         updates["destination"] = parsed["destination"]
 
-    # Only fill interests if they are genuinely absent — don't overwrite
-    # a caller-supplied list with what the LLM extracts from raw_input
     parsed_interests = parsed.get("interests")
     if parsed_interests and not state.get("interests"):
         updates["interests"] = parsed_interests
@@ -121,12 +93,6 @@ async def intent_parsing_node(state: ActivitiesState) -> ActivitiesState:
 
 
 def router(state: ActivitiesState) -> str:
-    """Deterministic routing — no LLM, no network calls.
-
-    Both destination AND at least one interest are required.
-    An empty interests list is treated the same as None — it would produce
-    a meaningless MCP query ("top  attractions in <city>").
-    """
     if not state.get("destination"):
         return "clarify"
     interests = state.get("interests")
@@ -136,11 +102,6 @@ def router(state: ActivitiesState) -> str:
 
 
 async def clarify_node(state: ActivitiesState) -> ActivitiesState:
-    """Return a plain-English clarifying question.
-
-    No LLM, no tool call — deterministic and unit-testable.
-    Prioritises destination first, then asks about interests.
-    """
     if not state.get("destination"):
         question = "Which city would you like to explore?"
     else:
@@ -150,12 +111,6 @@ async def clarify_node(state: ActivitiesState) -> ActivitiesState:
 
 
 async def get_attractions_node(state: ActivitiesState) -> ActivitiesState:
-    """Call get_attractions via the MCP client; populate attractions or error.
-
-    Non-English interests are forwarded as-is — the MCP tool embeds them
-    in the Google Maps query string and handles translation implicitly.
-    Pure function — no side effects, no logging here.
-    """
     params = {
         "destination": state["destination"],
         "interests": state.get("interests", []),
@@ -164,7 +119,7 @@ async def get_attractions_node(state: ActivitiesState) -> ActivitiesState:
 
     result = await call_tool("get_attractions", params)
 
-    if hasattr(result, "code"):  # ToolError instance
+    if hasattr(result, "code"):
         return {**state, "error": result.model_dump(), "attractions": []}
 
     return {**state, "attractions": result, "error": None}
@@ -198,8 +153,6 @@ def build_activities_agent_graph():
 
 
 class ActivitiesAgent:
-    """Thin wrapper so callers don't need to touch LangGraph directly."""
-
     def __init__(self):
         self._graph = build_activities_agent_graph()
 
@@ -208,7 +161,9 @@ class ActivitiesAgent:
         input_state: dict,
         db: AsyncSession | None = None,
         trip_id: uuid.UUID | None = None,
+        turn: int = 1,
     ) -> dict:
+        """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
             result = await self._graph.ainvoke(input_state)
 
@@ -221,6 +176,7 @@ class ActivitiesAgent:
                 output={"attractions": result.get("attractions", []), "error": result.get("error")},
                 duration_ms=timer.duration_ms,
                 status="failed" if result.get("error") is not None else "completed",
+                turn=turn,
             )
 
         return result

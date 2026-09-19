@@ -1,9 +1,8 @@
-"""Agent run logger — Phase 6 Dev B, extended Phase 11 Dev B.
+"""Agent run logger — Phase 6 Dev B, extended Phase 11 Dev B, Phase 15.
 
-Writes one row to agent_runs per agent execution. The caller (a FastAPI
-route or agent wrapper) passes in its existing AsyncSession so the log
-write participates in the same transaction as the rest of the request —
-no separate connection opened here.
+Phase 15 addition: `turn` parameter on log_agent_run() so every row
+written during a refinement pass is tagged with its conversation turn.
+Defaults to 1, so all existing callers need no change.
 """
 
 from __future__ import annotations
@@ -29,8 +28,15 @@ async def log_agent_run(
     output: dict,
     duration_ms: int,
     status: str = "completed",
+    turn: int = 1,
 ) -> AgentRun:
-    """Write one agent_runs row and return it."""
+    """Write one agent_runs row and return it.
+
+    The `turn` parameter (added in Phase 15) defaults to 1 so all
+    existing callers — FlightAgent, HotelAgent, ActivitiesAgent,
+    ItineraryBuilder, EvaluatorAgent, OrchestratorAgent — require no
+    changes for their first-turn behaviour.
+    """
     run = AgentRun(
         trip_id=trip_id,
         agent_name=agent_name,
@@ -38,6 +44,7 @@ async def log_agent_run(
         input=input,
         output=output,
         duration_ms=duration_ms,
+        turn=turn,
     )
     db.add(run)
     await db.commit()
@@ -47,13 +54,7 @@ async def log_agent_run(
 
 @asynccontextmanager
 async def timed_run():
-    """Async context manager that measures wall-clock duration in ms.
-
-    Usage:
-        async with timed_run() as timer:
-            result = await do_work()
-        print(timer.duration_ms)
-    """
+    """Async context manager that measures wall-clock duration in ms."""
 
     class _Timer:
         duration_ms: int = 0
@@ -69,18 +70,8 @@ async def timed_run():
 async def get_retry_chain(db: AsyncSession, trip_id: uuid.UUID) -> list[dict]:
     """Reconstruct the evaluation + retry timeline for a trip — Phase 11 Dev B.
 
-    Returns all agent_runs rows for the trip ordered by created_at, each
-    tagged with a per-agent-name running attempt counter (1-indexed), so
-    callers can see e.g. "flight_agent attempt 2" followed by "evaluator
-    attempt 2" without needing a dedicated retry_count column.
-
-    Example:
-        [
-          {"agent_name": "flight_agent", "attempt": 1, "status": "completed", ...},
-          {"agent_name": "evaluator",    "attempt": 1, "status": "failed",    ...},
-          {"agent_name": "flight_agent", "attempt": 2, "status": "completed", ...},
-          {"agent_name": "evaluator",    "attempt": 2, "status": "completed", ...},
-        ]
+    Returns all agent_runs rows ordered by created_at, each tagged with a
+    per-agent-name running attempt counter (1-indexed).
     """
     result = await db.execute(
         select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc())
@@ -100,6 +91,7 @@ async def get_retry_chain(db: AsyncSession, trip_id: uuid.UUID) -> list[dict]:
                 "output": row.output,
                 "duration_ms": row.duration_ms,
                 "created_at": row.created_at,
+                "turn": row.turn,
             }
         )
     return chain

@@ -5,15 +5,23 @@ Phase 13 additions:
   - GET /trips now accepts optional ?status= filter
   - GET /trips/{id}/timeline — ordered event log (internal debug endpoint)
 
+Phase 15 additions:
+  - GET /trips/{id}/runs accepts optional ?turn=N filter
+  - POST /trips/{id}/refine — multi-turn refinement (classifies + re-runs targeted agents)
+  - GET /trips/{id}/itineraries — all itinerary versions, newest first
+  - Planning state persisted to Redis after run so /refine can load it
+
 GET    /trips                    list trips for user; optional ?status= filter
 POST   /trips                    create a trip
 POST   /trips/{id}/plan          kick off planning (OrchestratorAgent)
 GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
 GET    /trips/{id}/itinerary     latest itinerary for the trip
+GET    /trips/{id}/itineraries   all itinerary versions, newest first (Phase 15)
 GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
-GET    /trips/{id}/runs          all agent_runs for debugging, oldest first
+GET    /trips/{id}/runs          all agent_runs for debugging; optional ?turn=N filter
 POST   /trips/{id}/replan        re-trigger with budget conflict choice
 GET    /trips/{id}/timeline      ordered event log: agent_runs + itinerary (Phase 13)
+POST   /trips/{id}/refine        multi-turn refinement — classify + targeted re-run (Phase 15)
 """
 
 import asyncio
@@ -25,6 +33,7 @@ from typing import Any
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
@@ -39,7 +48,7 @@ from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
 from app.schemas.trip import ClarifyRequest, PlanRequest, ReplanRequest, TripCreate, TripRead
 from src.ai.orchestrator.orchestrator import OrchestratorAgent
-from src.ai.utils.conversation import append_history, get_trip_state
+from src.ai.utils.conversation import append_history, get_current_turn, get_history, get_trip_state, save_trip_state
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -173,16 +182,26 @@ async def plan_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    _fire_and_forget(_run_orchestrator(trip_id=trip_id, initial_state=initial_state, publish_fn=publish_fn))
+    _fire_and_forget(_run_orchestrator(
+        trip_id=trip_id,
+        initial_state=initial_state,
+        publish_fn=publish_fn,
+        redis=redis,
+    ))
 
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
-async def _run_orchestrator(trip_id, initial_state, publish_fn) -> None:
+async def _run_orchestrator(trip_id, initial_state, publish_fn, redis=None) -> None:
     async with AsyncSessionLocal() as db:
         try:
             agent = OrchestratorAgent()
-            await agent.run(initial_state, db=db, trip_id=trip_id, publish_fn=publish_fn)
+            result = await agent.run(initial_state, db=db, trip_id=trip_id, publish_fn=publish_fn)
+            # Phase 15: persist final state to Redis so POST /refine can load it.
+            if redis is not None:
+                state_to_save = {k: v for k, v in result.items()
+                                 if k not in ("db", "trip_id", "publish_fn", "itinerary_id")}
+                await save_trip_state(redis, str(trip_id), state_to_save)
         except Exception as exc:
             try:
                 await publish_fn({
@@ -337,6 +356,30 @@ async def get_itinerary(
     return itinerary
 
 
+# ── GET /trips/{id}/itineraries ───────────────────────────────────────────────
+
+
+@router.get("/{trip_id}/itineraries", response_model=list[ItineraryRead])
+async def list_itineraries(
+    trip_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[Itinerary]:
+    """Phase 15 — all itinerary versions for a trip, newest first.
+
+    Each planning turn (initial + every refinement) produces one new row.
+    This endpoint returns them all so callers can diff turn 1 vs turn 2,
+    or let the user roll back to an earlier version.
+    """
+    await _get_trip_or_404(trip_id, current_user.id, db)
+    result = await db.execute(
+        select(Itinerary)
+        .where(Itinerary.trip_id == trip_id)
+        .order_by(Itinerary.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 # ── GET /trips/{id}/similar ────────────────────────────────────────────────
 
 
@@ -356,13 +399,17 @@ async def get_similar_trips(
 @router.get("/{trip_id}/runs", response_model=list[AgentRunRead])
 async def get_trip_runs(
     trip_id: uuid.UUID,
+    turn: int | None = Query(default=None, description="Filter by conversation turn (1-indexed). Omit for all turns."),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[AgentRun]:
+    """Phase 15: optional ?turn=N filters to a specific refinement pass."""
     await _get_trip_or_404(trip_id, current_user.id, db)
-    result = await db.execute(
-        select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc())
-    )
+    query = select(AgentRun).where(AgentRun.trip_id == trip_id)
+    if turn is not None:
+        query = query.where(AgentRun.turn == turn)
+    query = query.order_by(AgentRun.created_at.asc())
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
@@ -508,3 +555,80 @@ async def _get_trip_or_404(trip_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSess
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found.")
     return trip
+
+
+# ── POST /trips/{id}/refine ────────────────────────────────────────────────
+
+
+class RefineRequest(BaseModel):
+    message: str
+
+
+@router.post("/{trip_id}/refine")
+async def refine_trip(
+    trip_id: uuid.UUID,
+    body: RefineRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    r: aioredis.Redis = Depends(get_redis_dep),
+) -> dict:
+    """Phase 15 — multi-turn refinement.
+
+    Classifies the user's refinement message into one of five action types
+    (full_replan, targeted_flights, targeted_hotel, targeted_activities, add_day),
+    then kicks off OrchestratorAgent.refine() as a background task.
+
+    Prior planning state (flights, hotels, attractions, trip metadata) is loaded
+    from Redis. If no prior state exists the call returns 409 — the trip must
+    have been planned at least once before refinement is possible.
+
+    The turn number is derived from the conversation history (current_turn + 1)
+    so every agent_runs row written during this pass is labelled correctly.
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+
+    # Load prior state — required for carry-forward logic
+    prior_state = await get_trip_state(r, str(trip_id))
+    if not prior_state:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No prior planning state found. Run POST /plan first.",
+        )
+
+    # Determine the next turn number from conversation history
+    current_turn = await get_current_turn(r, str(trip_id))
+    next_turn = current_turn + 1
+
+    # Classify the refinement message
+    from src.ai.agents.refinement_classifier import classify_refinement
+    from src.ai.utils.conversation import get_history
+
+    history = await get_history(r, str(trip_id))
+    classification = await classify_refinement(body.message, history)
+
+    # Record user message in conversation history
+    await append_history(r, str(trip_id), role="user", content=body.message, turn=next_turn)
+
+    async def _refine_task() -> None:
+        async with AsyncSessionLocal() as bg_db:
+            agent = OrchestratorAgent()
+            await agent.refine(
+                refinement_type=classification.refinement_type,
+                prior_state=prior_state,
+                refinement_message=body.message,
+                db=bg_db,
+                trip_id=trip_id,
+                turn=next_turn,
+            )
+
+    task = asyncio.create_task(_refine_task())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return {
+        "status": "refinement_started",
+        "trip_id": str(trip_id),
+        "turn": next_turn,
+        "refinement_type": classification.refinement_type,
+        "reason": classification.reason,
+    }

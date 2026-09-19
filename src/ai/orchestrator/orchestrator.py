@@ -1,22 +1,25 @@
-"""
-Phase 10 + 12 + 13 — OrchestratorAgent.
+"""Phase 15 — OrchestratorAgent with multi-turn refinement support.
 
-Phase 13 adds agent_runs instrumentation to the four previously silent
-decision nodes: intent_parsing_node, persist_node, escalate_node, and
-builder_failed_node. Every node that makes a decision now has a row —
-the only exemption is merge_node (a pure publish step, no decision).
+Phase 15 adds:
+  - `turn` field to OrchestratorState (defaults to 1).
+  - All log_agent_run() calls forward the turn so agent_runs rows are
+    labelled with the correct conversation turn.
+  - refine() method on OrchestratorAgent: accepts a RefinementType and
+    prior state, runs only the implicated sub-agents, then rebuilds and
+    evaluates the itinerary. Flights / hotels / activities not targeted
+    are carried forward from the prior state unchanged.
 
-Graph structure (unchanged from Phase 12):
+Graph structure (unchanged from Phase 13):
 
-    intent_parsing_node       ← NOW LOGGED (Phase 13)
+    intent_parsing_node       ← logs turn
           ↓
     run_flight_node
           ↓
-    budget_decision_node
+    budget_decision_node      ← logs turn
           ↓ (conditional: route_after_budget_decision)
     ┌─── "continue" ──────→ hotel_activities_node
     ├─── "replan"   ──────→ run_flight_node (loop, cap = MAX_REPLAN_ATTEMPTS)
-    └─── "escalate" ──────→ escalate_node → END   ← NOW LOGGED (Phase 13)
+    └─── "escalate" ──────→ escalate_node → END
 
     hotel_activities_node
           ↓
@@ -24,22 +27,15 @@ Graph structure (unchanged from Phase 12):
           ↓
     evaluate_node
           ↓ (conditional: route_after_evaluator)
-    ┌─── "passed" ─────────→ persist_node → merge_node → END  ← persist NOW LOGGED
+    ┌─── "passed" ─────────→ persist_node → merge_node → END
     ├─── "retry"  ─────────→ retry_dispatch_node → build_itinerary_node
-    └─── "failed" ─────────→ builder_failed_node → END        ← NOW LOGGED
+    └─── "failed" ─────────→ builder_failed_node → END
 
-Minimum agent_runs rows on a full happy-path run (Phase 13 acceptance criterion):
-    intent_parsing   1
-    flight_agent     1   (via FlightAgent.run)
-    budget_decision  1
-    hotel_agent      1   (via HotelAgent.run)
-    activities_agent 1   (via ActivitiesAgent.run)
-    itinerary_builder 1  (via ItineraryBuilder.run)
-    evaluator        1   (via EvaluatorAgent.run)
-    persist          1
-    orchestrator     1   (OrchestratorAgent.run wrapper)
-    ─────────────────
-    total ≥ 9           (roadmap requires ≥ 7)
+Refinement bypass (Phase 15): refine() does NOT run the full graph.
+It calls only the targeted agent(s), then wires directly into
+build_itinerary_node → evaluate_node → persist_node. This avoids
+re-running the budget decision node for targeted refinements where the
+flight cost is already known and acceptable.
 """
 
 from __future__ import annotations
@@ -48,7 +44,7 @@ import asyncio
 import time
 import uuid
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
@@ -118,6 +114,9 @@ class OrchestratorState(TypedDict, total=False):
     evaluator_retry_count: int
     itinerary_id: Any | None
 
+    # Phase 15: conversation turn (1-indexed). Forwarded to every log_agent_run call.
+    turn: int
+
     # Runtime helpers — never stored in DB
     publish_fn: Any | None
     db: Any | None
@@ -155,14 +154,9 @@ User message: {message}"""
 
 
 async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
-    """Extract trip fields from free-form text via Gemini Flash.
-
-    Phase 13: logs one agent_runs row per invocation so the full pipeline
-    trace includes the LLM extraction step.  When raw_input is absent the
-    node is still logged (as a pass-through) so callers can see it ran.
-    """
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
     raw = state.get("raw_input")
 
     async with timed_run() as timer:
@@ -203,6 +197,7 @@ async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
             output={"extracted_fields": extracted, "pass_through": not bool(raw)},
             duration_ms=timer.duration_ms,
             status="completed",
+            turn=turn,
         )
 
     return result_state
@@ -212,6 +207,7 @@ async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
     publish_fn = state.get("publish_fn")
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
 
     replan_attempts = state.get("replan_attempts", 0)
     total_budget = state.get("budget") or 0.0
@@ -226,7 +222,7 @@ async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
         "passengers": state.get("group_size") or 1,
     }
 
-    result = await FlightAgent().run(flight_input, db=db, trip_id=trip_id)
+    result = await FlightAgent().run(flight_input, db=db, trip_id=trip_id, turn=turn)
 
     if result.get("error"):
         flights, flight_error, flight_status = [], result["error"], "failed"
@@ -248,6 +244,7 @@ async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
 async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
 
     flights = state.get("flights", [])
     total_budget = state.get("budget") or 0.0
@@ -291,6 +288,7 @@ async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
             output=decision.model_dump(),
             duration_ms=duration_ms,
             status="completed",
+            turn=turn,
         )
 
     return {
@@ -312,6 +310,7 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
     publish_fn = state.get("publish_fn")
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
 
     destination = state.get("destination", "")
     start_date = state.get("start_date", "")
@@ -341,8 +340,8 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
     }
 
     results = await asyncio.gather(
-        HotelAgent().run(hotel_input, db=db, trip_id=trip_id),
-        ActivitiesAgent().run(activities_input, db=db, trip_id=trip_id),
+        HotelAgent().run(hotel_input, db=db, trip_id=trip_id, turn=turn),
+        ActivitiesAgent().run(activities_input, db=db, trip_id=trip_id, turn=turn),
         return_exceptions=True,
     )
     hotel_result, activities_result = results
@@ -389,14 +388,10 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
 
 
 async def escalate_node(state: OrchestratorState) -> OrchestratorState:
-    """Publish budget_conflict SSE and mark trip failed.
-
-    Phase 13: now logs an agent_runs row so the escalation decision is
-    visible in GET /trips/{id}/runs and the timeline endpoint.
-    """
     publish_fn = state.get("publish_fn")
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
     bd = state.get("budget_decision") or {}
     options = state.get("budget_conflict_options") or []
 
@@ -425,6 +420,7 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
             },
             duration_ms=timer.duration_ms,
             status="completed",
+            turn=turn,
         )
 
     if publish_fn:
@@ -451,6 +447,7 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
 async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
 
     trip_meta = {
         "destination": state.get("destination", ""),
@@ -466,6 +463,7 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         attractions=state.get("attractions", []),
         db=db,
         trip_id=trip_id,
+        turn=turn,
     )
 
     return {**state, "draft_itinerary": result.get("draft"), "builder_error": result.get("error")}
@@ -474,6 +472,7 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
 async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
     draft = state.get("draft_itinerary")
     retry_count = state.get("evaluator_retry_count", 0)
 
@@ -489,6 +488,7 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
         retry_count=retry_count,
         db=db,
         trip_id=trip_id,
+        turn=turn,
     )
     return {**state, "evaluator_verdict": verdict.model_dump()}
 
@@ -506,6 +506,7 @@ def route_after_evaluator(state: OrchestratorState) -> str:
 async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
     verdict_dict = state.get("evaluator_verdict") or {}
     retry_count = state.get("evaluator_retry_count", 0) + 1
 
@@ -529,6 +530,7 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
             },
             db=db,
             trip_id=trip_id,
+            turn=turn,
         )
         if not flight_result.get("error"):
             new_state["flights"] = flight_result.get("flights", [])
@@ -541,6 +543,7 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
             },
             db=db,
             trip_id=trip_id,
+            turn=turn,
         )
         if not activities_result.get("error"):
             new_state["attractions"] = activities_result.get("attractions", [])
@@ -551,11 +554,14 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
 async def persist_node(state: OrchestratorState) -> OrchestratorState:
     """Write the itinerary row + mark the trip completed — one commit, atomic.
 
-    Phase 13: logs a persist agent_runs row so the write step is visible
-    in the timeline alongside all agent decisions.
+    Phase 15: always creates a NEW itinerary row (INSERT, never UPDATE)
+    so every turn's output is preserved in history. The latest row by
+    created_at is what GET /trips/{id}/itinerary returns; all versions are
+    accessible via GET /trips/{id}/itineraries.
     """
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
     draft = state.get("draft_itinerary") or {}
 
     if db is None or trip_id is None:
@@ -590,6 +596,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
         },
         duration_ms=timer.duration_ms,
         status="completed",
+        turn=turn,
     )
 
     try:
@@ -601,13 +608,9 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
 
 
 async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
-    """Evaluator/Builder retries exhausted — mark the trip failed honestly.
-
-    Phase 13: logs a builder_failed agent_runs row so the failure reason
-    is queryable alongside the retry chain.
-    """
     db = state.get("db")
     trip_id = state.get("trip_id")
+    turn = state.get("turn", 1)
     publish_fn = state.get("publish_fn")
     builder_error = state.get("builder_error") or {}
     retry_count = state.get("evaluator_retry_count", 0)
@@ -635,6 +638,7 @@ async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
             },
             duration_ms=timer.duration_ms,
             status="failed",
+            turn=turn,
         )
 
     if publish_fn:
@@ -667,6 +671,7 @@ async def merge_node(state: OrchestratorState) -> OrchestratorState:
                 "agents_total": 3,
                 "itinerary_id": str(state["itinerary_id"]) if state.get("itinerary_id") else None,
                 "status": "completed" if state.get("itinerary_id") else "failed",
+                "turn": state.get("turn", 1),
             })
         except Exception:
             pass
@@ -724,14 +729,8 @@ class OrchestratorAgent:
     def __init__(self):
         self._graph = build_orchestrator_graph()
 
-    async def run(
-        self,
-        input_state: dict,
-        db: AsyncSession | None = None,
-        trip_id: uuid.UUID | None = None,
-        publish_fn=None,
-    ) -> dict:
-        full_state = {
+    def _default_state(self, input_state: dict) -> dict:
+        return {
             "flights": [],
             "hotels": [],
             "attractions": [],
@@ -749,7 +748,21 @@ class OrchestratorAgent:
             "evaluator_verdict": None,
             "evaluator_retry_count": 0,
             "itinerary_id": None,
+            "turn": 1,
+        }
+
+    async def run(
+        self,
+        input_state: dict,
+        db: AsyncSession | None = None,
+        trip_id: uuid.UUID | None = None,
+        publish_fn=None,
+        turn: int = 1,
+    ) -> dict:
+        full_state = {
+            **self._default_state(input_state),
             **input_state,
+            "turn": turn,
             "db": db if db is not None else input_state.get("db"),
             "trip_id": trip_id if trip_id is not None else input_state.get("trip_id"),
             "publish_fn": publish_fn if publish_fn is not None else input_state.get("publish_fn"),
@@ -778,6 +791,176 @@ class OrchestratorAgent:
                 },
                 duration_ms=timer.duration_ms,
                 status="completed" if result.get("itinerary_id") else "failed",
+                turn=turn,
             )
 
         return {k: v for k, v in result.items() if k not in ("db", "trip_id", "publish_fn")}
+
+    async def refine(
+        self,
+        refinement_type: Literal[
+            "full_replan", "targeted_flights", "targeted_hotel",
+            "targeted_activities", "add_day"
+        ],
+        prior_state: dict,
+        refinement_message: str,
+        db: AsyncSession | None = None,
+        trip_id: uuid.UUID | None = None,
+        publish_fn=None,
+        turn: int = 2,
+    ) -> dict:
+        """Run a selective refinement instead of the full planning graph.
+
+        Carries forward unaffected agent results from prior_state and only
+        re-runs the targeted sub-agent(s). Then feeds into build_itinerary_node
+        → evaluate_node → persist_node directly, bypassing budget_decision and
+        intent_parsing (which are irrelevant for targeted changes).
+
+        For full_replan and add_day, delegates to self.run() with a clean slate
+        (or extended dates for add_day).
+        """
+        if refinement_type == "full_replan":
+            clean = {
+                k: v for k, v in prior_state.items()
+                if k in ("destination", "origin", "start_date", "end_date", "budget", "group_size", "interests")
+            }
+            clean["raw_input"] = refinement_message
+            return await self.run(clean, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn)
+
+        if refinement_type == "add_day":
+            # Extend end_date by 1 day and re-run everything.
+            extended = dict(prior_state)
+            try:
+                from datetime import date as _date, timedelta
+                new_end = _date.fromisoformat(prior_state["end_date"]) + timedelta(days=1)
+                extended["end_date"] = new_end.isoformat()
+            except Exception:
+                pass
+            extended.pop("itinerary_id", None)
+            return await self.run(extended, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn)
+
+        # ── Targeted refinements: carry forward unaffected data ──────────────
+        working_state: OrchestratorState = {
+            **self._default_state(prior_state),
+            **prior_state,
+            "turn": turn,
+            "db": db,
+            "trip_id": trip_id,
+            "publish_fn": publish_fn,
+            # Reset the build/evaluate loop counters
+            "draft_itinerary": None,
+            "builder_error": None,
+            "evaluator_verdict": None,
+            "evaluator_retry_count": 0,
+            "itinerary_id": None,
+        }
+
+        if refinement_type == "targeted_flights":
+            flight_input = {
+                "destination": prior_state.get("destination", ""),
+                "origin": prior_state.get("origin") or "DEL",
+                "date": prior_state.get("start_date", ""),
+                "return_date": prior_state.get("end_date") or None,
+                "budget": prior_state.get("budget") or 0.0,
+                "passengers": prior_state.get("group_size") or 1,
+            }
+            result = await FlightAgent().run(flight_input, db=db, trip_id=trip_id, turn=turn)
+            if not result.get("error"):
+                working_state["flights"] = result.get("flights", [])
+                working_state["flight_status"] = "completed"
+                working_state["flight_error"] = None
+                if publish_fn:
+                    try:
+                        await publish_fn({"agent": "flight_agent", "status": "completed",
+                                          "summary": f"Found {len(working_state['flights'])} flights"})
+                    except Exception:
+                        pass
+
+        elif refinement_type == "targeted_hotel":
+            destination = prior_state.get("destination", "")
+            start_date = prior_state.get("start_date", "")
+            end_date = prior_state.get("end_date", "")
+            group_size = prior_state.get("group_size") or 1
+            bd = prior_state.get("budget_decision") or {}
+            remaining = bd.get("remaining_budget") or (prior_state.get("budget") or 0.0)
+            try:
+                days = max(1, (date.fromisoformat(end_date) - date.fromisoformat(start_date)).days)
+            except Exception:
+                days = 7
+            hotel_input = {
+                "destination": destination,
+                "check_in": start_date,
+                "check_out": end_date,
+                "budget_per_night": round(remaining / days, 2),
+                "guests": group_size,
+            }
+            result = await HotelAgent().run(hotel_input, db=db, trip_id=trip_id, turn=turn)
+            if not result.get("error"):
+                working_state["hotels"] = result.get("hotels", [])
+                working_state["hotel_status"] = "completed"
+                working_state["hotel_error"] = None
+                if publish_fn:
+                    try:
+                        await publish_fn({"agent": "hotel_agent", "status": "completed",
+                                          "summary": f"Found {len(working_state['hotels'])} hotels"})
+                    except Exception:
+                        pass
+
+        elif refinement_type == "targeted_activities":
+            activities_input = {
+                "destination": prior_state.get("destination", ""),
+                "interests": prior_state.get("interests") or [],
+                "limit": 5,
+            }
+            result = await ActivitiesAgent().run(activities_input, db=db, trip_id=trip_id, turn=turn)
+            if not result.get("error"):
+                working_state["attractions"] = result.get("attractions", [])
+                working_state["activities_status"] = "completed"
+                working_state["activities_error"] = None
+                if publish_fn:
+                    try:
+                        await publish_fn({"agent": "activities_agent", "status": "completed",
+                                          "summary": f"Found {len(working_state['attractions'])} attractions"})
+                    except Exception:
+                        pass
+
+        # ── Build → Evaluate → Persist (shared tail for all targeted types) ──
+        s1 = await build_itinerary_node(working_state)
+        s2 = await evaluate_node(s1)
+
+        # Simple retry loop (mirrors orchestrator graph but inline, no LangGraph overhead)
+        retry_count = 0
+        current = s2
+        while route_after_evaluator(current) == "retry" and retry_count < MAX_EVALUATOR_RETRIES:
+            current = await retry_dispatch_node(current)
+            current = await build_itinerary_node(current)
+            current = await evaluate_node(current)
+            retry_count += 1
+
+        if route_after_evaluator(current) == "passed":
+            final = await persist_node(current)
+        else:
+            final = await builder_failed_node(current)
+
+        await merge_node(final)
+
+        if db is not None and trip_id is not None:
+            async with timed_run() as timer:
+                pass
+            await log_agent_run(
+                db=db,
+                trip_id=trip_id,
+                agent_name="orchestrator",
+                input={"refinement_type": refinement_type, "message": refinement_message},
+                output={
+                    "hotels_count": len(final.get("hotels", [])),
+                    "flights_count": len(final.get("flights", [])),
+                    "attractions_count": len(final.get("attractions", [])),
+                    "itinerary_id": str(final["itinerary_id"]) if final.get("itinerary_id") else None,
+                },
+                duration_ms=0,
+                status="completed" if final.get("itinerary_id") else "failed",
+                turn=turn,
+            )
+
+        return {k: v for k, v in final.items() if k not in ("db", "trip_id", "publish_fn")}

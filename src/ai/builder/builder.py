@@ -1,45 +1,8 @@
 """
 Phase 12 Dev A — ItineraryBuilder: Groq (Llama 3.3) + Structured Synthesis.
+Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
 
-Produces the day-by-day JSON schema defined in the roadmap:
-
-    {
-      "days": [
-        {
-          "day": 1, "date": "2025-12-10",
-          "morning": {"activity": "...", "cost": 0, "lat": 15.5, "lng": 73.8},
-          "afternoon": {"activity": "...", "cost": 0, "lat": null, "lng": null},
-          "evening": {"activity": "...", "cost": 0, "lat": null, "lng": null},
-          "hotel": {"name": "...", "cost_per_night": 4500},
-          "flight": null
-        }
-      ],
-      "total_cost": 48500,
-      "currency": "INR"
-    }
-
-Two deterministic Python validations run on every LLM output, mirroring the
-Phase 7/10/11 precedent (DECISIONS.md #6, #18, #21) of keeping objectively
-verifiable checks out of the LLM's hands:
-
-  1. Data-scope enforcement — every activity/hotel name referenced in the
-     draft must come from the flights/hotels/attractions actually passed in
-     (or be the documented fallback phrase). Catches hallucination before
-     the Evaluator (Phase 11) ever sees the draft.
-  2. Budget-math consistency — sum of per-day costs (+ cheapest flight) must
-     be within ₹500 of the declared total_cost. Catches a builder that
-     writes an internally-inconsistent total.
-
-These are builder-internal sanity checks. EvaluatorAgent (Phase 11) still
-runs afterward and independently re-checks hallucination + budget-vs-
-estimate_budget consistency — the two checks are not redundant: this
-module validates internal consistency of the JSON itself; the Evaluator
-validates the draft against trip dates and the wider budget estimate.
-
-LLM note: originally designed for Claude Haiku 4.5 but swapped to
-Groq (llama-3.3-70b-versatile) for free-tier usage. The function is
-named _call_llm to be model-agnostic. Swap the ChatGroq line for any
-LangChain-compatible chat model without touching callers.
+All other logic is unchanged from Phase 12/13.
 """
 
 from __future__ import annotations
@@ -56,9 +19,6 @@ from src.ai.utils.run_logger import log_agent_run, timed_run
 logger = logging.getLogger(__name__)
 
 BUDGET_MATH_TOLERANCE_INR = 500.0
-# Phrases this builder is documented to write when source data is empty for
-# a slot. The Evaluator's hallucination check (evaluator.py) maintains an
-# identical copy of this set so both layers stay in sync.
 _ALLOWED_FALLBACK_PHRASES = {"Explore the area"}
 
 
@@ -156,13 +116,6 @@ def _build_user_prompt(
 
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call the configured LLM and return the raw text response.
-
-    Using Groq (llama-3.3-70b-versatile) — free tier, no credit card required.
-    Swap ChatGroq for any LangChain-compatible chat model (e.g. ChatAnthropic,
-    ChatOpenAI) without changing any other code; this function is the single
-    seam that tests patch.
-    """
     from langchain_groq import ChatGroq
 
     llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_tokens=4096)
@@ -219,9 +172,6 @@ def _validate_budget_math(draft: dict, flights: list[dict]) -> bool:
     return abs(computed - declared) <= BUDGET_MATH_TOLERANCE_INR
 
 
-# ── Core build function (pure-ish; one network call) ───────────────────────
-
-
 async def build_itinerary(
     trip_meta: dict,
     flights: list[dict],
@@ -231,11 +181,10 @@ async def build_itinerary(
     if not flights and not hotels and not attractions:
         return BuilderError(error="No source data available to build an itinerary.", code="NO_SOURCE_DATA")
 
-    system_prompt = _SYSTEM_PROMPT
     user_prompt = _build_user_prompt(trip_meta, flights, hotels, attractions)
 
     try:
-        raw = await _call_llm(system_prompt, user_prompt)
+        raw = await _call_llm(_SYSTEM_PROMPT, user_prompt)
     except Exception as exc:
         logger.exception("ItineraryBuilder LLM call failed")
         return BuilderError(error=f"LLM call failed: {exc}", code="LLM_ERROR")
@@ -265,12 +214,7 @@ async def build_itinerary(
         return BuilderError(error=f"Draft failed schema validation: {exc}", code="SCHEMA_INVALID")
 
 
-# ── Agent wrapper (adds DB logging) ─────────────────────────────────────────
-
-
 class ItineraryBuilder:
-    """Thin wrapper: runs build_itinerary() and writes one agent_runs row."""
-
     async def run(
         self,
         trip_meta: dict,
@@ -279,7 +223,9 @@ class ItineraryBuilder:
         attractions: list[dict],
         db: AsyncSession | None = None,
         trip_id: uuid.UUID | None = None,
+        turn: int = 1,
     ) -> dict:
+        """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
             result = await build_itinerary(trip_meta, flights, hotels, attractions)
 
@@ -304,6 +250,7 @@ class ItineraryBuilder:
                 output=output,
                 duration_ms=timer.duration_ms,
                 status=status,
+                turn=turn,
             )
 
         return output

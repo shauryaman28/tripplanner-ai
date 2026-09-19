@@ -1,8 +1,8 @@
 """AgentRun table — one row per agent execution.
 
-This is the debugging superpower: when the re-planning logic breaks in
-Phase 15, query agent_runs for the trip and read every decision.
-No new logging code needed later — it's all already here.
+Phase 15 addition: `turn` column (integer, default 1) tracks which
+conversation turn produced this row. GET /trips/{id}/runs?turn=N lets
+callers isolate the second refinement pass from the initial plan.
 
 status lifecycle: pending → running → completed | failed
 input / output stored as JSONB so you can query them from psql.
@@ -27,5 +27,10 @@ class AgentRun(SQLModel, table=True):
 
     input: dict | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
     output: dict | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
-    duration_ms: int | None = Field(default=None)  # wall-clock ms for the run
+    duration_ms: int | None = Field(default=None)
+
+    # Phase 15: which conversation turn produced this row (1-indexed).
+    # Default 1 means all pre-Phase-15 rows are treated as first-turn data.
+    turn: int = Field(default=1)
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
