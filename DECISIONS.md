@@ -84,3 +84,19 @@
 26. **Evaluator retry dispatch reruns only the implicated sub-agent** (`flight_agent` or `activities_agent`, via `next_agent_for_failures()`) and loops directly back to `build_itinerary_node`, skipping `budget_decision`/`hotel_activities` entirely. Cheaper than re-deriving unrelated data, and matches the roadmap's "loop back to the relevant agent" wording literally.
 
 27. **Itinerary persistence is one non-branching node (`persist_node`) using a single `AsyncSession` and a single `commit()`.** The itinerary row and the trip-status update are queued on the same session and committed together — a failure before commit leaves neither write applied (verified in `test_phase12_integration.py`). `generate_embeddings()` runs as a same-node call rather than a FastAPI `BackgroundTask` because there is no request context inside the orchestrator; Phase 14 revisits this boundary when it implements real embedding generation.
+
+---
+
+## Phase 13 — Persistence: Storing Every Run
+
+28. **Four previously-silent orchestrator nodes now log `agent_runs` rows: `intent_parsing_node`, `persist_node`, `escalate_node`, `builder_failed_node`.** `merge_node` is intentionally excluded — it is a pure publish step (fires the `planning_complete` SSE event) with no decision-making. Adding a row there would add noise without diagnostic value. The minimum row count per happy-path run is 9; all paths exceed the roadmap's "≥ 7" criterion. `GET /trips?status=` filter and `GET /trips/{id}/timeline` are added to the trips router in the same phase so the stored rows are immediately queryable and human-readable.
+
+---
+
+## Phase 14 — Embedding Generation: OpenAI text-embedding-3-small
+
+29. **Two embedding rows per itinerary (full-text + structured summary), not one.** A single vector averaging all content works for recall but gives poor precision for the Phase 23 similarity search use case. The second row — a compact `"{destination} N days M INR {budget_range}. Top activities: …"` string — produces a much stronger similarity signal for "find me a trip like this" queries because it encodes the high-level trip profile rather than raw activity text. The cost is one extra OpenAI API call per itinerary (negligible at $0.00002/1k tokens). The two-row design is established now so the Phase 23 query can choose which embedding type to use.
+
+30. **`generate_embeddings()` opens its own `AsyncSessionLocal` rather than reusing the orchestrator's session.** `persist_node` commits the itinerary and immediately closes its transaction. If `generate_embeddings()` were called on the same session after the commit, it would operate on a closed transaction context. By opening a fresh session, the embedder is independent of the caller's lifecycle and can be safely called from startup recovery, background tasks, or any other context without coordination.
+
+31. **`pending_retry` row as the graceful-degradation signal — not a raised exception.** When OpenAI fails after all tenacity retries, the embedder writes one row with `embedding_model="pending_retry"` and `vector=NULL`, then commits it. The trip status remains `completed` — a missing vector is a degraded but not broken state. The startup recovery in `main.py` re-queues these rows on next boot, making recovery automatic with zero operator intervention. Raising an exception here would surface a non-fatal embedding failure to the planning pipeline, potentially marking a fully-valid itinerary as `failed`.

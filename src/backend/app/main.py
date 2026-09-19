@@ -5,6 +5,8 @@ FastAPI application entry point.
   docker compose up backend               (Docker)
 """
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,13 +19,59 @@ from app.core.config import settings
 from app.db.redis import close_redis, init_redis
 from src.ai.mcp_client.client import close_session
 
+logger = logging.getLogger(__name__)
+
+
+# ── Phase 14: startup recovery for failed embedding rows ──────────────────
+
+
+async def _recover_pending_embeddings() -> None:
+    """On startup, re-queue any embedding rows that failed to generate.
+
+    The embedder writes a row with embedding_model="pending_retry" whenever
+    the OpenAI call fails after all retries. This function finds those rows
+    and schedules generate_embeddings() as a background asyncio task so they
+    are retried once the app is running again.
+
+    Failures here are logged but never raised — the app must start cleanly
+    regardless of whether the embeddings table is reachable.
+    """
+    try:
+        from app.db.session import AsyncSessionLocal
+        from app.models.embedding import Embedding
+        from sqlmodel import select
+        from src.ai.utils.embeddings import generate_embeddings
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Embedding).where(Embedding.embedding_model == "pending_retry")
+            )
+            pending = result.scalars().all()
+
+        if pending:
+            logger.info(
+                "[EMBEDDING RECOVERY] Re-queuing %d pending embedding(s)", len(pending)
+            )
+            for row in pending:
+                asyncio.create_task(generate_embeddings(row.itinerary_id))
+
+    except Exception as exc:
+        logger.warning("[EMBEDDING RECOVERY] Could not check pending rows: %s", exc)
+
+
+# ── Lifespan ───────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_redis()
+    await _recover_pending_embeddings()   # Phase 14
     yield
     await close_redis()
     await close_session()
+
+
+# ── App ────────────────────────────────────────────────────────────────────
 
 
 app = FastAPI(
