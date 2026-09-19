@@ -1,14 +1,19 @@
 """
 Trip routes — all require JWT.
 
-GET    /trips                    list all trips for authenticated user
+Phase 13 additions:
+  - GET /trips now accepts optional ?status= filter
+  - GET /trips/{id}/timeline — ordered event log (internal debug endpoint)
+
+GET    /trips                    list trips for user; optional ?status= filter
 POST   /trips                    create a trip
-POST   /trips/{id}/plan          kick off planning (Phase 9: OrchestratorAgent)
+POST   /trips/{id}/plan          kick off planning (OrchestratorAgent)
 GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
 GET    /trips/{id}/itinerary     latest itinerary for the trip
 GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
-GET    /trips/{id}/runs          all agent_runs for debugging
-POST   /trips/{id}/replan        Phase 10: re-trigger with budget conflict choice
+GET    /trips/{id}/runs          all agent_runs for debugging, oldest first
+POST   /trips/{id}/replan        re-trigger with budget conflict choice
+GET    /trips/{id}/timeline      ordered event log: agent_runs + itinerary (Phase 13)
 """
 
 import asyncio
@@ -16,9 +21,10 @@ import json
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import timedelta
+from typing import Any
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
@@ -33,30 +39,49 @@ from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
 from app.schemas.trip import ClarifyRequest, PlanRequest, ReplanRequest, TripCreate, TripRead
 from src.ai.orchestrator.orchestrator import OrchestratorAgent
-from src.ai.utils.conversation import (
-    append_history,
-    get_trip_state,
-)
+from src.ai.utils.conversation import append_history, get_trip_state
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
 # ── Background task GC protection ─────────────────────────────────────────
-# asyncio.create_task() returns a weak reference — if nothing else holds the
-# task, the GC can cancel it mid-run. Keep a strong reference until done.
+
 _background_tasks: set[asyncio.Task] = set()
 
 
 def _fire_and_forget(coro) -> asyncio.Task:
-    """Schedule a coroutine as a fire-and-forget background task.
-
-    Stores a strong reference in _background_tasks so the GC cannot cancel
-    the task while it is still running. The reference is released automatically
-    via the done-callback once the task completes or raises.
-    """
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
+
+
+# ── Human-readable labels for agent_runs rows (Phase 13 timeline) ─────────
+
+_AGENT_LABELS: dict[str, str] = {
+    "intent_parsing": "Extracted trip details from user input",
+    "flight_agent": "Searched for flights",
+    "budget_decision": "Evaluated budget feasibility",
+    "hotel_agent": "Searched for hotels",
+    "activities_agent": "Searched for activities and attractions",
+    "itinerary_builder": "Built day-by-day itinerary",
+    "evaluator": "Validated itinerary correctness",
+    "persist": "Saved itinerary to database",
+    "escalate": "Budget conflict — offered alternatives to user",
+    "builder_failed": "Itinerary build failed after maximum retries",
+    "orchestrator": "Completed full planning run",
+}
+
+_STATUS_LABELS: dict[str, str] = {
+    "completed": "✓",
+    "failed": "✗",
+    "pending": "…",
+}
+
+
+def _agent_label(agent_name: str, run_status: str) -> str:
+    icon = _STATUS_LABELS.get(run_status, "?")
+    label = _AGENT_LABELS.get(agent_name, agent_name.replace("_", " ").title())
+    return f"{icon} {label}"
 
 
 # ── GET /trips ─────────────────────────────────────────────────────────────
@@ -64,10 +89,21 @@ def _fire_and_forget(coro) -> asyncio.Task:
 
 @router.get("", response_model=list[TripRead])
 async def list_trips(
+    status_filter: str | None = Query(None, alias="status"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Trip]:
-    result = await db.execute(select(Trip).where(Trip.user_id == current_user.id).order_by(Trip.created_at.desc()))
+    """List all trips for the authenticated user, newest first.
+
+    Optional query parameter: ?status=pending|planning|completed|failed
+    Unknown status values return an empty list rather than an error —
+    consistent with a filter that matches nothing.
+    """
+    query = select(Trip).where(Trip.user_id == current_user.id)
+    if status_filter is not None:
+        query = query.where(Trip.status == status_filter)
+    query = query.order_by(Trip.created_at.desc())
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 
@@ -123,8 +159,6 @@ async def plan_trip(
     trip.status = TripStatus.PLANNING
     db.add(trip)
     await db.commit()
-    # db (from Depends) is closed here when the response is sent — the
-    # background task must NOT reuse it. _run_orchestrator opens its own session.
 
     await redis.publish(
         f"trip:{trip_id}:events",
@@ -139,27 +173,12 @@ async def plan_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    _fire_and_forget(
-        _run_orchestrator(
-            trip_id=trip_id,
-            initial_state=initial_state,
-            publish_fn=publish_fn,
-        )
-    )
+    _fire_and_forget(_run_orchestrator(trip_id=trip_id, initial_state=initial_state, publish_fn=publish_fn))
 
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
 async def _run_orchestrator(trip_id, initial_state, publish_fn) -> None:
-    """Run OrchestratorAgent in a background task with its own DB session.
-
-    WHY a fresh session: the `db` dependency from `Depends(get_db)` is
-    scoped to the HTTP request and is closed by FastAPI once the response
-    has been sent. This background task outlives the request, so reusing
-    the request's session would cause "session is closed" errors under
-    any load. Opening AsyncSessionLocal() here gives the task an independent
-    connection from the pool for its entire lifespan.
-    """
     async with AsyncSessionLocal() as db:
         try:
             agent = OrchestratorAgent()
@@ -213,18 +232,12 @@ async def clarify_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    _fire_and_forget(
-        _run_orchestrator(
-            trip_id=trip_id,
-            initial_state=prev_state,
-            publish_fn=publish_fn,
-        )
-    )
+    _fire_and_forget(_run_orchestrator(trip_id=trip_id, initial_state=prev_state, publish_fn=publish_fn))
 
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
-# ── POST /trips/{id}/replan — Phase 10 ────────────────────────────────────
+# ── POST /trips/{id}/replan ────────────────────────────────────────────────
 
 
 @router.post("/{trip_id}/replan", status_code=200)
@@ -235,12 +248,6 @@ async def replan_trip(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
-    """Re-trigger planning with a user-chosen budget conflict resolution.
-
-    cheaper_flights  → start replan_attempts at 1 (65% budget cap on flights)
-    reduce_days      → shorten trip by 2 days, re-run from scratch
-    increase_budget  → add 25% to total budget, re-run from scratch
-    """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
     initial_state: dict = {
@@ -254,7 +261,6 @@ async def replan_trip(
     }
 
     if body.choice == "cheaper_flights":
-        # Skip straight to replan-budget logic on first flight run
         initial_state["replan_attempts"] = 1
     elif body.choice == "reduce_days":
         new_end = trip.end_date - timedelta(days=2)
@@ -280,13 +286,7 @@ async def replan_trip(
     async def publish_fn(event: dict) -> None:
         await redis.publish(f"trip:{trip_id}:events", json.dumps(event))
 
-    _fire_and_forget(
-        _run_orchestrator(
-            trip_id=trip_id,
-            initial_state=initial_state,
-            publish_fn=publish_fn,
-        )
-    )
+    _fire_and_forget(_run_orchestrator(trip_id=trip_id, initial_state=initial_state, publish_fn=publish_fn))
 
     return {"status": "replanning_started", "trip_id": str(trip_id), "choice": body.choice}
 
@@ -360,8 +360,143 @@ async def get_trip_runs(
     db: AsyncSession = Depends(get_db),
 ) -> list[AgentRun]:
     await _get_trip_or_404(trip_id, current_user.id, db)
-    result = await db.execute(select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc()))
+    result = await db.execute(
+        select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc())
+    )
     return list(result.scalars().all())
+
+
+# ── GET /trips/{id}/timeline ───────────────────────────────────────────────
+
+
+@router.get("/{trip_id}/timeline")
+async def get_trip_timeline(
+    trip_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """Ordered event log for debugging — agent_runs interleaved with itinerary saves.
+
+    Each entry has:
+      - event_type: "agent_run" | "itinerary_saved"
+      - label:      human-readable description
+      - timestamp:  ISO 8601 UTC string
+      - status:     "completed" | "failed" | "pending"
+      - detail:     agent-specific summary (cost, count, error code, etc.)
+
+    Entries are sorted by created_at ascending so you can read a run top-to-bottom.
+    This endpoint is intentionally not paginated — a single trip run produces
+    at most ~15 rows, well within the response budget.
+    """
+    await _get_trip_or_404(trip_id, current_user.id, db)
+
+    runs_result = await db.execute(
+        select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc())
+    )
+    runs = runs_result.scalars().all()
+
+    itineraries_result = await db.execute(
+        select(Itinerary).where(Itinerary.trip_id == trip_id).order_by(Itinerary.created_at.asc())
+    )
+    itineraries = itineraries_result.scalars().all()
+
+    events: list[dict[str, Any]] = []
+
+    for run in runs:
+        events.append({
+            "event_type": "agent_run",
+            "agent_name": run.agent_name,
+            "label": _agent_label(run.agent_name, run.status),
+            "timestamp": run.created_at.isoformat() if run.created_at else None,
+            "status": run.status,
+            "duration_ms": run.duration_ms,
+            "detail": _run_detail(run.agent_name, run.output or {}, run.status),
+        })
+
+    for itinerary in itineraries:
+        events.append({
+            "event_type": "itinerary_saved",
+            "agent_name": None,
+            "label": f"✓ Itinerary saved (₹{itinerary.total_cost:,.0f})" if itinerary.total_cost else "✓ Itinerary saved",
+            "timestamp": itinerary.created_at.isoformat() if itinerary.created_at else None,
+            "status": "completed",
+            "duration_ms": None,
+            "detail": {
+                "itinerary_id": str(itinerary.id),
+                "total_cost": itinerary.total_cost,
+                "has_structured_data": itinerary.structured_data is not None,
+            },
+        })
+
+    events.sort(key=lambda e: e["timestamp"] or "")
+
+    return events
+
+
+def _run_detail(agent_name: str, output: dict, run_status: str) -> dict[str, Any]:
+    """Extract a human-readable summary dict from an agent_runs output field."""
+    if run_status == "failed":
+        error = output.get("error") or {}
+        if isinstance(error, dict):
+            return {"error_code": error.get("code"), "error_message": error.get("error")}
+        return {"error": str(error)}
+
+    if agent_name == "flight_agent":
+        flights = output.get("flights", [])
+        return {"flights_found": len(flights), "cheapest_inr": min((f.get("price_inr", 0) for f in flights), default=None)}
+
+    if agent_name == "hotel_agent":
+        hotels = output.get("hotels", [])
+        return {"hotels_found": len(hotels)}
+
+    if agent_name == "activities_agent":
+        attractions = output.get("attractions", [])
+        return {"attractions_found": len(attractions)}
+
+    if agent_name == "budget_decision":
+        return {
+            "decision": output.get("decision"),
+            "flight_cost": output.get("flight_cost"),
+            "remaining_budget": output.get("remaining_budget"),
+        }
+
+    if agent_name == "evaluator":
+        failures = output.get("failures", [])
+        return {
+            "passed": output.get("passed"),
+            "failure_count": len(failures),
+            "failure_types": [f.get("check") for f in failures],
+        }
+
+    if agent_name == "itinerary_builder":
+        draft = output.get("draft") or {}
+        return {
+            "days_count": len(draft.get("days", [])),
+            "total_cost": draft.get("total_cost"),
+        }
+
+    if agent_name == "persist":
+        return {
+            "itinerary_id": output.get("itinerary_id"),
+            "trip_status": output.get("trip_status"),
+        }
+
+    if agent_name == "intent_parsing":
+        extracted = output.get("extracted_fields", {})
+        return {
+            "pass_through": output.get("pass_through", False),
+            "fields_extracted": [k for k, v in extracted.items() if v is not None],
+        }
+
+    if agent_name == "orchestrator":
+        return {
+            "flights_count": output.get("flights_count", 0),
+            "hotels_count": output.get("hotels_count", 0),
+            "attractions_count": output.get("attractions_count", 0),
+            "itinerary_id": output.get("itinerary_id"),
+        }
+
+    return output
 
 
 # ── Private helpers ────────────────────────────────────────────────────────

@@ -1,34 +1,45 @@
 """
-Phase 10 + 12 — OrchestratorAgent: Budget Conflict, Re-Planning, and
-Itinerary Build/Evaluate/Persist.
+Phase 10 + 12 + 13 — OrchestratorAgent.
 
-Graph structure:
+Phase 13 adds agent_runs instrumentation to the four previously silent
+decision nodes: intent_parsing_node, persist_node, escalate_node, and
+builder_failed_node. Every node that makes a decision now has a row —
+the only exemption is merge_node (a pure publish step, no decision).
 
-    intent_parsing_node
+Graph structure (unchanged from Phase 12):
+
+    intent_parsing_node       ← NOW LOGGED (Phase 13)
           ↓
-    run_flight_node         ← FlightAgent only
+    run_flight_node
           ↓
-    budget_decision_node    ← pure budget check + DB log
-          ↓ (conditional edge: route_after_budget_decision)
+    budget_decision_node
+          ↓ (conditional: route_after_budget_decision)
     ┌─── "continue" ──────→ hotel_activities_node
     ├─── "replan"   ──────→ run_flight_node (loop, cap = MAX_REPLAN_ATTEMPTS)
-    └─── "escalate" ──────→ escalate_node → END
+    └─── "escalate" ──────→ escalate_node → END   ← NOW LOGGED (Phase 13)
 
     hotel_activities_node
           ↓
-    build_itinerary_node    ← ItineraryBuilder (Claude Haiku), Phase 12
+    build_itinerary_node
           ↓
-    evaluate_node           ← EvaluatorAgent, Phase 11 — now wired in
-          ↓ (conditional edge: route_after_evaluator)
-    ┌─── "passed" ─────────→ persist_node → merge_node → END
-    ├─── "retry"  ─────────→ retry_dispatch_node → build_itinerary_node (loop, cap = MAX_EVALUATOR_RETRIES)
-    └─── "failed" ─────────→ builder_failed_node → END
+    evaluate_node
+          ↓ (conditional: route_after_evaluator)
+    ┌─── "passed" ─────────→ persist_node → merge_node → END  ← persist NOW LOGGED
+    ├─── "retry"  ─────────→ retry_dispatch_node → build_itinerary_node
+    └─── "failed" ─────────→ builder_failed_node → END        ← NOW LOGGED
 
-SSE events (happy path):
-    planning_started → flight_agent → hotel_agent → activities_agent → planning_complete
-
-SSE events (evaluator exhausts retries):
-    planning_started → ... → planning_failed (agent: itinerary_builder)
+Minimum agent_runs rows on a full happy-path run (Phase 13 acceptance criterion):
+    intent_parsing   1
+    flight_agent     1   (via FlightAgent.run)
+    budget_decision  1
+    hotel_agent      1   (via HotelAgent.run)
+    activities_agent 1   (via ActivitiesAgent.run)
+    itinerary_builder 1  (via ItineraryBuilder.run)
+    evaluator        1   (via EvaluatorAgent.run)
+    persist          1
+    orchestrator     1   (OrchestratorAgent.run wrapper)
+    ─────────────────
+    total ≥ 9           (roadmap requires ≥ 7)
 """
 
 from __future__ import annotations
@@ -75,10 +86,8 @@ except ImportError:
 
 
 class OrchestratorState(TypedDict, total=False):
-    # ── Raw input (optional — free-text queries) ───────────────────────
     raw_input: str | None
 
-    # ── Extracted trip fields ──────────────────────────────────────────
     destination: str | None
     origin: str | None
     start_date: str | None
@@ -87,40 +96,35 @@ class OrchestratorState(TypedDict, total=False):
     group_size: int | None
     interests: list[str] | None
 
-    # ── Sub-agent results ──────────────────────────────────────────────
     flights: list[dict]
     hotels: list[dict]
     attractions: list[dict]
 
-    # ── Per-agent status ("completed" | "failed" | "skipped") ─────────
     flight_status: str
     hotel_status: str
     activities_status: str
 
-    # ── Errors ────────────────────────────────────────────────────────
     flight_error: dict | None
     hotel_error: dict | None
     activities_error: dict | None
 
-    # ── Phase 10: budget conflict & re-planning ────────────────────────
     replan_attempts: int
     budget_decision: dict | None
     budget_conflict_options: list[dict] | None
 
-    # ── Phase 12: build / evaluate / persist ───────────────────────────
     draft_itinerary: dict | None
     builder_error: dict | None
     evaluator_verdict: dict | None
     evaluator_retry_count: int
     itinerary_id: Any | None
 
-    # ── Runtime helpers (never stored in DB) ──────────────────────────
+    # Runtime helpers — never stored in DB
     publish_fn: Any | None
     db: Any | None
     trip_id: Any | None
 
 
-# ── Intent parsing prompt (unchanged from Phase 10) ────────────────────────
+# ── Intent parsing prompt ──────────────────────────────────────────────────
 
 _INTENT_PROMPT = """You are an expert travel planning assistant. Extract structured trip details from the user message.
 
@@ -147,36 +151,61 @@ Rules:
 User message: {message}"""
 
 
-# ── Nodes (Phase 9/10 — unchanged) ──────────────────────────────────────────
+# ── Nodes ─────────────────────────────────────────────────────────────────
 
 
 async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
+    """Extract trip fields from free-form text via Gemini Flash.
+
+    Phase 13: logs one agent_runs row per invocation so the full pipeline
+    trace includes the LLM extraction step.  When raw_input is absent the
+    node is still logged (as a pass-through) so callers can see it ran.
+    """
+    db = state.get("db")
+    trip_id = state.get("trip_id")
     raw = state.get("raw_input")
-    if not raw:
-        return state
 
-    import json
+    async with timed_run() as timer:
+        if not raw:
+            result_state = state
+            extracted: dict = {}
+        else:
+            import json
 
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
-    prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=raw)
+            llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+            prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=raw)
 
-    response = await llm.ainvoke(prompt)
-    text = response.content.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1].removeprefix("json").strip()
+            response = await llm.ainvoke(prompt)
+            text = response.content.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1].removeprefix("json").strip()
 
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        return state
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                parsed = {}
 
-    updates: OrchestratorState = {}
-    for key in ("destination", "origin", "start_date", "end_date", "budget", "group_size", "interests"):
-        value = parsed.get(key)
-        if value is not None and not state.get(key):
-            updates[key] = value  # type: ignore[literal-required]
+            updates: OrchestratorState = {}
+            for key in ("destination", "origin", "start_date", "end_date", "budget", "group_size", "interests"):
+                value = parsed.get(key)
+                if value is not None and not state.get(key):
+                    updates[key] = value  # type: ignore[literal-required]
 
-    return {**state, **updates}
+            extracted = updates
+            result_state = {**state, **updates}
+
+    if db is not None and trip_id is not None:
+        await log_agent_run(
+            db=db,
+            trip_id=trip_id,
+            agent_name="intent_parsing",
+            input={"raw_input": raw},
+            output={"extracted_fields": extracted, "pass_through": not bool(raw)},
+            duration_ms=timer.duration_ms,
+            status="completed",
+        )
+
+    return result_state
 
 
 async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
@@ -327,9 +356,7 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
 
     if isinstance(activities_result, Exception):
         attractions, activities_error, activities_status = (
-            [],
-            {"error": str(activities_result), "code": "AGENT_EXCEPTION"},
-            "failed",
+            [], {"error": str(activities_result), "code": "AGENT_EXCEPTION"}, "failed",
         )
     elif activities_result.get("error"):
         attractions, activities_error, activities_status = [], activities_result["error"], "failed"
@@ -337,15 +364,15 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
         attractions, activities_error, activities_status = activities_result.get("attractions", []), None, "completed"
 
     if publish_fn:
-        for agent_name, status, summary, error in [
+        for agent_name, ag_status, summary, error in [
             ("hotel_agent", hotel_status, f"Found {len(hotels)} hotels", hotel_error),
             ("activities_agent", activities_status, f"Found {len(attractions)} attractions", activities_error),
         ]:
             try:
                 await publish_fn({
                     "agent": agent_name,
-                    "status": status,
-                    "summary": summary if status == "completed" else (error or {}).get("error", "Failed"),
+                    "status": ag_status,
+                    "summary": summary if ag_status == "completed" else (error or {}).get("error", "Failed"),
                 })
             except Exception:
                 pass
@@ -362,18 +389,43 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
 
 
 async def escalate_node(state: OrchestratorState) -> OrchestratorState:
+    """Publish budget_conflict SSE and mark trip failed.
+
+    Phase 13: now logs an agent_runs row so the escalation decision is
+    visible in GET /trips/{id}/runs and the timeline endpoint.
+    """
     publish_fn = state.get("publish_fn")
     db = state.get("db")
     trip_id = state.get("trip_id")
     bd = state.get("budget_decision") or {}
     options = state.get("budget_conflict_options") or []
 
+    async with timed_run() as timer:
+        if db is not None and trip_id is not None:
+            trip = await db.get(Trip, trip_id)
+            if trip is not None:
+                trip.status = TripStatus.FAILED
+                db.add(trip)
+                await db.commit()
+
     if db is not None and trip_id is not None:
-        trip = await db.get(Trip, trip_id)
-        if trip is not None:
-            trip.status = TripStatus.FAILED
-            db.add(trip)
-            await db.commit()
+        await log_agent_run(
+            db=db,
+            trip_id=trip_id,
+            agent_name="escalate",
+            input={
+                "flight_cost": bd.get("flight_cost", 0),
+                "remaining_budget": bd.get("remaining_budget", 0),
+                "total_budget": bd.get("total_budget", 0),
+            },
+            output={
+                "reason": bd.get("reason", ""),
+                "options_offered": len(options),
+                "trip_status": "failed",
+            },
+            duration_ms=timer.duration_ms,
+            status="completed",
+        )
 
     if publish_fn:
         try:
@@ -396,11 +448,7 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
     return {**state, "hotel_status": "skipped", "activities_status": "skipped"}
 
 
-# ── Nodes (Phase 12 — build / evaluate / persist) ───────────────────────────
-
-
 async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
-    """Run ItineraryBuilder (Claude Haiku) against the sub-agents' data."""
     db = state.get("db")
     trip_id = state.get("trip_id")
 
@@ -424,15 +472,12 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
 
 
 async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
-    """Run EvaluatorAgent (Phase 11) against the builder's draft."""
     db = state.get("db")
     trip_id = state.get("trip_id")
     draft = state.get("draft_itinerary")
     retry_count = state.get("evaluator_retry_count", 0)
 
     if draft is None:
-        # Builder itself failed to produce a draft — nothing to evaluate.
-        # route_after_evaluator handles this case directly via builder_error.
         return {**state, "evaluator_verdict": {"passed": False, "failures": [], "retry_count": retry_count}}
 
     verdict = await EvaluatorAgent().run(
@@ -449,12 +494,6 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
 
 
 def route_after_evaluator(state: OrchestratorState) -> str:
-    """Conditional edge: 'passed' | 'retry' | 'failed'.
-
-    Builder failures (no draft at all) share the same retry cap as
-    Evaluator failures — one bounded loop for the whole build+evaluate
-    stage, rather than two independent caps.
-    """
     if state.get("builder_error") is not None and state.get("draft_itinerary") is None:
         retry_count = state.get("evaluator_retry_count", 0)
         return "failed" if retry_count >= MAX_EVALUATOR_RETRIES else "retry"
@@ -465,20 +504,16 @@ def route_after_evaluator(state: OrchestratorState) -> str:
 
 
 async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
-    """Re-run the sub-agent implicated by the Evaluator's failures, then loop
-    back to build_itinerary_node. Increments evaluator_retry_count."""
     db = state.get("db")
     trip_id = state.get("trip_id")
     verdict_dict = state.get("evaluator_verdict") or {}
     retry_count = state.get("evaluator_retry_count", 0) + 1
 
     failures = verdict_dict.get("failures", [])
-    if failures:
-        agent_to_retry = next_agent_for_failures([EvaluatorFailure(**f) for f in failures])
-    else:
-        # Builder-level failure (no verdict) — regenerate activities as the
-        # most likely source of a bad draft (missing/renamed data).
-        agent_to_retry = "activities_agent"
+    agent_to_retry = (
+        next_agent_for_failures([EvaluatorFailure(**f) for f in failures])
+        if failures else "activities_agent"
+    )
 
     new_state: OrchestratorState = {**state, "evaluator_retry_count": retry_count}
 
@@ -516,9 +551,8 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
 async def persist_node(state: OrchestratorState) -> OrchestratorState:
     """Write the itinerary row + mark the trip completed — one commit, atomic.
 
-    Both writes share a single AsyncSession and a single commit() call: if
-    anything raises before commit, neither write lands (Phase 12 Dev B
-    acceptance criterion — "forced mid-write failure → neither row persists").
+    Phase 13: logs a persist agent_runs row so the write step is visible
+    in the timeline alongside all agent decisions.
     """
     db = state.get("db")
     trip_id = state.get("trip_id")
@@ -527,46 +561,85 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     if db is None or trip_id is None:
         return {**state, "itinerary_id": None}
 
-    itinerary = Itinerary(
-        trip_id=trip_id,
-        structured_data=draft,
-        total_cost=draft.get("total_cost"),
-    )
-    trip = await db.get(Trip, trip_id)
-    if trip is not None:
-        trip.status = TripStatus.COMPLETED
-        db.add(trip)
-    db.add(itinerary)
+    async with timed_run() as timer:
+        itinerary = Itinerary(
+            trip_id=trip_id,
+            structured_data=draft,
+            total_cost=draft.get("total_cost"),
+        )
+        trip = await db.get(Trip, trip_id)
+        if trip is not None:
+            trip.status = TripStatus.COMPLETED
+            db.add(trip)
+        db.add(itinerary)
+        await db.commit()
+        await db.refresh(itinerary)
 
-    await db.commit()
-    await db.refresh(itinerary)
+    await log_agent_run(
+        db=db,
+        trip_id=trip_id,
+        agent_name="persist",
+        input={
+            "total_cost": draft.get("total_cost"),
+            "days_count": len(draft.get("days", [])),
+            "currency": draft.get("currency", "INR"),
+        },
+        output={
+            "itinerary_id": str(itinerary.id),
+            "trip_status": "completed",
+        },
+        duration_ms=timer.duration_ms,
+        status="completed",
+    )
 
     try:
         await generate_embeddings(itinerary.id)
     except Exception:
-        pass  # embedding is best-effort — never fails the planning run
+        pass
 
     return {**state, "itinerary_id": itinerary.id}
 
 
 async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
-    """Evaluator/Builder retries exhausted — mark the trip failed honestly."""
+    """Evaluator/Builder retries exhausted — mark the trip failed honestly.
+
+    Phase 13: logs a builder_failed agent_runs row so the failure reason
+    is queryable alongside the retry chain.
+    """
     db = state.get("db")
     trip_id = state.get("trip_id")
     publish_fn = state.get("publish_fn")
+    builder_error = state.get("builder_error") or {}
+    retry_count = state.get("evaluator_retry_count", 0)
+
+    async with timed_run() as timer:
+        if db is not None and trip_id is not None:
+            trip = await db.get(Trip, trip_id)
+            if trip is not None:
+                trip.status = TripStatus.FAILED
+                db.add(trip)
+                await db.commit()
 
     if db is not None and trip_id is not None:
-        trip = await db.get(Trip, trip_id)
-        if trip is not None:
-            trip.status = TripStatus.FAILED
-            db.add(trip)
-            await db.commit()
+        await log_agent_run(
+            db=db,
+            trip_id=trip_id,
+            agent_name="builder_failed",
+            input={
+                "evaluator_retry_count": retry_count,
+                "builder_error_code": builder_error.get("code"),
+            },
+            output={
+                "builder_error": builder_error,
+                "trip_status": "failed",
+            },
+            duration_ms=timer.duration_ms,
+            status="failed",
+        )
 
     if publish_fn:
         try:
-            error_detail = (state.get("builder_error") or {}).get(
-                "error", "Itinerary could not be built after maximum retries."
-            )
+            error_detail = builder_error.get("error", "Itinerary could not be built after maximum retries.")
             await publish_fn({
                 "event": "planning_failed",
                 "agent": "itinerary_builder",
@@ -580,7 +653,7 @@ async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
 
 
 async def merge_node(state: OrchestratorState) -> OrchestratorState:
-    """Publish planning_complete. Called only on the fully-persisted path."""
+    """Publish planning_complete. Not logged — pure publish, no decision."""
     publish_fn = state.get("publish_fn")
     agents_done = sum(
         1 for s in [state.get("flight_status"), state.get("hotel_status"), state.get("activities_status")]
@@ -624,22 +697,14 @@ def build_orchestrator_graph():
     graph.add_conditional_edges(
         "budget_decision",
         route_after_budget_decision,
-        {
-            "continue": "hotel_activities",
-            "replan": "run_flight",
-            "escalate": "escalate",
-        },
+        {"continue": "hotel_activities", "replan": "run_flight", "escalate": "escalate"},
     )
     graph.add_edge("hotel_activities", "build_itinerary")
     graph.add_edge("build_itinerary", "evaluate")
     graph.add_conditional_edges(
         "evaluate",
         route_after_evaluator,
-        {
-            "passed": "persist",
-            "retry": "retry_dispatch",
-            "failed": "builder_failed",
-        },
+        {"passed": "persist", "retry": "retry_dispatch", "failed": "builder_failed"},
     )
     graph.add_edge("retry_dispatch", "build_itinerary")
     graph.add_edge("persist", "merge")
