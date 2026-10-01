@@ -51,7 +51,7 @@ def _make_redis() -> AsyncMock:
     store: dict = {}
     r = AsyncMock()
     r.get = AsyncMock(side_effect=lambda k: store.get(k))
-    r.setex = AsyncMock(side_effect=lambda k, _ttl, v: store.update({k: v}))
+    r.set = AsyncMock(side_effect=lambda k, v, ex=None: store.update({k: v}))
     r._store = store
     return r
 
@@ -259,12 +259,26 @@ def _make_app_mocks(user_id: uuid.UUID, trip_id: uuid.UUID):
     mock_trip.user_id = user_id
     mock_trip.status = TripStatus.COMPLETED
 
-    run_t1 = AgentRun(trip_id=trip_id, agent_name="flight_agent", status="completed",
-                      input={}, output={}, duration_ms=10, turn=1,
-                      created_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc).replace(tzinfo=None))
-    run_t2 = AgentRun(trip_id=trip_id, agent_name="flight_agent", status="completed",
-                      input={}, output={}, duration_ms=10, turn=2,
-                      created_at=datetime(2026, 1, 1, 11, 0, tzinfo=timezone.utc).replace(tzinfo=None))
+    run_t1 = AgentRun(
+        trip_id=trip_id,
+        agent_name="flight_agent",
+        status="completed",
+        input={},
+        output={},
+        duration_ms=10,
+        turn=1,
+        created_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc).replace(tzinfo=None),
+    )
+    run_t2 = AgentRun(
+        trip_id=trip_id,
+        agent_name="flight_agent",
+        status="completed",
+        input={},
+        output={},
+        duration_ms=10,
+        turn=2,
+        created_at=datetime(2026, 1, 1, 11, 0, tzinfo=timezone.utc).replace(tzinfo=None),
+    )
 
     return mock_user, mock_trip, run_t1, run_t2
 
@@ -391,23 +405,21 @@ async def test_refine_returns_refinement_started():
     trip_id = uuid.uuid4()
     mock_user, mock_trip, _, _ = _make_app_mocks(user_id, trip_id)
 
-    prior_state = {"destination": "Goa", "budget": 40000,
-                   "start_date": "2026-12-10", "end_date": "2026-12-15"}
+    prior_state = {"destination": "Goa", "budget": 40000, "start_date": "2026-12-10", "end_date": "2026-12-15"}
 
     trip_result = MagicMock()
     trip_result.scalar_one_or_none.return_value = mock_trip
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(return_value=trip_result)
+    mock_db.add = MagicMock()
 
     store = {
         f"trip:{trip_id}:planning_state": _json.dumps(prior_state),
-        f"trip:{trip_id}:conv_history": _json.dumps(
-            [{"role": "user", "content": "plan", "turn": 1}]
-        ),
+        f"trip:{trip_id}:conv_history": _json.dumps([{"role": "user", "content": "plan", "turn": 1}]),
     }
     mock_redis = AsyncMock()
     mock_redis.get = AsyncMock(side_effect=lambda k: store.get(k))
-    mock_redis.setex = AsyncMock()
+    mock_redis.set = AsyncMock()
 
     mock_classification = RefinementClassification(
         refinement_type="targeted_flights",
@@ -422,11 +434,8 @@ async def test_refine_returns_refinement_started():
     app.dependency_overrides[get_redis_dep] = lambda: mock_redis
     try:
         with (
-            patch(
-                "src.ai.agents.refinement_classifier.classify_refinement",
-                AsyncMock(return_value=mock_classification),
-            ),
-            patch("asyncio.create_task", return_value=MagicMock()),
+            patch("app.api.routes.trips.classify_refinement", AsyncMock(return_value=mock_classification)),
+            patch("app.api.routes.trips.spawn", side_effect=lambda coro: coro.close()),
         ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 resp = await client.post(
@@ -457,10 +466,18 @@ async def test_list_itineraries_returns_all_versions_newest_first():
     trip_id = uuid.uuid4()
     mock_user, mock_trip, _, _ = _make_app_mocks(user_id, trip_id)
 
-    itin1 = Itinerary(trip_id=trip_id, structured_data={"days": []}, total_cost=40000,
-                      created_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc).replace(tzinfo=None))
-    itin2 = Itinerary(trip_id=trip_id, structured_data={"days": []}, total_cost=38000,
-                      created_at=datetime(2026, 1, 1, 11, 0, tzinfo=timezone.utc).replace(tzinfo=None))
+    itin1 = Itinerary(
+        trip_id=trip_id,
+        structured_data={"days": []},
+        total_cost=40000,
+        created_at=datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc).replace(tzinfo=None),
+    )
+    itin2 = Itinerary(
+        trip_id=trip_id,
+        structured_data={"days": []},
+        total_cost=38000,
+        created_at=datetime(2026, 1, 1, 11, 0, tzinfo=timezone.utc).replace(tzinfo=None),
+    )
 
     trip_result = MagicMock()
     trip_result.scalar_one_or_none.return_value = mock_trip
@@ -494,45 +511,263 @@ async def test_list_itineraries_returns_all_versions_newest_first():
 
 @pytest.mark.asyncio
 async def test_run_orchestrator_saves_state_to_redis():
-    """_run_orchestrator saves the final planning state to Redis after completion."""
+    """_run_orchestrator saves the final planning state to Redis after a successful run."""
     import json as _json
 
-    from src.backend.app.api.routes.trips import _run_orchestrator
+    from app.api.routes.trips import _run_orchestrator
 
     trip_id = uuid.uuid4()
     saved_state = {}
 
     mock_redis = AsyncMock()
-    mock_redis.setex = AsyncMock(
-        side_effect=lambda k, _ttl, v: saved_state.update({k: v})
-    )
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.set = AsyncMock(side_effect=lambda k, v, ex=None: saved_state.update({k: v}))
 
-    mock_agent_result = {
-        "destination": "Goa",
-        "flights": [{"price_inr": 5000}],
-        "hotels": [],
-        "attractions": [],
-        "flight_status": "completed",
-        "hotel_status": "completed",
-        "activities_status": "completed",
-    }
+    result = {"destination": "Goa", "flights": [{"price_inr": 5000}], "itinerary_id": uuid.uuid4()}
 
-    with patch(
-        "src.ai.orchestrator.orchestrator.OrchestratorAgent.run",
-        AsyncMock(return_value=mock_agent_result),
-    ):
-        await _run_orchestrator(
-            trip_id=trip_id,
-            initial_state={"destination": "Goa"},
-            publish_fn=AsyncMock(),
-            redis=mock_redis,
-        )
+    with patch("app.api.routes.trips.AsyncSessionLocal", MagicMock(return_value=AsyncMock())):
+        await _run_orchestrator(trip_id, mock_redis, AsyncMock(return_value=result))
 
-    # Redis setex must have been called with the trip state key
-    assert mock_redis.setex.called
-    state_key = f"trip:{trip_id}:planning_state"
-    assert state_key in saved_state
-    saved = _json.loads(saved_state[state_key])
+    saved = _json.loads(saved_state[f"trip:{trip_id}:planning_state"])
     assert saved["destination"] == "Goa"
     assert "itinerary_id" not in saved  # stripped before saving
 
+
+def _session_factory(trip):
+    """AsyncSessionLocal stand-in whose session returns `trip` from db.get()."""
+    db = AsyncMock()
+    db.get = AsyncMock(return_value=trip)
+    db.__aenter__.return_value = db
+    return MagicMock(return_value=db), db
+
+
+@pytest.mark.asyncio
+async def test_run_orchestrator_crash_marks_trip_failed_and_notifies_sse():
+    """A crash mid-run must not leave the trip stuck in 'planning' (Phase 13 lifecycle)."""
+    from app.api.routes.trips import _run_orchestrator
+    from app.models.trip import TripStatus
+
+    trip = MagicMock(status=TripStatus.PLANNING)
+    factory, _ = _session_factory(trip)
+    mock_redis = AsyncMock()
+
+    with patch("app.api.routes.trips.AsyncSessionLocal", factory):
+        await _run_orchestrator(uuid.uuid4(), mock_redis, AsyncMock(side_effect=RuntimeError("LLM exploded")))
+
+    assert trip.status == TripStatus.FAILED
+    event = __import__("json").loads(mock_redis.publish.await_args.args[1])
+    assert event["event"] == "planning_failed" and "LLM exploded" in event["error"]
+    mock_redis.set.assert_not_called()  # a failed run never overwrites the last good state
+
+
+@pytest.mark.asyncio
+async def test_failed_refinement_keeps_trip_completed_and_previous_state():
+    """A refinement that produces no itinerary leaves the earlier itinerary standing."""
+    from app.api.routes.trips import _run_orchestrator
+    from app.models.trip import TripStatus
+
+    trip = MagicMock(status=TripStatus.FAILED)  # what the graph's failure nodes set
+    factory, _ = _session_factory(trip)
+    mock_redis = AsyncMock()
+
+    with patch("app.api.routes.trips.AsyncSessionLocal", factory):
+        await _run_orchestrator(
+            uuid.uuid4(), mock_redis, AsyncMock(return_value={"itinerary_id": None}), turn=2, has_itinerary=True
+        )
+
+    assert trip.status == TripStatus.COMPLETED
+    mock_redis.set.assert_not_called()
+
+
+# ── OrchestratorAgent.refine (selective re-run) ───────────────────────────────
+
+_PRIOR = {
+    "destination": "Goa",
+    "origin": "DEL",
+    "start_date": "2026-12-10",
+    "end_date": "2026-12-12",
+    "budget": 50_000.0,
+    "group_size": 2,
+    "interests": ["beach"],
+    "flights": [{"airline": "6E", "price_inr": 8_000.0}],
+    "hotels": [{"name": "Old Inn", "price_per_night_inr": 3_000.0}],
+    "attractions": [{"name": "Fort Aguada"}],
+    "flight_status": "completed",
+    "hotel_status": "completed",
+    "activities_status": "completed",
+    "budget_decision": {
+        "decision": "continue",
+        "remaining_budget": 42_000.0,
+        "flight_cost": 8_000.0,
+        "total_budget": 50_000.0,
+        "reason": "ok",
+    },
+    "evaluator_retry_count": 2,  # left over from turn 1 — must not eat into this turn's retries
+    "draft_itinerary": {"days": [], "total_cost": 0},
+}
+_DRAFT = {
+    "days": [{"day": 1, "date": "2026-12-10", "hotel": {"name": "Beach House", "cost_per_night": 4_000.0}}],
+    "total_cost": 12_000.0,
+    "currency": "INR",
+}
+
+
+def _orchestrator_mocks(stack, **agent_results):
+    """Patch the three sub-agents + builder inside the orchestrator module; return their mocks."""
+    mocks = {}
+    for name in ("FlightAgent", "HotelAgent", "ActivitiesAgent", "ItineraryBuilder"):
+        mocks[name] = stack.enter_context(patch(f"src.ai.orchestrator.orchestrator.{name}")).return_value
+        mocks[name].run = AsyncMock(return_value=agent_results.get(name, {}))
+    return mocks
+
+
+@pytest.mark.asyncio
+async def test_refine_targeted_hotel_reruns_only_hotel_agent_and_keeps_flights():
+    """Phase 15 acceptance: "change hotels" → only HotelAgent runs; flights and activities carried forward."""
+    from contextlib import ExitStack
+
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    published = []
+    with ExitStack() as stack:
+        mocks = _orchestrator_mocks(
+            stack,
+            HotelAgent={"hotels": [{"name": "Beach House", "price_per_night_inr": 4_000.0}], "error": None},
+            ItineraryBuilder={"draft": _DRAFT, "error": None},
+        )
+
+        async def publish(event):
+            published.append(event)
+
+        result = await OrchestratorAgent().refine(
+            "targeted_hotel", _PRIOR, "closer to the beach", publish_fn=publish, turn=2
+        )
+
+    mocks["HotelAgent"].run.assert_awaited_once()
+    mocks["FlightAgent"].run.assert_not_called()
+    mocks["ActivitiesAgent"].run.assert_not_called()
+    assert mocks["HotelAgent"].run.await_args.kwargs["turn"] == 2
+
+    assert result["flights"] == _PRIOR["flights"]
+    assert result["attractions"] == _PRIOR["attractions"]
+    assert result["hotels"][0]["name"] == "Beach House"
+    assert result["evaluator_verdict"]["passed"] is True
+    assert result["evaluator_retry_count"] == 0
+
+    # the user's request reaches the builder, and the refinement is announced over SSE
+    assert mocks["ItineraryBuilder"].run.await_args.kwargs["trip_meta"]["request"] == "closer to the beach"
+    assert [e.get("agent") or e.get("event") for e in published] == ["hotel_agent", "planning_complete"]
+
+
+@pytest.mark.asyncio
+async def test_refine_targeted_hotel_failure_keeps_previous_hotels():
+    from contextlib import ExitStack
+
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    with ExitStack() as stack:
+        _orchestrator_mocks(
+            stack,
+            HotelAgent={"hotels": [], "error": {"error": "down", "code": "API_NOT_CONFIGURED"}},
+            ItineraryBuilder={"draft": None, "error": {"error": "x", "code": "LLM_ERROR"}},
+        )
+        result = await OrchestratorAgent().refine("targeted_hotel", _PRIOR, "nicer hotel")
+
+    assert result["hotels"] == _PRIOR["hotels"]
+
+
+@pytest.mark.asyncio
+async def test_refine_targeted_flights_runs_budget_check_and_escalates_on_conflict():
+    """Hard case "make it cheaper": targeted_flights, then the budget decision node."""
+    from contextlib import ExitStack
+
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    published = []
+
+    async def publish(event):
+        published.append(event)
+
+    with ExitStack() as stack:
+        mocks = _orchestrator_mocks(stack, FlightAgent={"flights": [{"price_inr": 40_000.0}], "error": None})
+        result = await OrchestratorAgent().refine("targeted_flights", _PRIOR, "make it cheaper", publish_fn=publish)
+
+    assert result["budget_decision"]["decision"] == "escalate"
+    assert "budget_conflict" in [e.get("event") for e in published]
+    mocks["ItineraryBuilder"].run.assert_not_called()
+    mocks["HotelAgent"].run.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refine_targeted_activities_takes_new_interests_from_the_message():
+    from contextlib import ExitStack
+
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    with ExitStack() as stack:
+        mocks = _orchestrator_mocks(
+            stack,
+            ActivitiesAgent={"attractions": [{"name": "Mapusa Market"}], "error": None},
+            ItineraryBuilder={"draft": _DRAFT, "error": None},
+        )
+        stack.enter_context(
+            patch(
+                "src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={"interests": ["shopping"]})
+            )
+        )
+        result = await OrchestratorAgent().refine("targeted_activities", _PRIOR, "swap the beach for shopping")
+
+    assert mocks["ActivitiesAgent"].run.await_args.args[0]["interests"] == ["shopping"]
+    assert result["interests"] == ["shopping"]
+    mocks["FlightAgent"].run.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refine_full_replan_resets_state_and_lets_the_message_override_destination():
+    """Hard case "I'd rather go to Mumbai": all agents, reset state, new destination wins."""
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    agent = OrchestratorAgent()
+    with patch.object(agent, "run", AsyncMock(return_value={})) as mock_run:
+        await agent.refine("full_replan", _PRIOR, "I'd rather go to Mumbai", turn=2)
+
+    state = mock_run.await_args.args[0]
+    assert state["raw_input"] == "I'd rather go to Mumbai" and state["intent_override"] is True
+    assert "flights" not in state and "draft_itinerary" not in state and "evaluator_retry_count" not in state
+    assert mock_run.await_args.kwargs["turn"] == 2
+
+
+@pytest.mark.asyncio
+async def test_refine_add_day_extends_end_date_and_replans_everything():
+    """Hard case "add a day": all three agents re-run on the longer date range."""
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    agent = OrchestratorAgent()
+    with patch.object(agent, "run", AsyncMock(return_value={})) as mock_run:
+        await agent.refine("add_day", _PRIOR, "add a day", turn=3)
+
+    state = mock_run.await_args.args[0]
+    assert state["end_date"] == "2026-12-13"
+    assert "flights" not in state and "raw_input" not in state
+
+
+@pytest.mark.asyncio
+async def test_intent_override_replaces_destination_and_keeps_trip_length():
+    from src.ai.orchestrator.orchestrator import intent_parsing_node
+
+    state = {
+        "destination": "Goa",
+        "start_date": "2026-12-10",
+        "end_date": "2026-12-15",
+        "budget": 50_000.0,
+        "raw_input": "Mumbai in January instead",
+    }
+    parsed = {"destination": "Mumbai", "start_date": "2027-01-05"}
+
+    with patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value=parsed)):
+        kept = await intent_parsing_node(state)
+        replaced = await intent_parsing_node({**state, "intent_override": True})
+
+    assert kept["destination"] == "Goa" and kept["start_date"] == "2026-12-10"  # fill-only by default
+    assert replaced["destination"] == "Mumbai"
+    assert (replaced["start_date"], replaced["end_date"]) == ("2027-01-05", "2027-01-10")  # still 5 nights

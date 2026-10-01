@@ -10,12 +10,13 @@ from pydantic import BaseModel, Field
 
 
 class FlightSearchInput(BaseModel):
-    origin: str = Field(..., description="IATA airport code, e.g. DEL")
-    destination: str = Field(..., description="IATA airport code, e.g. GOI")
+    origin: str = Field(..., description="IATA airport code or known city name, e.g. DEL")
+    destination: str = Field(..., description="IATA airport code or known city name, e.g. GOI or Goa")
     date: str = Field(..., description="Departure date ISO 8601, e.g. 2025-12-10")
     return_date: str | None = Field(None, description="Return date for round-trip")
-    budget: float = Field(..., description="Max total price in INR")
+    budget: float = Field(..., description="Max total price in INR (all passengers); dearer offers are dropped")
     passengers: int = Field(1, ge=1, le=9)
+    max_stops: int = Field(1, ge=0, le=2, description="Max connections per direction")
     preferred_airlines: list[str] | None = Field(
         None, description="IATA carrier codes ranked first (soft preference, not a filter), e.g. ['6E', 'AI']"
     )

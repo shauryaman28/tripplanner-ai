@@ -1,6 +1,11 @@
 """
 Phase 3 — all 5 MCP tools wired to real external APIs.
 
+Providers: Duffel (flights), Amadeus (hotels), OpenTripMap (attractions),
+OpenWeatherMap (weather). Amadeus closed its self-service portal on
+2026-07-17, so search_hotels returns API_NOT_CONFIGURED until a replacement
+hotel provider is wired in — the orchestrator plans without a hotel then.
+
 Rules:
 - Missing API key  → ToolError(code="API_NOT_CONFIGURED")  — server never crashes
 - Validation first → ToolError before any network call
@@ -46,7 +51,15 @@ TTL_WEATHER = 3_600  # 1 hr
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-# Mapping of common Indian city names → Amadeus IATA city codes
+DUFFEL_API_URL = "https://api.duffel.com"
+MAX_FLIGHT_RESULTS = 5
+
+# Duffel quotes offers in the account's billing currency and has no currency
+# parameter, so prices are converted with these approximate rates. Offers in
+# any other currency are skipped rather than mispriced.
+_FX_TO_INR: dict[str, float] = {"INR": 1.0, "USD": 84.0, "EUR": 91.0, "GBP": 107.0}
+
+# Mapping of common Indian city names → IATA city codes
 _CITY_IATA: dict[str, str] = {
     "goa": "GOI",
     "mumbai": "BOM",
@@ -206,11 +219,20 @@ def _city_to_iata(city: str) -> str | None:
     return _CITY_IATA.get(city.strip().lower())
 
 
+def _to_airport_code(place: str) -> str | None:
+    """Accept a known city name ("Goa") or an IATA code ("GOI"); None if neither.
+
+    The city table is tried first because some city names are also 3-letter
+    strings ("Goa" must resolve to GOI, not "GOA").
+    """
+    place = place.strip()
+    return _city_to_iata(place) or (place.upper() if len(place) == 3 and place.isalpha() else None)
+
+
 def _parse_iso_duration(duration: str) -> int:
-    """Parse 'PT2H15M' → total minutes."""
-    hours = re.search(r"(\d+)H", duration)
-    mins = re.search(r"(\d+)M", duration)
-    return (int(hours.group(1)) if hours else 0) * 60 + (int(mins.group(1)) if mins else 0)
+    """Parse 'PT2H15M' / 'P1DT2H' → total minutes."""
+    days, hours, mins = (re.search(rf"(\d+){unit}", duration) for unit in "DHM")
+    return sum(int(m.group(1)) * factor for m, factor in ((days, 1440), (hours, 60), (mins, 1)) if m)
 
 
 def _otm_kind_to_category(kinds: str) -> str:
@@ -241,11 +263,43 @@ def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayF
 # ── Tool: search_flights ───────────────────────────────────────────────────
 
 
+def _offer_to_flight(offer: dict, budget: float) -> Flight | None:
+    """Map one Duffel offer to a Flight, or None if it is unpriceable or over budget."""
+    rate = _FX_TO_INR.get(offer.get("total_currency", ""))
+    if rate is None:
+        return None
+    price = round(float(offer["total_amount"]) * rate, 2)  # total_amount already covers all passengers
+    if price > budget:
+        return None
+
+    outbound = offer["slices"][0]
+    first, last = outbound["segments"][0], outbound["segments"][-1]
+    carrier = first["marketing_carrier"]["iata_code"]
+    return Flight(
+        airline=carrier,
+        flight_number=f"{carrier}-{first['marketing_carrier_flight_number']}",
+        departure=first["departing_at"],
+        arrival=last["arriving_at"],
+        duration_mins=_parse_iso_duration(outbound.get("duration") or ""),
+        price_inr=price,
+        stops=len(outbound["segments"]) - 1,
+    )
+
+
 def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
-    """Search flights via Amadeus sandbox. Caches results for 5 min."""
+    """Search flights via Duffel, cheapest first, capped at `budget`. Caches results for 5 min.
+
+    With a return_date the search is a round trip and price_inr is the total
+    for both directions; the other Flight fields describe the outbound leg.
+    """
     # --- validation (before any API call) ---
-    if date.fromisoformat(input.date) < date.today():
-        return ToolError(error="Departure date is in the past.", code="PAST_DATE")
+    try:
+        if date.fromisoformat(input.date) < date.today():
+            return ToolError(error="Departure date is in the past.", code="PAST_DATE")
+        if input.return_date and date.fromisoformat(input.return_date) < date.fromisoformat(input.date):
+            return ToolError(error="return_date is before the departure date.", code="INVALID_DATES")
+    except ValueError:
+        return ToolError(error="Dates must be ISO 8601 (YYYY-MM-DD).", code="INVALID_DATES")
     if input.budget < 2_000:
         return ToolError(
             error="Budget too low — minimum viable flight budget is ₹2,000.",
@@ -253,10 +307,20 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
         )
 
     # --- API key check ---
-    if not mcp_settings.AMADEUS_CLIENT_ID or not mcp_settings.AMADEUS_CLIENT_SECRET:
+    if not mcp_settings.DUFFEL_ACCESS_TOKEN:
         return ToolError(
-            error="Amadeus API not configured. Set AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET in .env.",
+            error="Duffel API not configured. Set DUFFEL_ACCESS_TOKEN in .env.",
             code="API_NOT_CONFIGURED",
+        )
+
+    origin, destination = _to_airport_code(input.origin), _to_airport_code(input.destination)
+    if not origin or not destination:
+        return ToolError(
+            error=(
+                f"Unknown airport: '{input.destination if origin else input.origin}'. "
+                "Pass an IATA code or add the city to _CITY_IATA in tools.py."
+            ),
+            code="UNKNOWN_DESTINATION",
         )
 
     # --- cache ---
@@ -266,46 +330,50 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
         return [Flight(**f) for f in cached]
 
     # --- real API call ---
+    slices = [{"origin": origin, "destination": destination, "departure_date": input.date}]
+    if input.return_date:
+        slices.append({"origin": destination, "destination": origin, "departure_date": input.return_date})
     try:
-        amadeus = AmadeusClient(
-            client_id=mcp_settings.AMADEUS_CLIENT_ID,
-            client_secret=mcp_settings.AMADEUS_CLIENT_SECRET,
+        resp = httpx.post(
+            f"{DUFFEL_API_URL}/air/offer_requests",
+            params={"return_offers": "true", "supplier_timeout": 15_000},
+            headers={
+                "Authorization": f"Bearer {mcp_settings.DUFFEL_ACCESS_TOKEN}",
+                "Duffel-Version": "v2",
+                "Accept": "application/json",
+            },
+            json={
+                "data": {
+                    "slices": slices,
+                    "passengers": [{"type": "adult"}] * input.passengers,
+                    "cabin_class": "economy",
+                    "max_connections": input.max_stops,
+                }
+            },
+            timeout=30,
         )
-        response = amadeus.shopping.flight_offers_search.get(
-            originLocationCode=input.origin,
-            destinationLocationCode=input.destination,
-            departureDate=input.date,
-            adults=input.passengers,
-            currencyCode="INR",
-            max=5,
-        )
-        flights: list[Flight] = []
-        for offer in response.data:
-            itin = offer["itineraries"][0]
-            seg = itin["segments"][0]
-            price = float(offer["price"]["grandTotal"]) * input.passengers
-            flights.append(
-                Flight(
-                    airline=seg["carrierCode"],
-                    flight_number=f"{seg['carrierCode']}-{seg['number']}",
-                    departure=seg["departure"]["at"],
-                    arrival=seg["arrival"]["at"],
-                    duration_mins=_parse_iso_duration(itin["duration"]),
-                    price_inr=price,
-                    stops=len(itin["segments"]) - 1,
-                )
+        resp.raise_for_status()
+        offers = resp.json()["data"].get("offers") or []
+
+        flights = [f for f in (_offer_to_flight(offer, input.budget) for offer in offers) if f is not None]
+        if not flights:
+            return ToolError(
+                error=f"No flights from {origin} to {destination} within ₹{input.budget:,.0f}.",
+                code="NO_RESULTS",
             )
+        flights = sorted(flights, key=lambda f: f.price_inr)[:MAX_FLIGHT_RESULTS]
+
         if input.preferred_airlines:
             preferred = {code.strip().upper() for code in input.preferred_airlines}
             # Soft preference: list.sort is stable, so preferred carriers move to the front
-            # while Amadeus' original order is preserved within each group. Nothing is dropped.
+            # while price order is preserved within each group. Nothing is dropped.
             flights.sort(key=lambda f: f.airline.upper() not in preferred)
         set_cached_sync(cache_key, [f.model_dump() for f in flights], TTL_FLIGHTS)
         return flights
 
-    except AmadeusError as exc:
-        logger.error("Amadeus flight search error: %s", exc)
-        return ToolError(error=f"Amadeus error: {exc.description}", code="AMADEUS_ERROR")
+    except httpx.HTTPStatusError as exc:
+        logger.error("Duffel flight search error: %s", exc)
+        return ToolError(error=f"Duffel API error: HTTP {exc.response.status_code}", code="DUFFEL_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in search_flights")
         return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
@@ -317,13 +385,16 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
 def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
     """Search hotels via Amadeus Hotel Search. Caches results for 15 min."""
     # --- validation ---
-    if date.fromisoformat(input.check_out) <= date.fromisoformat(input.check_in):
-        return ToolError(error="check_out must be after check_in.", code="INVALID_DATES")
+    try:
+        if date.fromisoformat(input.check_out) <= date.fromisoformat(input.check_in):
+            return ToolError(error="check_out must be after check_in.", code="INVALID_DATES")
+    except ValueError:
+        return ToolError(error="Dates must be ISO 8601 (YYYY-MM-DD).", code="INVALID_DATES")
 
     # --- API key check ---
     if not mcp_settings.AMADEUS_CLIENT_ID or not mcp_settings.AMADEUS_CLIENT_SECRET:
         return ToolError(
-            error="Amadeus API not configured. Set AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET in .env.",
+            error="Hotel search not configured (Amadeus self-service keys stopped working on 2026-07-17).",
             code="API_NOT_CONFIGURED",
         )
 
@@ -449,9 +520,11 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
             return ToolError(error=f"Could not geocode destination: {input.destination}", code="NOT_FOUND")
 
         # Step 2 — map interests to OTM kinds
-        kinds = ",".join(
-            {_INTEREST_TO_OTM_KIND.get(i.strip().lower(), "interesting_places") for i in input.interests}
-        ) if input.interests else "interesting_places"
+        kinds = (
+            ",".join({_INTEREST_TO_OTM_KIND.get(i.strip().lower(), "interesting_places") for i in input.interests})
+            if input.interests
+            else "interesting_places"
+        )
 
         radius_resp = httpx.get(
             "https://api.opentripmap.com/0.1/en/places/radius",
@@ -494,8 +567,9 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
         return attractions
 
     except httpx.HTTPStatusError as exc:
-        logger.error("OpenTripMap error: %s", exc)
-        return ToolError(error=f"OpenTripMap API error: {exc}", code="OTM_ERROR")
+        # str(exc) contains the request URL, API key included — report the status only.
+        logger.error("OpenTripMap error: HTTP %s", exc.response.status_code)
+        return ToolError(error=f"OpenTripMap API error: HTTP {exc.response.status_code}", code="OTM_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in get_attractions")
         return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
@@ -598,7 +672,7 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
                 error=f"City not found in OpenWeatherMap: {input.destination}",
                 code="NOT_FOUND",
             )
-        return ToolError(error=f"OWM API error: {exc}", code="OWM_ERROR")
+        return ToolError(error=f"OWM API error: HTTP {exc.response.status_code}", code="OWM_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in get_weather")
         return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")

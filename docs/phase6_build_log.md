@@ -1,5 +1,7 @@
 # Phase 6 — FlightAgent: One Agent, One Tool
 
+> **Since this log was written:** `call_tool` read only the first content block, which truncated every list result to one item; it now reads the structured payload (DECISIONS #52). `log_agent_run` serialises writes per session because sub-agents run concurrently on one session (DECISIONS #51).
+
 **Status: ✅ Complete**
 **Done criterion:** `FlightAgent.run()` returns flights for valid input. 6 unit tests pass. Prompt on v2. MCP client wraps all errors as `ToolError`. `log_agent_run` writes correctly-shaped rows.
 

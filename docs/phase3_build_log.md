@@ -1,5 +1,7 @@
 # Phase 3 — MCP Server: Real APIs
 
+> **Since this log was written:** attractions moved to OpenTripMap, and — after Amadeus shut down its self-service portal on 2026-07-17 — flights moved to Duffel (city names resolved to IATA codes, `budget` enforced as a cap, round trips). Hotels currently have no provider. Provider error messages no longer include the request URL (it carried the API key). See `docs/phase1-17_audit.md` and DECISIONS #47.
+
 **Status: ✅ Complete**
 **Done criterion:** All 5 tools return real data via MCP Inspector. Caching verified via logs. Contract tests pass. At least one real API error handled.
 

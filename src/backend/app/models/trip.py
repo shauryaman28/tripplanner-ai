@@ -24,7 +24,7 @@ class Trip(SQLModel, table=True):
     __tablename__ = "trips"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    user_id: uuid.UUID = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
 
     destination: str = Field(max_length=200)
     start_date: date

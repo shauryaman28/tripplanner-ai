@@ -136,9 +136,7 @@ def test_evaluate_itinerary_bad_itinerary_reports_multiple_failures():
     draft["days"][0]["date"] = "2026-12-25"
     draft["days"][0]["evening"]["activity"] = "Fake Museum"
 
-    verdict = evaluate_itinerary(
-        draft, TRIP_START, TRIP_END, expected_budget_total=5200, attractions=ATTRACTIONS
-    )
+    verdict = evaluate_itinerary(draft, TRIP_START, TRIP_END, expected_budget_total=5200, attractions=ATTRACTIONS)
     assert verdict.passed is False
     checks = {f.check for f in verdict.failures}
     assert "date_out_of_range" in checks

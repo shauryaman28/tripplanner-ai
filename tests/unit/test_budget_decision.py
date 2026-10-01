@@ -4,7 +4,6 @@ Unit tests for Phase 10 budget decision pure function.
 All tests call make_budget_decision() directly — no mocks, no network.
 """
 
-
 from src.ai.agents.budget_decision import (
     MAX_REPLAN_ATTEMPTS,
     make_budget_decision,
@@ -44,9 +43,7 @@ def test_55_percent_flights_replans():
 def test_max_replan_attempts_forces_escalate():
     """Even borderline budget: cap hit → escalate regardless of remaining fraction."""
     # 45% remaining would normally replan, but attempt cap overrides
-    result = make_budget_decision(
-        _flights(22_000), total_budget=40_000, replan_attempts=MAX_REPLAN_ATTEMPTS
-    )
+    result = make_budget_decision(_flights(22_000), total_budget=40_000, replan_attempts=MAX_REPLAN_ATTEMPTS)
     assert result.decision == "escalate"
     assert "Maximum re-planning" in result.reason
 

@@ -50,14 +50,19 @@ from src.ai.utils.preferences import (
     preferred_airlines_from,
     resolve_origin_code,
 )
+from tests.fakes import duffel_offer, duffel_response
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 _LLM = "src.ai.agents.preference_extractor._call_llm"
 
 _FLIGHT = {
-    "airline": "6E", "flight_number": "6E-204",
-    "departure": "2026-12-10T06:00:00", "arrival": "2026-12-10T08:15:00",
-    "duration_mins": 135, "price_inr": 8200.0, "stops": 0,
+    "airline": "6E",
+    "flight_number": "6E-204",
+    "departure": "2026-12-10T06:00:00",
+    "arrival": "2026-12-10T08:15:00",
+    "duration_mins": 135,
+    "price_inr": 8200.0,
+    "stops": 0,
 }
 
 _LUX_STATE = {
@@ -69,7 +74,8 @@ _LUX_STATE = {
     "draft_itinerary": {
         "days": [
             {
-                "day": 1, "date": "2026-12-10",
+                "day": 1,
+                "date": "2026-12-10",
                 "morning": {"activity": "Fort Aguada", "cost": 0},
                 "afternoon": {"activity": "Explore the area", "cost": 0},
                 "evening": None,
@@ -77,9 +83,11 @@ _LUX_STATE = {
                 "flight": None,
             },
             {
-                "day": 2, "date": "2026-12-11",
+                "day": 2,
+                "date": "2026-12-11",
                 "morning": {"activity": "Baga Beach", "cost": 500},
-                "afternoon": None, "evening": None,
+                "afternoon": None,
+                "evening": None,
                 "hotel": {"name": "Taj", "cost_per_night": 12_000.0},
                 "flight": None,
             },
@@ -179,7 +187,15 @@ def test_build_preference_updates_is_idempotent():
 
 @pytest.mark.parametrize(
     "home_city, expected",
-    [("Delhi", "DEL"), ("Goa", "GOI"), ("blr", "BLR"), ("  Mumbai ", "BOM"), ("Atlantis", None), ("", None), (None, None)],
+    [
+        ("Delhi", "DEL"),
+        ("Goa", "GOI"),
+        ("blr", "BLR"),
+        ("  Mumbai ", "BOM"),
+        ("Atlantis", None),
+        ("", None),
+        (None, None),
+    ],
 )
 def test_resolve_origin_code(home_city, expected):
     assert resolve_origin_code(home_city) == expected
@@ -195,7 +211,12 @@ def test_preferred_airlines_from_state():
 
 def test_merge_extracted_unions_lists_and_fills_unset_scalars():
     existing = {"dietary_restrictions": ["vegan"], "preferred_airlines": [], "travel_style": None, "home_city": None}
-    extracted = {"dietary_restrictions": ["jain"], "preferred_airlines": ["AI"], "travel_style": "luxury", "home_city": "Pune"}
+    extracted = {
+        "dietary_restrictions": ["jain"],
+        "preferred_airlines": ["AI"],
+        "travel_style": "luxury",
+        "home_city": "Pune",
+    }
     assert merge_extracted(existing, extracted) == {
         "dietary_restrictions": ["vegan", "jain"],
         "preferred_airlines": ["AI"],
@@ -205,7 +226,12 @@ def test_merge_extracted_unions_lists_and_fills_unset_scalars():
 
 
 def test_merge_extracted_never_overwrites_set_scalars_or_drops_items():
-    existing = {"dietary_restrictions": ["vegan"], "preferred_airlines": ["6E"], "travel_style": "budget", "home_city": "Pune"}
+    existing = {
+        "dietary_restrictions": ["vegan"],
+        "preferred_airlines": ["6E"],
+        "travel_style": "budget",
+        "home_city": "Pune",
+    }
     extracted = {"dietary_restrictions": [], "preferred_airlines": [], "travel_style": "luxury", "home_city": "Delhi"}
     assert merge_extracted(existing, extracted) == {}
 
@@ -244,12 +270,14 @@ def test_build_trip_facts_joins_hotel_stars_and_computes_per_person_spend():
 
 @pytest.mark.asyncio
 async def test_extract_preferences_coerces_llm_output():
-    reply = json.dumps({
-        "travel_style": "posh",  # invalid → dropped → heuristic fills in
-        "dietary_restrictions": ["Vegetarian", "vegetarian"],
-        "preferred_airlines": ["ai", "IndiGo"],  # "IndiGo" is not a carrier code → dropped
-        "home_city": "  Pune ",
-    })
+    reply = json.dumps(
+        {
+            "travel_style": "posh",  # invalid → dropped → heuristic fills in
+            "dietary_restrictions": ["Vegetarian", "vegetarian"],
+            "preferred_airlines": ["ai", "IndiGo"],  # "IndiGo" is not a carrier code → dropped
+            "home_city": "  Pune ",
+        }
+    )
     with patch(_LLM, AsyncMock(return_value=reply)):
         result = await extract_preferences(build_trip_facts(_LUX_STATE))
 
@@ -279,12 +307,14 @@ async def test_extract_preferences_falls_back_to_heuristic_style(failure):
 
 # ── PreferenceExtractor.run (additive writes + logging) ────────────────────
 
-_LLM_LUX = json.dumps({
-    "travel_style": "luxury",
-    "dietary_restrictions": ["Vegetarian"],
-    "preferred_airlines": ["ai"],
-    "home_city": None,
-})
+_LLM_LUX = json.dumps(
+    {
+        "travel_style": "luxury",
+        "dietary_restrictions": ["Vegetarian"],
+        "preferred_airlines": ["ai"],
+        "home_city": None,
+    }
+)
 
 
 @pytest.mark.asyncio
@@ -309,9 +339,14 @@ async def test_extractor_creates_row_and_updates_travel_style_for_new_user():
 async def test_extractor_is_additive_and_never_overwrites_explicit_preferences():
     existing = _prefs(dietary_restrictions=["vegan"], travel_style="budget", home_city="Pune")
     db = _mock_db(prefs=existing)
-    reply = json.dumps({
-        "travel_style": "luxury", "dietary_restrictions": ["jain"], "preferred_airlines": [], "home_city": "Delhi",
-    })
+    reply = json.dumps(
+        {
+            "travel_style": "luxury",
+            "dietary_restrictions": ["jain"],
+            "preferred_airlines": [],
+            "home_city": "Delhi",
+        }
+    )
     with patch(_LLM, AsyncMock(return_value=reply)):
         changes = await PreferenceExtractor().run(_LUX_STATE, db=db, user_id=existing.user_id, trip_id=uuid.uuid4())
 
@@ -325,7 +360,9 @@ async def test_extractor_is_additive_and_never_overwrites_explicit_preferences()
 async def test_extractor_writes_nothing_when_nothing_changes():
     existing = _prefs(travel_style="luxury")
     db = _mock_db(prefs=existing)
-    reply = json.dumps({"travel_style": "luxury", "dietary_restrictions": [], "preferred_airlines": [], "home_city": None})
+    reply = json.dumps(
+        {"travel_style": "luxury", "dietary_restrictions": [], "preferred_airlines": [], "home_city": None}
+    )
     with patch(_LLM, AsyncMock(return_value=reply)):
         changes = await PreferenceExtractor().run(_LUX_STATE, db=db, user_id=existing.user_id, trip_id=uuid.uuid4())
 
@@ -361,9 +398,15 @@ async def test_saved_preferences_reach_flight_and_activities_agents():
     )
     db = _mock_db(trip=_trip_for(user_id), prefs=prefs)
     state = {
-        "destination": "Goa", "start_date": "2026-12-10", "end_date": "2026-12-17",
-        "budget": 50_000.0, "group_size": 2, "interests": [],
-        "db": db, "trip_id": trip_id, "publish_fn": None,
+        "destination": "Goa",
+        "start_date": "2026-12-10",
+        "end_date": "2026-12-17",
+        "budget": 50_000.0,
+        "group_size": 2,
+        "interests": [],
+        "db": db,
+        "trip_id": trip_id,
+        "publish_fn": None,
     }
 
     state = await apply_preferences_node(state)
@@ -460,32 +503,20 @@ async def test_flight_node_forwards_preferred_airlines_only_when_present():
     assert "preferred_airlines" not in without_pref
 
 
-def _offer(carrier: str, number: str, price: str) -> dict:
-    return {
-        "itineraries": [{
-            "segments": [{
-                "carrierCode": carrier, "number": number,
-                "departure": {"at": f"{FUTURE}T06:00:00"}, "arrival": {"at": f"{FUTURE}T08:15:00"},
-            }],
-            "duration": "PT2H15M",
-        }],
-        "price": {"grandTotal": price},
-    }
-
-
 def _search(preferred):
-    response = MagicMock()
-    response.data = [_offer("6E", "204", "4200.00"), _offer("AI", "805", "5100.00"), _offer("UK", "995", "4800.00")]
+    offers = [
+        duffel_offer("6E", "204", "4200.00"),
+        duffel_offer("AI", "805", "5100.00"),
+        duffel_offer("UK", "995", "4800.00"),
+    ]
     settings = MagicMock()
-    settings.AMADEUS_CLIENT_ID = "id"
-    settings.AMADEUS_CLIENT_SECRET = "secret"
+    settings.DUFFEL_ACCESS_TOKEN = "token"
     with (
         patch("src.ai.mcp_server.tools.mcp_settings", settings),
         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
         patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
+        patch("src.ai.mcp_server.tools.httpx.post", return_value=duffel_response(*offers)),
     ):
-        MockClient.return_value.shopping.flight_offers_search.get.return_value = response
         result = search_flights(
             FlightSearchInput(
                 origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1, preferred_airlines=preferred
@@ -495,9 +526,9 @@ def _search(preferred):
 
 
 def test_search_flights_ranks_preferred_carriers_first_without_dropping_others():
-    assert _search(None) == ["6E", "AI", "UK"]
+    assert _search(None) == ["6E", "UK", "AI"]  # cheapest first
     assert _search(["ai"]) == ["AI", "6E", "UK"]  # case-insensitive, others kept
-    assert _search(["UK", "AI"]) == ["AI", "UK", "6E"]  # stable within the preferred group
+    assert _search(["UK", "AI"]) == ["UK", "AI", "6E"]  # price order kept within the preferred group
 
 
 # ── ItineraryBuilder prompt ────────────────────────────────────────────────
@@ -509,7 +540,10 @@ def test_builder_prompt_includes_preferences_block_with_data_scope_guard():
     meta = {
         **_META,
         "preferences": {
-            "dietary_restrictions": ["vegetarian"], "preferred_airlines": [], "travel_style": "luxury", "home_city": None,
+            "dietary_restrictions": ["vegetarian"],
+            "preferred_airlines": [],
+            "travel_style": "luxury",
+            "home_city": None,
         },
     }
     prompt = _build_user_prompt(meta, [], [], [])
@@ -520,7 +554,10 @@ def test_builder_prompt_includes_preferences_block_with_data_scope_guard():
 
 def test_builder_prompt_unchanged_without_preferences():
     assert "Traveller preferences" not in _build_user_prompt(_META, [], [], [])
-    empty = {**_META, "preferences": {"dietary_restrictions": [], "preferred_airlines": [], "travel_style": None, "home_city": None}}
+    empty = {
+        **_META,
+        "preferences": {"dietary_restrictions": [], "preferred_airlines": [], "travel_style": None, "home_city": None},
+    }
     assert "Traveller preferences" not in _build_user_prompt(empty, [], [], [])
 
 
@@ -562,7 +599,11 @@ async def test_get_preferences_returns_empty_defaults_for_new_user():
     resp = await _call("GET", _route_session(prefs=None))
     assert resp.status_code == 200
     assert resp.json() == {
-        "dietary_restrictions": [], "preferred_airlines": [], "travel_style": None, "home_city": None, "updated_at": None,
+        "dietary_restrictions": [],
+        "preferred_airlines": [],
+        "travel_style": None,
+        "home_city": None,
+        "updated_at": None,
     }
 
 

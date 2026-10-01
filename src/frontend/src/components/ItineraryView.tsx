@@ -25,22 +25,13 @@ export default function ItineraryView({ itinerary }: Props) {
     );
   }
 
-  const flightCost = data.days.reduce((sum, d) => {
-    const f = d.flight as { price_inr?: number } | null;
-    return sum + (f?.price_inr ?? 0);
-  }, 0);
-  const hotelCost = data.days.reduce(
-    (sum, d) => sum + (d.hotel?.cost_per_night ?? 0),
+  const hotelCost = data.days.reduce((sum, d) => sum + (d.hotel?.cost_per_night ?? 0), 0);
+  const activityCost = data.days.reduce(
+    (sum, d) => sum + (d.morning?.cost ?? 0) + (d.afternoon?.cost ?? 0) + (d.evening?.cost ?? 0),
     0,
   );
-  const activityCost = data.days.reduce((sum, d) => {
-    return (
-      sum +
-      (d.morning?.cost ?? 0) +
-      (d.afternoon?.cost ?? 0) +
-      (d.evening?.cost ?? 0)
-    );
-  }, 0);
+  // total_cost = flights + hotel nights + activities; the builder reports flights only inside the total.
+  const flightCost = Math.max(0, data.total_cost - hotelCost - activityCost);
 
   return (
     <section aria-label="Your itinerary" className="space-y-5">

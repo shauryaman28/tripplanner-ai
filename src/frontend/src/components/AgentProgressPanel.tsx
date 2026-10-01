@@ -1,11 +1,15 @@
 "use client";
 
-import type { SSEAgentUpdateEvent } from "@/lib/types";
+import type { AgentStatus, SSEAgentUpdateEvent } from "@/lib/types";
 import { AGENT_DISPLAY, deriveAgentStates, type SSEStatus } from "@/lib/sse";
 
 interface Props {
   events: SSEAgentUpdateEvent[];
   sseStatus: SSEStatus;
+  /** A planning run is in flight. */
+  active: boolean;
+  /** Agent statuses from the polling fallback (GET /trips/{id}/status). */
+  polled: Record<string, AgentStatus>;
 }
 
 type AgentState = "pending" | "running" | "completed" | "failed";
@@ -60,13 +64,13 @@ function ConnectionBadge({ status }: { status: SSEStatus }) {
   );
 }
 
-export default function AgentProgressPanel({ events, sseStatus }: Props) {
-  const agentStates = deriveAgentStates(events);
+export default function AgentProgressPanel({ events, sseStatus, active, polled }: Props) {
+  const agentStates = deriveAgentStates(events, polled, active);
 
   // Extract the latest summary per agent from events
   const summaries: Record<string, string> = {};
   for (const ev of events) {
-    if (ev.agent && ev.summary) summaries[ev.agent] = ev.summary;
+    if (ev.agent && ev.summary && !ev.event) summaries[ev.agent] = ev.summary;
   }
 
   // Budget conflict

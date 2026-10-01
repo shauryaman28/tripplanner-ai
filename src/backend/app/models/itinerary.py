@@ -8,7 +8,7 @@ structured_data — day-by-day JSON produced by ItineraryBuilder (Phase 12)
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column
+from sqlalchemy import Column, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -17,9 +17,9 @@ class Itinerary(SQLModel, table=True):
     __tablename__ = "itineraries"
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    trip_id: uuid.UUID = Field(foreign_key="trips.id", index=True)
+    trip_id: uuid.UUID = Field(foreign_key="trips.id", index=True, ondelete="CASCADE")
 
-    content: str | None = Field(default=None)  # markdown prose
+    content: str | None = Field(default=None, sa_column=Column(Text, nullable=True))  # markdown prose
     structured_data: dict | None = Field(  # machine-readable JSON
         default=None, sa_column=Column(JSONB, nullable=True)
     )

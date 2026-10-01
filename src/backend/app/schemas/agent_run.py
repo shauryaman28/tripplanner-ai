@@ -1,8 +1,9 @@
 import uuid
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
+
+from app.schemas.types import UTCDateTime
 
 
 class AgentRunRead(BaseModel):
@@ -15,6 +16,6 @@ class AgentRunRead(BaseModel):
     duration_ms: int | None
     # Phase 15: conversation turn (1-indexed).
     turn: int = 1
-    created_at: datetime
+    created_at: UTCDateTime
 
     model_config = {"from_attributes": True}

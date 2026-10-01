@@ -35,6 +35,7 @@ from src.ai.mcp_server.tools import (
     search_flights,
     search_hotels,
 )
+from tests.fakes import duffel_offer, duffel_response
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 PAST = (date.today() - timedelta(days=1)).isoformat()
@@ -43,9 +44,10 @@ PAST = (date.today() - timedelta(days=1)).isoformat()
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
-def _fake_settings(client_id="fake_id", secret="fake_secret", otm="fake_key", owm="fake_key"):
+def _fake_settings(client_id="fake_id", secret="fake_secret", otm="fake_key", owm="fake_key", duffel="fake_token"):
     """Return a MagicMock that looks like a configured mcp_settings."""
     s = MagicMock()
+    s.DUFFEL_ACCESS_TOKEN = duffel
     s.AMADEUS_CLIENT_ID = client_id
     s.AMADEUS_CLIENT_SECRET = secret
     s.OPENTRIPMAP_API_KEY = otm
@@ -69,7 +71,7 @@ def test_search_flights_budget_too_low():
 
 
 def test_search_flights_no_api_key():
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(client_id="", secret="")):
+    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(duffel="")):
         result = search_flights(
             FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1)
         )
@@ -77,86 +79,85 @@ def test_search_flights_no_api_key():
     assert result.code == "API_NOT_CONFIGURED"
 
 
-def test_search_flights_valid():
-    """Happy path — Amadeus SDK mocked to return one flight offer."""
-    mock_response = MagicMock()
-    mock_response.data = [
-        {
-            "itineraries": [
-                {
-                    "segments": [
-                        {
-                            "carrierCode": "6E",
-                            "number": "204",
-                            "departure": {"at": f"{FUTURE}T06:00:00"},
-                            "arrival": {"at": f"{FUTURE}T08:15:00"},
-                        }
-                    ],
-                    "duration": "PT2H15M",
-                }
-            ],
-            "price": {"grandTotal": "4200.00"},
-        }
-    ]
+def test_search_flights_malformed_date_is_a_tool_error():
+    result = search_flights(FlightSearchInput(origin="DEL", destination="GOI", date="next friday", budget=20_000))
+    assert isinstance(result, ToolError)
+    assert result.code == "INVALID_DATES"
 
+
+def test_search_flights_unknown_city_is_a_tool_error():
+    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()):
+        result = search_flights(FlightSearchInput(origin="DEL", destination="Atlantis", date=FUTURE, budget=20_000))
+    assert isinstance(result, ToolError)
+    assert result.code == "UNKNOWN_DESTINATION"
+
+
+def _search_flights(*offers, **input_overrides):
+    """Run search_flights against a faked Duffel response; returns (result, httpx.post mock)."""
+    params = {"origin": "DEL", "destination": "GOI", "date": FUTURE, "budget": 20_000, "passengers": 1}
     with (
         patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
         patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
         patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
+        patch("src.ai.mcp_server.tools.httpx.post", return_value=duffel_response(*offers)) as mock_post,
     ):
-        MockClient.return_value.shopping.flight_offers_search.get.return_value = mock_response
-        result = search_flights(
-            FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1)
-        )
+        return search_flights(FlightSearchInput(**{**params, **input_overrides})), mock_post
+
+
+def test_search_flights_valid():
+    """Happy path — Duffel mocked to return one offer."""
+    result, _ = _search_flights(duffel_offer(day=FUTURE))
 
     assert isinstance(result, list)
     assert len(result) == 1
     assert isinstance(result[0], Flight)
     assert result[0].airline == "6E"
+    assert result[0].flight_number == "6E-204"
     assert result[0].price_inr == 4200.0
     assert result[0].duration_mins == 135
+    assert result[0].stops == 0
 
 
-def test_search_flights_scales_with_passengers():
-    """price_inr must be multiplied by passenger count."""
-    mock_response = MagicMock()
-    mock_response.data = [
-        {
-            "itineraries": [
-                {
-                    "segments": [
-                        {
-                            "carrierCode": "6E",
-                            "number": "204",
-                            "departure": {"at": f"{FUTURE}T06:00:00"},
-                            "arrival": {"at": f"{FUTURE}T08:15:00"},
-                        }
-                    ],
-                    "duration": "PT2H15M",
-                }
-            ],
-            "price": {"grandTotal": "4200.00"},
-        }
-    ]
+def test_search_flights_resolves_city_names_and_sends_one_passenger_per_traveller():
+    """Agents pass city names ("Goa"); Duffel needs IATA codes and one passenger entry each."""
+    _, mock_post = _search_flights(duffel_offer(), origin="Delhi", destination="Goa", passengers=2)
 
-    with (
-        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
-        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
-        patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
-    ):
-        MockClient.return_value.shopping.flight_offers_search.get.return_value = mock_response
+    body = mock_post.call_args.kwargs["json"]["data"]
+    assert body["slices"] == [{"origin": "DEL", "destination": "GOI", "departure_date": FUTURE}]
+    assert len(body["passengers"]) == 2
 
-        r1 = search_flights(
-            FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=50_000, passengers=1)
-        )
-        r2 = search_flights(
-            FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=50_000, passengers=2)
-        )
 
-    assert isinstance(r1, list) and isinstance(r2, list)
-    assert r2[0].price_inr == r1[0].price_inr * 2
+def test_search_flights_round_trip_adds_return_slice():
+    return_date = (date.today() + timedelta(days=35)).isoformat()
+    _, mock_post = _search_flights(duffel_offer(), return_date=return_date)
+
+    slices = mock_post.call_args.kwargs["json"]["data"]["slices"]
+    assert slices[1] == {"origin": "GOI", "destination": "DEL", "departure_date": return_date}
+
+
+def test_search_flights_sorts_by_price_and_enforces_budget_cap():
+    """The budget is a real cap — it is what makes the Phase 10 re-plan loop meaningful."""
+    result, _ = _search_flights(
+        duffel_offer("AI", "805", "9000.00"),
+        duffel_offer("6E", "204", "4200.00"),
+        duffel_offer("UK", "995", "25000.00"),  # over the ₹20,000 cap → dropped
+    )
+    assert [f.airline for f in result] == ["6E", "AI"]
+
+
+def test_search_flights_nothing_within_budget_is_no_results():
+    result, _ = _search_flights(duffel_offer(amount="25000.00"))
+    assert isinstance(result, ToolError)
+    assert result.code == "NO_RESULTS"
+
+
+def test_search_flights_converts_currency_and_skips_unknown_ones():
+    result, _ = _search_flights(
+        duffel_offer("BA", "1", "100.00", currency="GBP"),
+        duffel_offer("XX", "2", "100.00", currency="XYZ"),
+    )
+    assert [f.airline for f in result] == ["BA"]
+    assert result[0].price_inr == 10_700.0
 
 
 # ── search_hotels ──────────────────────────────────────────────────────────
@@ -487,3 +488,23 @@ def test_estimate_budget_negative_daily_spend():
     result = estimate_budget(BudgetInput(flights=5_000, hotels=2_000, days=3, daily_spend=-500))
     assert isinstance(result, ToolError)
     assert result.code == "INVALID_INPUT"
+
+
+def test_provider_errors_never_leak_the_api_key():
+    """httpx puts the full request URL (apikey=…) in str(HTTPStatusError); it must not reach the ToolError."""
+    import httpx
+
+    request = httpx.Request("GET", "https://api.opentripmap.com/0.1/en/places/geoname?apikey=SECRET-KEY")
+    denied = httpx.HTTPStatusError("401", request=request, response=httpx.Response(401, request=request))
+
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(otm="SECRET-KEY", owm="SECRET-KEY")),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.httpx.get", side_effect=denied),
+    ):
+        attractions = get_attractions(AttractionInput(destination="Goa", interests=["beach"], limit=3))
+        weather = get_weather(WeatherInput(destination="Goa", date_range=f"{date.today()} to {date.today()}"))
+
+    for result, code in ((attractions, "OTM_ERROR"), (weather, "OWM_ERROR")):
+        assert isinstance(result, ToolError) and result.code == code
+        assert "SECRET-KEY" not in result.error and "401" in result.error

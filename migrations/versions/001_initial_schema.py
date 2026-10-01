@@ -62,9 +62,7 @@ def upgrade() -> None:
         sa.Column("budget", sa.Float(), nullable=False),
         sa.Column("group_size", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("interests", JSONB(), nullable=True),
-        sa.Column(
-            "status", sa.String(20), nullable=False, server_default="pending"
-        ),
+        sa.Column("status", sa.String(20), nullable=False, server_default="pending"),
         sa.Column(
             "created_at",
             sa.DateTime(),
@@ -117,9 +115,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("agent_name", sa.String(100), nullable=False),
-        sa.Column(
-            "status", sa.String(20), nullable=False, server_default="pending"
-        ),
+        sa.Column("status", sa.String(20), nullable=False, server_default="pending"),
         sa.Column("input", JSONB(), nullable=True),
         sa.Column("output", JSONB(), nullable=True),
         sa.Column("duration_ms", sa.Integer(), nullable=True),
@@ -158,10 +154,7 @@ def upgrade() -> None:
     # Add vector column using raw SQL — pgvector type is not a standard SA type
     op.execute("ALTER TABLE embeddings ADD COLUMN vector vector(1536)")
     # HNSW index for fast similarity search (Phase 23)
-    op.execute(
-        "CREATE INDEX ix_embeddings_vector_hnsw "
-        "ON embeddings USING hnsw (vector vector_cosine_ops)"
-    )
+    op.execute("CREATE INDEX ix_embeddings_vector_hnsw ON embeddings USING hnsw (vector vector_cosine_ops)")
     op.create_index("ix_embeddings_itinerary_id", "embeddings", ["itinerary_id"])
 
 

@@ -1,10 +1,10 @@
-from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from app.core.preferences import MAX_ITEM_LENGTH, MAX_LIST_ITEMS, normalise_airlines, normalise_dietary
 from app.models.user_preferences import TravelStyle
+from app.schemas.types import UTCDateTime
 
 DietaryItem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_ITEM_LENGTH)]
 # Case-insensitive on input; canonicalised to upper-case by the validator below.
@@ -55,6 +55,6 @@ class PreferencesRead(BaseModel):
     preferred_airlines: list[str] = Field(default_factory=list)
     travel_style: str | None = None
     home_city: str | None = None
-    updated_at: datetime | None = None
+    updated_at: UTCDateTime | None = None
 
     model_config = {"from_attributes": True}

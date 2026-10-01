@@ -142,7 +142,7 @@ async def test_non_english_interest_passes_through_without_crash():
     """
     hindi_state: ActivitiesState = {
         "destination": "Goa",
-        "interests": ["खाना"],   # Hindi for "food" — non-English interest
+        "interests": ["खाना"],  # Hindi for "food" — non-English interest
         "limit": 5,
     }
     mock_call = AsyncMock(return_value=[_sample_attraction_dict()])

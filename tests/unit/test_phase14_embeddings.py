@@ -66,7 +66,7 @@ def _make_mock_db(stale_rows=None):
     db.add = lambda obj: added.append(obj)
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
-    db.delete = MagicMock()
+    db.delete = AsyncMock()
 
     stale = stale_rows or []
     stale_result = MagicMock()
@@ -106,9 +106,13 @@ def test_build_full_text_empty_data_returns_fallback():
 def test_build_full_text_none_slots_are_skipped():
     data = {
         "days": [
-            {"day": 1, "date": "2026-12-10",
-             "morning": {"activity": "Fort Aguada", "cost": 0},
-             "afternoon": None, "evening": None}
+            {
+                "day": 1,
+                "date": "2026-12-10",
+                "morning": {"activity": "Fort Aguada", "cost": 0},
+                "afternoon": None,
+                "evening": None,
+            }
         ]
     }
     text = build_full_text(data)
@@ -357,7 +361,7 @@ async def test_generate_embeddings_calls_write_embedding_rows():
         mock_db.execute = AsyncMock(return_value=stale_result)
         mock_db.add = MagicMock()
         mock_db.commit = AsyncMock()
-        mock_db.delete = MagicMock()
+        mock_db.delete = AsyncMock()
 
         await generate_embeddings(fake_itinerary.id)
 
@@ -404,7 +408,7 @@ async def test_generate_embeddings_openai_failure_does_not_raise():
     mock_db.add = MagicMock()
     mock_db.commit = AsyncMock()
     mock_db.rollback = AsyncMock()
-    mock_db.delete = MagicMock()
+    mock_db.delete = AsyncMock()
 
     stale_result = MagicMock()
     stale_result.scalars.return_value.all.return_value = []

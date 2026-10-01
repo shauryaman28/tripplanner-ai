@@ -101,11 +101,7 @@ async def test_write_embedding_rows_inserts_two_rows(db_session):
             db=db_session,
         )
 
-    rows = (
-        await db_session.execute(
-            select(Embedding).where(Embedding.itinerary_id == itinerary.id)
-        )
-    ).scalars().all()
+    rows = (await db_session.execute(select(Embedding).where(Embedding.itinerary_id == itinerary.id))).scalars().all()
 
     assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}"
     for row in rows:
@@ -120,24 +116,21 @@ async def test_write_embedding_rows_failure_writes_pending_retry(db_session):
     from src.ai.embeddings.embedder import write_embedding_rows
 
     itinerary, destination = await _make_itinerary(db_session)
+    itinerary_id = itinerary.id  # the embedder's rollback expires `itinerary`
 
     with patch(
         "src.ai.embeddings.embedder._call_openai_embed",
         AsyncMock(side_effect=Exception("OpenAI timeout")),
     ):
         await write_embedding_rows(
-            itinerary_id=itinerary.id,
+            itinerary_id=itinerary_id,
             structured_data=_STRUCTURED_DATA,
             destination=destination,
-            total_cost=itinerary.total_cost,
+            total_cost=12_700.0,
             db=db_session,
         )
 
-    rows = (
-        await db_session.execute(
-            select(Embedding).where(Embedding.itinerary_id == itinerary.id)
-        )
-    ).scalars().all()
+    rows = (await db_session.execute(select(Embedding).where(Embedding.itinerary_id == itinerary_id))).scalars().all()
 
     assert len(rows) == 1
     assert rows[0].embedding_model == "pending_retry"
@@ -158,12 +151,7 @@ async def test_generate_embeddings_end_to_end(db_session):
         await generate_embeddings(itinerary.id)
 
     # generate_embeddings opens its own session — query via the fixture session
-    await db_session.expire_all()
-    rows = (
-        await db_session.execute(
-            select(Embedding).where(Embedding.itinerary_id == itinerary.id)
-        )
-    ).scalars().all()
+    rows = (await db_session.execute(select(Embedding).where(Embedding.itinerary_id == itinerary.id))).scalars().all()
 
     assert len(rows) == 2
     assert all(r.embedding_model == "text-embedding-3-small" for r in rows)
@@ -197,12 +185,7 @@ async def test_pending_retry_cleanup_on_recovery(db_session):
             db=db_session,
         )
 
-    await db_session.expire_all()
-    rows = (
-        await db_session.execute(
-            select(Embedding).where(Embedding.itinerary_id == itinerary.id)
-        )
-    ).scalars().all()
+    rows = (await db_session.execute(select(Embedding).where(Embedding.itinerary_id == itinerary.id))).scalars().all()
 
     # Stale row gone; exactly 2 fresh rows
     pending = [r for r in rows if r.embedding_model == "pending_retry"]

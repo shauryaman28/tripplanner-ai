@@ -34,9 +34,9 @@ services:
       retries: 5
 
   # Optional: run the backend in Docker.
-  # During development, prefer running locally:
-  #   cd tripplanner-ai && pip install -r requirements.txt
-  #   cd src/backend && uvicorn app.main:app --reload
+  # During development, prefer running locally (from the repo root):
+  #   pip install -r requirements.txt && alembic upgrade head
+  #   uvicorn app.main:app --reload --app-dir src/backend
   backend:
     build:
       context: .
@@ -45,6 +45,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Inside the compose network the services are reached by name, not localhost.
+      DATABASE_URL: postgresql://tripplanner:tripplanner_secret@postgres:5432/tripplanner_db
+      REDIS_URL: redis://redis:6379
     ports:
       - "8000:8000"
     depends_on:
@@ -53,8 +57,12 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./src/backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - ./src/backend:/app/src/backend
+      - ./src/ai:/app/src/ai
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --app-dir src/backend --host 0.0.0.0 --port 8000
+             --reload --reload-dir src/backend --reload-dir src/ai"
 
 volumes:
   postgres_data:

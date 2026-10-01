@@ -11,16 +11,17 @@ input / output stored as JSONB so you can query them from psql.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column
+from sqlalchemy import Column, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
 
 class AgentRun(SQLModel, table=True):
     __tablename__ = "agent_runs"
+    __table_args__ = (Index("ix_agent_runs_turn", "trip_id", "turn"),)  # GET /trips/{id}/runs?turn=N
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    trip_id: uuid.UUID = Field(foreign_key="trips.id", index=True)
+    trip_id: uuid.UUID = Field(foreign_key="trips.id", index=True, ondelete="CASCADE")
 
     agent_name: str = Field(max_length=100)  # e.g. "flight_agent", "orchestrator"
     status: str = Field(default="pending", max_length=20)

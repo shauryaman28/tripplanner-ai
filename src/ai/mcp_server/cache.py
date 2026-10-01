@@ -71,7 +71,7 @@ def set_cached_sync(key: str, value: Any, ttl: int = 900) -> None:
     if client is None:
         return
     try:
-        client.setex(key, ttl, json.dumps(value, default=str))
+        client.set(key, json.dumps(value, default=str), ex=ttl)
     except Exception as exc:
         logger.warning("Cache set failed: %s", exc)
 

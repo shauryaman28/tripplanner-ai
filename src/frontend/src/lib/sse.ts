@@ -8,12 +8,14 @@
  * Reconnect strategy: exponential back-off (1s → 2s → 4s → 8s, cap 30s).
  * On reconnect we do NOT reset the events array so the UI shows the last
  * known agent status rather than a blank screen — roadmap requirement.
+ * Redis pub/sub has no replay, so an event published while the stream was
+ * down is gone; the trip page polls GET /status as the safety net.
  */
 
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SSEAgentUpdateEvent } from "./types";
+import type { AgentStatus, SSEAgentUpdateEvent } from "./types";
 import { getToken } from "./api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -25,8 +27,8 @@ export type SSEStatus = "idle" | "connecting" | "connected" | "reconnecting" | "
 export interface UseSSEResult {
   events: SSEAgentUpdateEvent[];
   status: SSEStatus;
-  /** Manually close the SSE connection and stop reconnecting. */
-  close: () => void;
+  /** Forget the events of the previous run (the connection stays open). */
+  reset: () => void;
 }
 
 export function useSSE(tripId: string | null, enabled: boolean = true): UseSSEResult {
@@ -94,15 +96,9 @@ export function useSSE(tripId: string | null, enabled: boolean = true): UseSSERe
     };
   }, [tripId, enabled, connect]);
 
-  const close = useCallback(() => {
-    closedRef.current = true;
-    esRef.current?.close();
-    esRef.current = null;
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setStatus("closed");
-  }, []);
+  const reset = useCallback(() => setEvents([]), []);
 
-  return { events, status, close };
+  return { events, status, reset };
 }
 
 // ---------------------------------------------------------------------------
@@ -115,26 +111,23 @@ export const AGENT_DISPLAY: Record<string, string> = {
   activities_agent: "Activities",
 };
 
+type AgentState = "pending" | "running" | "completed" | "failed";
+
+/**
+ * Per-agent badge state. SSE events are the live source; `polled` (from
+ * GET /trips/{id}/status) fills in anything the stream missed, and an agent
+ * with no result yet shows as running while a run is `active`.
+ */
 export function deriveAgentStates(
   events: SSEAgentUpdateEvent[],
-): Record<string, "pending" | "running" | "completed" | "failed"> {
-  const states: Record<string, "pending" | "running" | "completed" | "failed"> = {
-    flight_agent:     "pending",
-    hotel_agent:      "pending",
-    activities_agent: "pending",
-  };
-
-  for (const ev of events) {
-    if (ev.event === "planning_started") {
-      // Mark all as running once planning kicks off
-      Object.keys(states).forEach((k) => {
-        if (states[k] === "pending") states[k] = "running";
-      });
-    }
-    if (ev.agent && ev.agent in states && ev.status) {
-      states[ev.agent] = ev.status as typeof states[keyof typeof states];
-    }
+  polled: Record<string, AgentStatus> = {},
+  active: boolean = false,
+): Record<string, AgentState> {
+  const states: Record<string, AgentState> = {};
+  for (const agent of Object.keys(AGENT_DISPLAY)) {
+    const fromStream = [...events].reverse().find((ev) => ev.agent === agent && !ev.event)?.status;
+    const result = [fromStream, polled[agent]].find((s) => s === "completed" || s === "failed");
+    states[agent] = (result as AgentState | undefined) ?? (active ? "running" : "pending");
   }
-
   return states;
 }

@@ -98,8 +98,9 @@ export default function TripsPage() {
           <h2 className="mb-4 font-display text-lg font-semibold text-gray-900">New trip</h2>
           <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-600">Destination</label>
+              <label htmlFor="destination" className="mb-1 block text-xs font-medium text-gray-600">Destination</label>
               <input
+                id="destination"
                 required
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
@@ -108,26 +109,31 @@ export default function TripsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Start date</label>
+              <label htmlFor="start-date" className="mb-1 block text-xs font-medium text-gray-600">Start date</label>
               <input
+                id="start-date"
                 required type="date"
+                min={new Date().toISOString().slice(0, 10)}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">End date</label>
+              <label htmlFor="end-date" className="mb-1 block text-xs font-medium text-gray-600">End date</label>
               <input
+                id="end-date"
                 required type="date"
+                min={startDate || undefined}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Budget (INR)</label>
+              <label htmlFor="budget" className="mb-1 block text-xs font-medium text-gray-600">Budget (INR)</label>
               <input
+                id="budget"
                 required type="number" min="1000"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
@@ -136,19 +142,21 @@ export default function TripsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Group size</label>
+              <label htmlFor="group-size" className="mb-1 block text-xs font-medium text-gray-600">Group size</label>
               <input
-                type="number" min="1" max="20"
+                id="group-size"
+                type="number" min="1" max="9"
                 value={groupSize}
                 onChange={(e) => setGroupSize(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-gray-600">
+              <label htmlFor="interests" className="mb-1 block text-xs font-medium text-gray-600">
                 Interests <span className="text-muted font-normal">(comma-separated)</span>
               </label>
               <input
+                id="interests"
                 value={interests}
                 onChange={(e) => setInterests(e.target.value)}
                 placeholder="beach, history, food"

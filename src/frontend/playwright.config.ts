@@ -1,21 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Phase 17 E2E tests.
+ * Phase 17 E2E tests. Run from src/frontend:  npx playwright test
  *
- * Requires:
- *   1. FastAPI backend running at http://localhost:8000
- *   2. Next.js frontend running at http://localhost:3000
- *      (npm run dev inside src/frontend/)
- *
- * Run: npx playwright test
+ * Needs Docker Postgres + Redis (docker compose up postgres redis -d) and the
+ * Python venv on PATH (or PYTHON=/path/to/python). Both servers below are
+ * started automatically unless something is already listening — start the real
+ * backend on :8000 first to run the same test against real API keys.
  */
 export default defineConfig({
-  testDir: "../../tests/e2e",
-  timeout: 90_000,          // planning can take up to 30s + SSE delivery
+  testDir: "./e2e",
+  timeout: 120_000,
   expect: { timeout: 15_000 },
-  fullyParallel: false,     // SSE tests share backend state; run sequentially
-  retries: 1,
+  fullyParallel: false, // the tests share one account; run sequentially
+  workers: 1,
+  retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
 
   use: {
@@ -25,18 +24,22 @@ export default defineConfig({
     video: "retain-on-failure",
   },
 
-  projects: [
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+
+  webServer: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      // The real app with external APIs stubbed — see tests/e2e/stub_backend.py
+      command: `${process.env.PYTHON ?? "python"} -m tests.e2e.stub_backend`,
+      cwd: "../..",
+      url: "http://localhost:8000/ping",
+      reuseExistingServer: true,
+      timeout: 60_000,
+    },
+    {
+      command: "npm run dev",
+      url: "http://localhost:3000/login",
+      reuseExistingServer: true,
+      timeout: 120_000,
     },
   ],
-
-  // Auto-start the Next.js dev server for CI (comment out if already running)
-  // webServer: {
-  //   command: "npm run dev",
-  //   url: "http://localhost:3000",
-  //   reuseExistingServer: true,
-  //   timeout: 60_000,
-  // },
 });

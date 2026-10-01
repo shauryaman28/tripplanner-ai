@@ -1,5 +1,7 @@
 # Phase 13 — Persistence: Storing Every Run
 
+> **Since this log was written:** a crashed run marks the trip `failed` and publishes `planning_failed`; trips still `planning` at startup are marked `failed`; only one run per trip at a time (DECISIONS #54).
+
 **Status: ✅ Complete**
 **Done criterion:** Full pipeline produces ≥ 7 `agent_runs` rows. `GET /trips/{id}/runs` returns them ordered by `created_at` ascending. Every row has non-null `duration_ms`. A re-planned trip has additional rows. Status lifecycle correct. `GET /trips?status=completed` and `?status=failed` filter correctly. `GET /trips/{id}/timeline` returns correct ordered event log.
 

@@ -25,9 +25,14 @@ from pydantic import BaseModel
 
 # ── Thresholds ─────────────────────────────────────────────────────────────
 
-ESCALATE_THRESHOLD = 0.35    # remaining < 35% → escalate
-REPLAN_THRESHOLD = 0.50      # remaining < 50% → replan
-MAX_REPLAN_ATTEMPTS = 2      # hard cap on re-plan loops
+ESCALATE_THRESHOLD = 0.35  # remaining < 35% → escalate
+REPLAN_THRESHOLD = 0.50  # remaining < 50% → replan
+MAX_REPLAN_ATTEMPTS = 2  # hard cap on re-plan loops
+
+# Flight-search failures that really are about money. Anything else (provider
+# not configured, API down, no airport for the destination) is a partial
+# failure: planning continues without flights instead of failing the trip.
+_BUDGET_ERROR_CODES = {"NO_RESULTS", "BUDGET_TOO_LOW"}
 
 
 # ── Model ──────────────────────────────────────────────────────────────────
@@ -48,15 +53,28 @@ def make_budget_decision(
     flights: list[dict],
     total_budget: float,
     replan_attempts: int = 0,
+    flight_error: dict | None = None,
 ) -> BudgetDecision:
     """Return a BudgetDecision based on cheapest available flight vs. budget.
 
     Pure function — no I/O, no mocks needed in unit tests.
     """
+    if flight_error and flight_error.get("code") not in _BUDGET_ERROR_CODES and total_budget > 0:
+        return BudgetDecision(
+            decision="continue",
+            reason=(
+                f"Flight search unavailable ({flight_error.get('code', 'UNKNOWN')}) — "
+                "planning hotels and activities without flights."
+            ),
+            remaining_budget=total_budget,
+            flight_cost=0.0,
+            total_budget=total_budget,
+        )
+
     if not flights or total_budget <= 0:
         return BudgetDecision(
             decision="escalate",
-            reason="No flights found or zero budget — cannot proceed with planning.",
+            reason="No flights found within the budget — cannot proceed with planning.",
             remaining_budget=0.0,
             flight_cost=0.0,
             total_budget=total_budget,
