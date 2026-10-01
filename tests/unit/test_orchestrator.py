@@ -41,22 +41,36 @@ from src.ai.orchestrator.orchestrator import (
 # ── Fixtures ───────────────────────────────────────────────────────────────
 
 _FLIGHT = {
-    "airline": "6E", "flight_number": "6E-204",
-    "departure": "2026-12-10T06:00:00", "arrival": "2026-12-10T08:15:00",
-    "duration_mins": 135, "price_inr": 8200.0, "stops": 0,
+    "airline": "6E",
+    "flight_number": "6E-204",
+    "departure": "2026-12-10T06:00:00",
+    "arrival": "2026-12-10T08:15:00",
+    "duration_mins": 135,
+    "price_inr": 8200.0,
+    "stops": 0,
 }
 _HOTEL = {"name": "Goa Grand", "stars": 4, "price_per_night_inr": 4500.0, "rating": 4.2, "address": "Goa"}
-_ATTRACTION = {"name": "Fort Aguada", "category": "history", "rating": 4.5,
-               "description": "17th-century fort.", "lat": 15.5, "lng": 73.7}
+_ATTRACTION = {
+    "name": "Fort Aguada",
+    "category": "history",
+    "rating": 4.5,
+    "description": "17th-century fort.",
+    "lat": 15.5,
+    "lng": 73.7,
+}
 
 _GOOD_DRAFT = {
-    "days": [{
-        "day": 1, "date": "2026-12-10",
-        "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
-        "afternoon": None, "evening": None,
-        "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
-        "flight": None,
-    }],
+    "days": [
+        {
+            "day": 1,
+            "date": "2026-12-10",
+            "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
+            "afternoon": None,
+            "evening": None,
+            "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
+            "flight": None,
+        }
+    ],
     "total_cost": 12700.0,
     "currency": "INR",
 }
@@ -136,9 +150,7 @@ async def test_orchestrator_full_happy_path():
         MockHA.return_value.run = AsyncMock(return_value={"hotels": [_HOTEL], "error": None})
         MockAA.return_value.run = AsyncMock(return_value={"attractions": [_ATTRACTION], "error": None})
         MockIB.return_value.run = AsyncMock(return_value={"draft": _GOOD_DRAFT, "error": None})
-        MockEval.return_value.run = AsyncMock(
-            return_value=EvaluatorVerdict(passed=True, failures=[], retry_count=0)
-        )
+        MockEval.return_value.run = AsyncMock(return_value=EvaluatorVerdict(passed=True, failures=[], retry_count=0))
 
         agent = OrchestratorAgent()
         result = await agent.run(_BASE_STATE)
@@ -222,7 +234,7 @@ async def test_sse_events_published_for_all_agents():
         MockAA.return_value.run = AsyncMock(return_value={"attractions": [_ATTRACTION], "error": None})
 
         s1 = await run_flight_node(state)
-        s2 = await budget_decision_node(s1)          # budget passes → "continue"
+        s2 = await budget_decision_node(s1)  # budget passes → "continue"
         s3 = await hotel_activities_node(s2)
         await merge_node(s3)
 
@@ -337,9 +349,7 @@ async def test_build_itinerary_node_populates_draft():
 async def test_evaluate_node_passes_through_verdict():
     state = {**_AFTER_BUDGET_CHECK, "draft_itinerary": _GOOD_DRAFT, "budget": 12700.0}
     with patch("src.ai.orchestrator.orchestrator.EvaluatorAgent") as MockEval:
-        MockEval.return_value.run = AsyncMock(
-            return_value=EvaluatorVerdict(passed=True, failures=[], retry_count=0)
-        )
+        MockEval.return_value.run = AsyncMock(return_value=EvaluatorVerdict(passed=True, failures=[], retry_count=0))
         result = await evaluate_node(state)
 
     assert result["evaluator_verdict"]["passed"] is True
@@ -356,8 +366,11 @@ def test_route_after_evaluator_builder_failure_fails_at_cap():
 
 
 def test_route_after_evaluator_passed():
-    state = {"builder_error": None, "draft_itinerary": _GOOD_DRAFT,
-             "evaluator_verdict": {"passed": True, "failures": [], "retry_count": 0}}
+    state = {
+        "builder_error": None,
+        "draft_itinerary": _GOOD_DRAFT,
+        "evaluator_verdict": {"passed": True, "failures": [], "retry_count": 0},
+    }
     assert route_after_evaluator(state) == "passed"
 
 

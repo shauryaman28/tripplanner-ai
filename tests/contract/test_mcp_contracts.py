@@ -27,12 +27,14 @@ from src.ai.mcp_server.tools import (
     search_flights,
     search_hotels,
 )
+from tests.fakes import duffel_offer, duffel_response
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 
 
-def _settings(client_id="k", secret="s", otm="k", owm="k"):
+def _settings(client_id="k", secret="s", otm="k", owm="k", duffel="k"):
     s = MagicMock()
+    s.DUFFEL_ACCESS_TOKEN = duffel
     s.AMADEUS_CLIENT_ID = client_id
     s.AMADEUS_CLIENT_SECRET = secret
     s.OPENTRIPMAP_API_KEY = otm
@@ -46,7 +48,7 @@ def _settings(client_id="k", secret="s", otm="k", owm="k"):
 class TestFlightContract:
     def test_error_has_code_and_error_fields(self):
         """ToolError shape: { error: str, code: str }."""
-        with patch("src.ai.mcp_server.tools.mcp_settings", _settings(client_id="", secret="")):
+        with patch("src.ai.mcp_server.tools.mcp_settings", _settings(duffel="")):
             result = search_flights(
                 FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1)
             )
@@ -56,33 +58,12 @@ class TestFlightContract:
 
     def test_flight_has_all_required_fields(self):
         """Flight shape: airline, flight_number, departure, arrival, duration_mins, price_inr, stops."""
-        mock_resp = MagicMock()
-        mock_resp.data = [
-            {
-                "itineraries": [
-                    {
-                        "segments": [
-                            {
-                                "carrierCode": "6E",
-                                "number": "204",
-                                "departure": {"at": f"{FUTURE}T06:00:00"},
-                                "arrival": {"at": f"{FUTURE}T08:15:00"},
-                            }
-                        ],
-                        "duration": "PT2H15M",
-                    }
-                ],
-                "price": {"grandTotal": "4200.00"},
-            }
-        ]
-
         with (
             patch("src.ai.mcp_server.tools.mcp_settings", _settings()),
             patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
             patch("src.ai.mcp_server.tools.set_cached_sync"),
-            patch("src.ai.mcp_server.tools.AmadeusClient") as MC,
+            patch("src.ai.mcp_server.tools.httpx.post", return_value=duffel_response(duffel_offer(day=FUTURE))),
         ):
-            MC.return_value.shopping.flight_offers_search.get.return_value = mock_resp
             result = search_flights(
                 FlightSearchInput(origin="DEL", destination="GOI", date=FUTURE, budget=20_000, passengers=1)
             )

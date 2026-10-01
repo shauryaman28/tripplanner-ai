@@ -1,5 +1,7 @@
 # Phase 11 — Evaluator Agent: Self-Checking
 
+> **Since this log was written:** `budget_mismatch` compares the draft with a total recomputed from source prices (`expected_total_cost`), not with the user's budget (DECISIONS #50).
+
 **Status: ✅ Complete (standalone module — orchestrator wiring deferred to Phase 12, see note below)**
 
 **Done criterion:** 4 known-bad itinerary fixtures (one per failure type) all

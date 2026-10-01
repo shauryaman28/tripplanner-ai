@@ -43,3 +43,19 @@ LangGraph's `Send` API. Decision rationale:
 | group_size | null (caller defaults to 1) | Infer from context (solo=1, couple=2, family=4) |
 | interests | null only if zero intent expressed | ["sightseeing"] as minimum |
 | origin | null (caller defaults to DEL) | null |
+
+## Audit note (2026-10-02) — prompt text unchanged, code brought in line with it
+
+- The v3 *interests completeness* rule above existed only in this document; the
+  prompt in `orchestrator.py` did not contain it. It does now.
+- The model's reply is validated field by field (`_clean_intent`): wrong types,
+  non-ISO dates and non-positive budgets are dropped rather than trusted.
+- **Interests absent entirely:** if there is free text, the orchestrator assumes
+  `["sightseeing"]` (the table's minimum). If there is no free text at all,
+  `POST /plan` asks the user instead of starting a run (DECISIONS #56).
+- **`intent_override`:** on a `full_replan` refinement, fields parsed from the new
+  message replace the existing ones ("I'd rather go to Mumbai"). Everywhere else
+  parsing stays fill-only. A moved `start_date` keeps the trip length.
+- Model: `GEMINI_MODEL` setting (default `gemini-3.5-flash`) — `gemini-1.5-flash`
+  has been retired. Not yet re-run against the live model.
+

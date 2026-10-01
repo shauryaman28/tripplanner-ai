@@ -34,6 +34,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai.llm import content_to_text, strip_fences
 from src.ai.utils.preferences import load_preferences, merge_extracted, preferences_to_dict
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -155,20 +156,6 @@ def _build_user_prompt(facts: Mapping[str, Any]) -> str:
     return f"Trip facts (JSON): {json.dumps(facts, ensure_ascii=False, default=str)}"
 
 
-def _content_to_text(content: Any) -> str:
-    """ChatAnthropic normally returns a str, but may return a list of content blocks."""
-    if isinstance(content, str):
-        return content
-    return "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
-
-
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1].removeprefix("json")
-    return text.strip()
-
-
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
     """The single network seam. Raises if no Anthropic key is configured."""
     if not settings.ANTHROPIC_API_KEY:
@@ -178,7 +165,7 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
 
     llm = ChatAnthropic(model=_MODEL, temperature=0, max_tokens=300, api_key=settings.ANTHROPIC_API_KEY)
     response = await llm.ainvoke([("system", system_prompt), ("user", user_prompt)])
-    return _content_to_text(response.content)
+    return content_to_text(response.content)
 
 
 def _coerce_extraction(parsed: Any) -> dict[str, Any]:
@@ -205,7 +192,7 @@ async def extract_preferences(facts: Mapping[str, Any]) -> dict[str, Any]:
     extracted: dict[str, Any] = {}
     try:
         raw = await _call_llm(_SYSTEM_PROMPT, _build_user_prompt(facts))
-        extracted = _coerce_extraction(json.loads(_strip_fences(raw)))
+        extracted = _coerce_extraction(json.loads(strip_fences(raw)))
     except Exception as exc:
         logger.warning("PreferenceExtractor LLM step failed (%s) — using heuristic travel_style only", exc)
 

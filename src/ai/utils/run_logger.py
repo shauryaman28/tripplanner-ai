@@ -1,15 +1,16 @@
 """Agent run logger — Phase 6 Dev B, extended Phase 11 Dev B, Phase 15.
 
-Phase 15 addition: `turn` parameter on log_agent_run() so every row
-written during a refinement pass is tagged with its conversation turn.
-Defaults to 1, so all existing callers need no change.
+Every agent and decision node writes one agent_runs row through
+log_agent_run(); `turn` tags the row with its conversation turn (Phase 15).
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from contextlib import asynccontextmanager
+from weakref import WeakKeyDictionary
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -18,6 +19,12 @@ try:
     from app.models.agent_run import AgentRun
 except ImportError:
     from src.backend.app.models.agent_run import AgentRun
+
+
+# One planning run shares a single AsyncSession, and the orchestrator fans
+# HotelAgent and ActivitiesAgent out concurrently. A session cannot be used by
+# two coroutines at once, so writes on the same session are serialised.
+_session_locks: WeakKeyDictionary[AsyncSession, asyncio.Lock] = WeakKeyDictionary()
 
 
 async def log_agent_run(
@@ -30,13 +37,7 @@ async def log_agent_run(
     status: str = "completed",
     turn: int = 1,
 ) -> AgentRun:
-    """Write one agent_runs row and return it.
-
-    The `turn` parameter (added in Phase 15) defaults to 1 so all
-    existing callers — FlightAgent, HotelAgent, ActivitiesAgent,
-    ItineraryBuilder, EvaluatorAgent, OrchestratorAgent — require no
-    changes for their first-turn behaviour.
-    """
+    """Write one agent_runs row and return it."""
     run = AgentRun(
         trip_id=trip_id,
         agent_name=agent_name,
@@ -46,9 +47,10 @@ async def log_agent_run(
         duration_ms=duration_ms,
         turn=turn,
     )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
+    async with _session_locks.setdefault(db, asyncio.Lock()):
+        db.add(run)
+        await db.commit()
+        await db.refresh(run)
     return run
 
 
@@ -73,9 +75,7 @@ async def get_retry_chain(db: AsyncSession, trip_id: uuid.UUID) -> list[dict]:
     Returns all agent_runs rows ordered by created_at, each tagged with a
     per-agent-name running attempt counter (1-indexed).
     """
-    result = await db.execute(
-        select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc())
-    )
+    result = await db.execute(select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc()))
     rows = result.scalars().all()
 
     attempt_counts: dict[str, int] = {}

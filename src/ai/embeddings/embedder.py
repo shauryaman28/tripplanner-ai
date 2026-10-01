@@ -81,17 +81,10 @@ def build_summary_text(
 
     top_5 = activity_names[:5]
     cost_int = int(total_cost) if total_cost else 0
-    budget_label = (
-        "budget" if cost_int < 30_000
-        else "mid-range" if cost_int < 80_000
-        else "luxury"
-    )
+    budget_label = "budget" if cost_int < 30_000 else "mid-range" if cost_int < 80_000 else "luxury"
     cost_str = f"{cost_int:,}" if cost_int else "unknown"
     activities_str = ", ".join(top_5) if top_5 else "sightseeing"
-    return (
-        f"{destination} {num_days} days {cost_str} INR {budget_label}. "
-        f"Top activities: {activities_str}."
-    )
+    return f"{destination} {num_days} days {cost_str} INR {budget_label}. Top activities: {activities_str}."
 
 
 # ── OpenAI call (the single network seam — patch this in tests) ───────────
@@ -148,15 +141,19 @@ async def write_embedding_rows(
 
     # ── Clean up stale pending_retry rows (makes recovery idempotent) ──────
     stale_rows = (
-        await db.execute(
-            select(Embedding).where(
-                Embedding.itinerary_id == itinerary_id,
-                Embedding.embedding_model == PENDING_RETRY_MODEL,
+        (
+            await db.execute(
+                select(Embedding).where(
+                    Embedding.itinerary_id == itinerary_id,
+                    Embedding.embedding_model == PENDING_RETRY_MODEL,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for stale in stale_rows:
-        db.delete(stale)
+        await db.delete(stale)
     if stale_rows:
         await db.commit()
         logger.info(

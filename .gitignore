@@ -41,3 +41,9 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Playwright / TypeScript build output
+test-results/
+playwright-report/
+*.tsbuildinfo
+next-env.d.ts

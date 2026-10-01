@@ -1,5 +1,7 @@
 # Phase 7 — Conditional Edges: Ask Instead of Assume
 
+> **Since this log was written:** `POST /plan` returns `clarification_needed` only when the trip has no interests and no free text was sent — the one thing a trip row can be missing (DECISIONS #56).
+
 **Status: ✅ Complete**
 **Done criterion:** Ambiguous query → clarifying question → user answers → correct tool call. Router is deterministic. 8 router unit tests pass. API correctly distinguishes `planning_started` vs `clarification_needed`. Prompt on v3.
 

@@ -1,8 +1,9 @@
 import uuid
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
+
+from app.schemas.types import UTCDateTime
 
 
 class ItineraryRead(BaseModel):
@@ -11,6 +12,6 @@ class ItineraryRead(BaseModel):
     content: str | None
     structured_data: Any | None
     total_cost: float | None
-    created_at: datetime
+    created_at: UTCDateTime
 
     model_config = {"from_attributes": True}

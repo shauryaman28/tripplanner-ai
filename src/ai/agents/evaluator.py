@@ -6,8 +6,10 @@ categories of correctness failure:
 
   1. date_out_of_range     — a day in the itinerary falls outside the trip's
                               travel window (trip.start_date .. trip.end_date)
-  2. budget_mismatch       — itinerary total_cost differs from the
-                              estimate_budget total by more than 5%
+  2. budget_mismatch       — itinerary total_cost differs by more than 5% from
+                              the total recomputed from source prices
+                              (expected_total_cost: the estimate_budget
+                              arithmetic applied to this itinerary)
   3. duplicate_activity    — the same activity appears twice on the same day
   4. hallucinated_activity — an activity name that wasn't in ActivitiesAgent's
                               get_attractions results
@@ -33,10 +35,7 @@ Retry loop:
     once retry_count reaches the cap, regardless of remaining failures —
     same hard-cap pattern as Phase 10's replan_attempts.
 
-Scope note: this module is standalone and fully unit-tested against the
-Phase 12 draft-itinerary schema. It is not yet wired into orchestrator.py —
-there is no ItineraryBuilder node for it to sit after until Phase 12 exists.
-Wiring happens there.
+Wired into the graph by orchestrator.evaluate_node (Phase 12).
 """
 
 from __future__ import annotations
@@ -134,6 +133,23 @@ def check_activity_dates(draft: dict, trip_start: str, trip_end: str) -> Evaluat
 # ── Check 2: budget consistency within 5% ──────────────────────────────────
 
 
+def expected_total_cost(draft: dict, flights: list[dict], hotels: list[dict]) -> float:
+    """What the draft should cost, recomputed from SOURCE prices.
+
+    Same arithmetic as the estimate_budget tool (flights + hotel nights +
+    daily spend), applied to this itinerary. Hotel nights are priced from the
+    hotel search results rather than the draft, so a builder that misquotes a
+    hotel is caught; activities have no source price and are taken as drafted.
+    """
+    hotel_prices = {h.get("name"): h.get("price_per_night_inr") for h in hotels}
+    total = min((f.get("price_inr") or 0.0 for f in flights), default=0.0)
+    for day in draft.get("days", []):
+        hotel = day.get("hotel") or {}
+        total += hotel_prices.get(hotel.get("name")) or hotel.get("cost_per_night") or 0.0
+        total += sum((day.get(slot) or {}).get("cost") or 0.0 for slot in ("morning", "afternoon", "evening"))
+    return total
+
+
 def check_budget_consistency(draft: dict, expected_total: float) -> EvaluatorFailure | None:
     total_cost = draft.get("total_cost")
     if total_cost is None or expected_total is None or expected_total == 0:
@@ -144,7 +160,7 @@ def check_budget_consistency(draft: dict, expected_total: float) -> EvaluatorFai
         return EvaluatorFailure(
             check="budget_mismatch",
             detail=(
-                f"Itinerary total_cost ₹{total_cost:,.0f} differs from estimate_budget total "
+                f"Itinerary total_cost ₹{total_cost:,.0f} differs from the recomputed total "
                 f"₹{expected_total:,.0f} by {diff_pct:.1%} — exceeds the {BUDGET_TOLERANCE_PCT:.0%} tolerance."
             ),
         )
@@ -181,10 +197,7 @@ def check_hallucinated_activities(draft: dict, attractions: list[dict]) -> Evalu
     #   (a) names actually returned by get_attractions
     #   (b) documented fallback phrases the builder writes when attractions
     #       are empty for a slot (e.g. "Explore the area" from builder.py)
-    known_names = (
-        {a.get("name") for a in attractions if a.get("name")}
-        | _ALLOWED_FALLBACK_PHRASES
-    )
+    known_names = {a.get("name") for a in attractions if a.get("name")} | _ALLOWED_FALLBACK_PHRASES
     hallucinated = []
     for _day_num, _slot_name, slot in _iter_slots(draft):
         name = slot.get("activity")

@@ -25,10 +25,12 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: ruff check src/ tests/
+        run: ruff check . && ruff format --check src tests migrations
 
-      - name: Unit tests
-        run: pytest tests/unit/ -v
+      - name: Unit + contract tests
+        run: pytest tests/unit/ tests/contract/ -v
 
-      # Integration tests require Docker — run manually:
-      # RUN_INTEGRATION=1 pytest tests/integration/
+      # Integration tests need Postgres + Redis (docker compose up postgres redis -d):
+      #   RUN_INTEGRATION=1 pytest tests/integration/
+      # Browser E2E (starts a stub backend + the Next.js dev server itself):
+      #   cd src/frontend && npx playwright test

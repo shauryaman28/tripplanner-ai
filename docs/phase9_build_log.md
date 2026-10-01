@@ -1,5 +1,7 @@
 # Phase 9 — Orchestrator: Decomposition & Fan-Out
 
+> **Since this log was written:** sub-agent failures are published on SSE, missing interests default to `["sightseeing"]`, and a flight-provider outage no longer stops the run (DECISIONS #48).
+
 **Status: ✅ Complete**
 **Done criterion:** Full run on "Plan a 7-day trip to Goa in December for 2 people, budget ₹50,000" → all 3 sub-agents called concurrently (overlapping `created_at` in `agent_runs`). Results merged in OrchestratorState. Prompt on v3+. 5 unit tests pass.
 

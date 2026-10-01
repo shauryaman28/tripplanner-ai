@@ -21,6 +21,7 @@ import asyncio
 import json
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
@@ -30,6 +31,8 @@ try:
     from src.ai.mcp_server.models import ToolError
 except ImportError:
     from ai.mcp_server.models import ToolError
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 _session: ClientSession | None = None
 _client_context: Any = None
@@ -65,6 +68,7 @@ async def get_session() -> ClientSession:
             command=sys.executable,
             args=["-m", "src.ai.mcp_server.server"],
             env=os.environ.copy(),
+            cwd=_PROJECT_ROOT,  # `-m src.ai…` only resolves from the repo root
         )
 
         # Start stdio client connection. Nothing is assigned to the module
@@ -113,6 +117,25 @@ async def close_session() -> None:
             _client_context = None
 
 
+def _parse_result(response: Any) -> Any:
+    """Return the tool's value as plain JSON data.
+
+    FastMCP sends a list result as one text block PER ITEM, so reading only the
+    first block would silently truncate every list to its first element. The
+    structured payload (wrapped as {"result": ...} for non-object returns) is
+    exact; the text blocks are only a fallback for servers that don't send it.
+    """
+    structured = getattr(response, "structuredContent", None)
+    if isinstance(structured, dict):
+        return structured["result"] if set(structured) == {"result"} else structured
+
+    texts = [block.text for block in response.content if getattr(block, "text", None) is not None]
+    if not texts:
+        raise ValueError("response has no text content")
+    items = [json.loads(text) for text in texts]
+    return items[0] if len(items) == 1 else items
+
+
 async def call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
     """Call an MCP tool asynchronously.
 
@@ -125,37 +148,17 @@ async def call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
         session = await get_session()
 
         # FastMCP tools wrap their inputs in an 'input' schema parameter
-        if "input" not in params:
-            arguments = {"input": params}
-        else:
-            arguments = params
-
+        arguments = params if "input" in params else {"input": params}
         response = await session.call_tool(tool_name, arguments=arguments)
 
-        if getattr(response, "isError", False) or getattr(response, "is_error", False):
-            error_msg = ""
-            if response.content:
-                error_msg = getattr(response.content[0], "text", str(response.content[0]))
+        if getattr(response, "isError", False):
+            error_msg = getattr(response.content[0], "text", str(response.content[0])) if response.content else ""
             return ToolError(error=f"MCP error: {error_msg}", code="MCP_SERVER_ERROR")
 
-        if not response.content:
-            return ToolError(error="Empty response from MCP server", code="EMPTY_RESPONSE")
-
-        content_block = response.content[0]
-        text_content = getattr(content_block, "text", None)
-        if text_content is None:
-            return ToolError(
-                error=f"Unexpected response content block type: {type(content_block)}",
-                code="INVALID_CONTENT_TYPE",
-            )
-
         try:
-            parsed = json.loads(text_content)
-        except Exception as e:
-            return ToolError(
-                error=f"Failed to parse JSON response: {e}",
-                code="JSON_PARSE_ERROR",
-            )
+            parsed = _parse_result(response)
+        except ValueError as exc:  # includes json.JSONDecodeError
+            return ToolError(error=f"Unparseable MCP response: {exc}", code="INVALID_RESPONSE")
 
         # Convert tool error dict responses into ToolError model
         if isinstance(parsed, dict) and "error" in parsed and "code" in parsed:

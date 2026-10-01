@@ -36,7 +36,7 @@ class UserPreferences(SQLModel, table=True):
         ),
     )
 
-    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True)
+    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
 
     dietary_restrictions: list[str] = Field(
         default_factory=list,

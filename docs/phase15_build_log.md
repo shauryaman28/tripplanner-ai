@@ -1,5 +1,7 @@
 # Phase 15 Build Log — Multi-Turn Refinement
 
+> **Since this log was written:** refinement was largely reworked — correct turn numbers, SSE events, state saved after every successful turn, the user's message passed to the builder, `full_replan` able to change the destination, failed refinements leaving the trip `completed`. `OrchestratorAgent.refine()` now has unit and integration tests. See DECISIONS #55.
+
 **Date:** 2026-07-25  
 **Status:** ✅ Complete — 175/175 tests passing
 

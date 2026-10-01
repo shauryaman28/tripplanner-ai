@@ -12,6 +12,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
+from src.ai.llm import GEMINI_MODEL, parse_json_object
 from src.ai.mcp_client.client import call_tool
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -59,23 +60,10 @@ async def intent_parsing_node(state: ActivitiesState) -> ActivitiesState:
     if not raw:
         return state
 
-    import json
-
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+    llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
     prompt = _INTENT_PROMPT.format(message=raw)
 
-    response = await llm.ainvoke(prompt)
-    text = response.content.strip()
-
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        text = text.removeprefix("json")
-    text = text.strip()
-
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        return state
+    parsed = parse_json_object((await llm.ainvoke(prompt)).content)
 
     updates: ActivitiesState = {}
 
