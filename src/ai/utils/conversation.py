@@ -2,10 +2,12 @@
 
 Phase 7B: initial implementation — {role, content} history entries.
 Phase 15: history entries gain a `turn` field for multi-turn refinement.
-          New helper: get_current_turn() derives the turn number from history.
+          get_current_turn() derives the turn number from history.
 
-All existing callers of append_history remain compatible: the `turn`
-parameter defaults to 1, so Phase 7 / Phase 9 code needs no changes.
+Keys (24 h TTL):
+  trip:{id}:conv_history     list of {role, content, turn}
+  trip:{id}:planning_state   the last SUCCESSFUL orchestrator state — what
+                             POST /refine carries forward
 """
 
 import json
@@ -44,13 +46,16 @@ async def append_history(
     """Append one message to the conversation history and return the full list.
 
     Each entry: {"role": str, "content": str, "turn": int}
-    The `turn` parameter was added in Phase 15; defaults to 1 so all
-    existing callers (Phase 7B, Phase 9) require no change.
     """
     hist = await get_history(r, trip_id)
     hist.append({"role": role, "content": content, "turn": turn})
-    await r.setex(_hist_key(trip_id), _TTL, json.dumps(hist))
+    await r.set(_hist_key(trip_id), json.dumps(hist), ex=_TTL)
     return hist
+
+
+async def start_history(r: aioredis.Redis, trip_id: str, content: str) -> None:
+    """Begin a new conversation: a fresh POST /plan is always turn 1."""
+    await r.set(_hist_key(trip_id), json.dumps([{"role": "user", "content": content, "turn": 1}]), ex=_TTL)
 
 
 async def get_current_turn(r: aioredis.Redis, trip_id: str) -> int:
@@ -74,4 +79,4 @@ async def get_trip_state(r: aioredis.Redis, trip_id: str) -> dict | None:
 
 
 async def save_trip_state(r: aioredis.Redis, trip_id: str, state: dict) -> None:
-    await r.setex(_state_key(trip_id), _TTL, json.dumps(state, default=str))
+    await r.set(_state_key(trip_id), json.dumps(state, default=str), ex=_TTL)

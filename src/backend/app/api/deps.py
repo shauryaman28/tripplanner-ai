@@ -21,31 +21,32 @@ from app.models.user import User
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
+_UNAUTHORIZED = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
+
+async def _user_from_token(token: str, db: AsyncSession) -> User:
+    """Decode a JWT and load its user. Any failure — bad signature, expired,
+    malformed subject, deleted user — is the same 401."""
+    try:
+        user_id = uuid.UUID(decode_access_token(token).get("sub", ""))
+    except (JWTError, ValueError, TypeError, AttributeError):
+        raise _UNAUTHORIZED
+    user = await db.get(User, user_id)
+    if user is None:
+        raise _UNAUTHORIZED
+    return user
+
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Validate Bearer JWT and return the authenticated User.
-
-    Raises 401 on any invalid / expired token.
-    """
-    _unauth = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = decode_access_token(token)
-        user_id: str | None = payload.get("sub")
-        if not user_id:
-            raise _unauth
-    except JWTError:
-        raise _unauth
-
-    user = await db.get(User, uuid.UUID(user_id))
-    if user is None:
-        raise _unauth
-    return user
+    """Validate Bearer JWT and return the authenticated User (401 otherwise)."""
+    return await _user_from_token(token, db)
 
 
 async def get_current_user_sse(
@@ -58,34 +59,13 @@ async def get_current_user_sse(
     Browsers cannot set custom headers for EventSource connections, so the
     SSE endpoint accepts the JWT as a query parameter as a fallback.
     """
-    raw: str | None = None
-    if authorization and authorization.startswith("Bearer "):
-        raw = authorization[7:]
-    elif token:
-        raw = token
-
+    raw = authorization[7:] if authorization and authorization.startswith("Bearer ") else token
     if not raw:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required (use Authorization header or ?token=)",
         )
-
-    _unauth = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-    )
-    try:
-        payload = decode_access_token(raw)
-        user_id: str | None = payload.get("sub")
-        if not user_id:
-            raise _unauth
-    except JWTError:
-        raise _unauth
-
-    user = await db.get(User, uuid.UUID(user_id))
-    if user is None:
-        raise _unauth
-    return user
+    return await _user_from_token(raw, db)
 
 
 async def get_redis_dep() -> aioredis.Redis:

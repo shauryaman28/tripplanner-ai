@@ -8,12 +8,14 @@ Phase 7: three-node graph — free text → intent parse → route → search or
 """
 
 import uuid
+from datetime import date
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
+from src.ai.llm import GEMINI_MODEL, parse_json_object
 from src.ai.mcp_client.client import call_tool
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -28,6 +30,7 @@ class TripState(TypedDict, total=False):
     budget: float
     passengers: int
     preferred_airlines: list[str]
+    max_stops: int
     flights: list[dict]
     error: dict | None
     raw_input: str | None
@@ -65,24 +68,10 @@ async def intent_parsing_node(state: TripState) -> TripState:
     if not raw:
         return state
 
-    import json
-    from datetime import date
-
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
+    llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
     prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=raw)
 
-    response = await llm.ainvoke(prompt)
-    text = response.content.strip()
-
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        text = text.removeprefix("json")
-    text = text.strip()
-
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        return state
+    parsed = parse_json_object((await llm.ainvoke(prompt)).content)
 
     updates: TripState = {}
     for field in ("origin", "destination", "date", "budget", "passengers"):
@@ -127,9 +116,10 @@ async def search_flights_node(state: TripState) -> TripState:
         "budget": state["budget"],
         "passengers": state.get("passengers", 1),
     }
-    # Only sent when set, so the tool call is byte-identical for users without the preference.
-    if state.get("preferred_airlines"):
-        params["preferred_airlines"] = state["preferred_airlines"]
+    # Optional fields are only sent when set, so the tool's own defaults apply otherwise.
+    for optional in ("return_date", "preferred_airlines", "max_stops"):
+        if state.get(optional):
+            params[optional] = state[optional]
 
     result = await call_tool("search_flights", params)
 

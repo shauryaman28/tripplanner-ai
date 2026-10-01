@@ -1,5 +1,7 @@
 # Phase 10 — Budget Conflict & Re-Planning
 
+> **Since this log was written:** the re-plan loop now changes the search (tighter cap *and* one more stop — the tool used to ignore `budget`), `/replan` saves the chosen adjustment on the trip, and a provider outage is not treated as a budget conflict (DECISIONS #48, #49).
+
 **Status: ✅ Complete**
 **Done criterion:** Scenario "5 days Goa, ₹40,000 budget, flights ₹28,000" → escalate.
 Unit test: 70% budget on flights → escalate. 40% → continue. LangGraph graph shows branch.

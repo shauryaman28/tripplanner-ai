@@ -1,7 +1,7 @@
 # Phase 15 — RefinementClassifier prompt
 
 > Version: v1  
-> Model: `gemini-1.5-flash`, `temperature=0`  
+> Model: Gemini Flash (`GEMINI_MODEL` setting, default `gemini-3.5-flash`), `temperature=0`  
 > Referenced by: `src/ai/agents/refinement_classifier.py`
 
 ---

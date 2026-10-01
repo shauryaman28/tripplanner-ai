@@ -7,7 +7,9 @@
  */
 
 import type {
+  ApiErrorBody,
   Itinerary,
+  ReplanChoice,
   TokenResponse,
   Trip,
   TripStatus,
@@ -72,11 +74,13 @@ async function request<T>(
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try {
-      const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      const body: ApiErrorBody = await res.json();
+      detail = body.error?.message ?? (typeof body.detail === "string" ? body.detail : detail);
     } catch {
       // ignore parse error; use the status string
     }
+    // An expired or revoked token: forget it, so the pages' auth guards send the user to /login.
+    if (res.status === 401) clearToken();
     throw new ApiError(res.status, detail);
   }
 
@@ -139,10 +143,18 @@ export interface PlanTripPayload {
   raw_input?: string;
 }
 
+export async function getTrip(tripId: string): Promise<Trip> {
+  return request<Trip>(`/trips/${tripId}`);
+}
+
+export type PlanResponse =
+  | { status: "planning_started"; trip_id: string }
+  | { status: "clarification_needed"; trip_id: string; question: string };
+
 export async function planTrip(
   tripId: string,
   payload: PlanTripPayload = {},
-): Promise<{ status: string; trip_id: string }> {
+): Promise<PlanResponse> {
   return request(`/trips/${tripId}/plan`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -166,6 +178,16 @@ export async function refineTrip(
   return request(`/trips/${tripId}/refine`, {
     method: "POST",
     body: JSON.stringify({ message }),
+  });
+}
+
+export async function replanTrip(
+  tripId: string,
+  choice: ReplanChoice,
+): Promise<{ status: string; choice: ReplanChoice }> {
+  return request(`/trips/${tripId}/replan`, {
+    method: "POST",
+    body: JSON.stringify({ choice }),
   });
 }
 

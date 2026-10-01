@@ -34,12 +34,13 @@ Hard cases (documented in prompts/refinement_classifier_v1.md and tested):
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Literal
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
+
+from src.ai.llm import GEMINI_MODEL, parse_json_object
 
 logger = logging.getLogger(__name__)
 
@@ -119,28 +120,22 @@ async def classify_refinement(
     back to "full_replan" — the safest default (re-derives everything from
     scratch rather than silently using stale data).
     """
-    history_text = "\n".join(
-        f"[Turn {e.get('turn', 1)}] {e['role'].upper()}: {e['content']}"
-        for e in conversation_history[-10:]  # last 10 messages for context
-    ) or "(none)"
+    history_text = (
+        "\n".join(
+            f"[Turn {e.get('turn', 1)}] {e['role'].upper()}: {e['content']}"
+            for e in conversation_history[-10:]  # last 10 messages for context
+        )
+        or "(none)"
+    )
 
     prompt = _SYSTEM_PROMPT.format(history=history_text, message=message)
 
     try:
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0)
-        response = await llm.ainvoke(prompt)
-        text = response.content.strip()
-
-        if text.startswith("```"):
-            text = text.split("```")[1].removeprefix("json").strip()
-
-        parsed = json.loads(text)
-        return RefinementClassification(**parsed)
+        llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
+        return RefinementClassification(**parse_json_object((await llm.ainvoke(prompt)).content))
 
     except Exception as exc:
-        logger.warning(
-            "RefinementClassifier failed (%s) — defaulting to full_replan", exc
-        )
+        logger.warning("RefinementClassifier failed (%s) — defaulting to full_replan", exc)
         return RefinementClassification(
             refinement_type="full_replan",
             reason=f"Classification failed ({exc}); safe fallback.",

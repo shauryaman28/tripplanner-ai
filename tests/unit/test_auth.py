@@ -11,11 +11,14 @@ loop" failures.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+
+START = (date.today() + timedelta(days=30)).isoformat()
+END = (date.today() + timedelta(days=37)).isoformat()
 
 
 def _make_mock_session(existing_user=None, created_user=None):
@@ -157,8 +160,8 @@ async def test_protected_route_without_token_returns_401():
                 "/trips",
                 json={
                     "destination": "Goa",
-                    "start_date": "2025-12-10",
-                    "end_date": "2025-12-17",
+                    "start_date": START,
+                    "end_date": END,
                     "budget": 50000,
                 },
             )

@@ -26,21 +26,23 @@ ATTRACTIONS = [{"name": "Fort Aguada", "category": "history"}]
 
 
 def _good_draft_json() -> str:
-    return json.dumps({
-        "days": [
-            {
-                "day": 1,
-                "date": "2026-12-10",
-                "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
-                "afternoon": None,
-                "evening": None,
-                "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
-                "flight": None,
-            }
-        ],
-        "total_cost": 8200.0 + 4500.0,
-        "currency": "INR",
-    })
+    return json.dumps(
+        {
+            "days": [
+                {
+                    "day": 1,
+                    "date": "2026-12-10",
+                    "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
+                    "afternoon": None,
+                    "evening": None,
+                    "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
+                    "flight": None,
+                }
+            ],
+            "total_cost": 8200.0 + 4500.0,
+            "currency": "INR",
+        }
+    )
 
 
 @pytest.mark.asyncio
@@ -103,9 +105,7 @@ async def test_itinerary_builder_run_logs_agent_run():
 
     with patch("src.ai.builder.builder._call_llm", AsyncMock(return_value=_good_draft_json())):
         builder = ItineraryBuilder()
-        result = await builder.run(
-            TRIP_META, FLIGHTS, HOTELS, ATTRACTIONS, db=mock_session, trip_id=uuid.uuid4()
-        )
+        result = await builder.run(TRIP_META, FLIGHTS, HOTELS, ATTRACTIONS, db=mock_session, trip_id=uuid.uuid4())
 
     assert result["error"] is None
     assert result["draft"]["total_cost"] == 12700.0

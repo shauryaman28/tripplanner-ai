@@ -1,5 +1,7 @@
 # Phase 12 — Itinerary Builder: Claude Haiku + Structured Synthesis
 
+> **Since this log was written:** builder prompt is on v5 (`prompts/itinerary_builder_v5.md`); `persist_node` also syncs destination / dates / budget back to the trip row and spawns embeddings instead of awaiting them (DECISIONS #53, #55).
+
 **Status: ✅ Complete**
 
 **Done criterion:** Full run on "Plan a 7-day trip to Goa in December for 2 people, budget ₹50,000" → complete `Itinerary` saved in DB with all days populated, morning/afternoon/evening slots assigned, hotel assigned per night, flight cost included, total_cost within budget, zero placeholder strings. Prompt on v3+. Itinerary readable via `GET /trips/{id}/itinerary`.

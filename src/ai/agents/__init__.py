@@ -5,6 +5,7 @@ from src.ai.agents.evaluator import (
     EvaluatorFailure,
     EvaluatorVerdict,
     evaluate_itinerary,
+    expected_total_cost,
     next_agent_for_failures,
     route_after_evaluation,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "EvaluatorFailure",
     "EvaluatorVerdict",
     "evaluate_itinerary",
+    "expected_total_cost",
     "next_agent_for_failures",
     "route_after_evaluation",
 ]

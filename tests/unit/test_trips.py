@@ -6,13 +6,16 @@ ignored and caused these tests to hit the real engine/event loop.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.security import create_access_token
+
+START = (date.today() + timedelta(days=30)).isoformat()
+END = (date.today() + timedelta(days=37)).isoformat()
 
 
 def _auth_header(user_id: uuid.UUID) -> dict:
@@ -25,8 +28,8 @@ def _make_trip(user_id: uuid.UUID) -> MagicMock:
     trip.id = uuid.uuid4()
     trip.user_id = user_id
     trip.destination = "Goa"
-    trip.start_date = date(2025, 12, 10)
-    trip.end_date = date(2025, 12, 17)
+    trip.start_date = date.fromisoformat(START)
+    trip.end_date = date.fromisoformat(END)
     trip.budget = 50_000.0
     trip.group_size = 2
     trip.interests = ["beach", "food"]
@@ -60,8 +63,8 @@ async def test_create_trip_requires_auth():
                 "/trips",
                 json={
                     "destination": "Goa",
-                    "start_date": "2025-12-10",
-                    "end_date": "2025-12-17",
+                    "start_date": START,
+                    "end_date": END,
                     "budget": 50000,
                 },
             )
@@ -104,8 +107,8 @@ async def test_create_trip_returns_201():
                     "/trips",
                     json={
                         "destination": "Goa",
-                        "start_date": "2025-12-10",
-                        "end_date": "2025-12-17",
+                        "start_date": START,
+                        "end_date": END,
                         "budget": 50000,
                         "group_size": 2,
                         "interests": ["beach", "food"],
@@ -140,8 +143,8 @@ async def test_create_trip_end_date_before_start_returns_422():
                     "/trips",
                     json={
                         "destination": "Goa",
-                        "start_date": "2025-12-17",
-                        "end_date": "2025-12-10",  # end before start
+                        "start_date": END,
+                        "end_date": START,  # end before start
                         "budget": 50000,
                     },
                     headers=_auth_header(user_id),

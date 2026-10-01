@@ -14,15 +14,24 @@ import uuid
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column
+from sqlalchemy import Column, Index
 from sqlmodel import Field, SQLModel
 
 
 class Embedding(SQLModel, table=True):
     __tablename__ = "embeddings"
+    __table_args__ = (
+        # HNSW index for cosine similarity search (Phase 23)
+        Index(
+            "ix_embeddings_vector_hnsw",
+            "vector",
+            postgresql_using="hnsw",
+            postgresql_ops={"vector": "vector_cosine_ops"},
+        ),
+    )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    itinerary_id: uuid.UUID = Field(foreign_key="itineraries.id", index=True)
+    itinerary_id: uuid.UUID = Field(foreign_key="itineraries.id", index=True, ondelete="CASCADE")
 
     embedding_model: str = Field(max_length=100)  # e.g. "text-embedding-3-small"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

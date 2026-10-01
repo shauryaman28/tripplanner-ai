@@ -84,17 +84,20 @@ export interface SSEAgentUpdateEvent {
   agent?: string;
   status?: AgentStatus;
   summary?: string;
-  event?: string;               // "planning_started" | "planning_complete" | etc.
+  event?: string;               // "planning_started" | "planning_complete" | "planning_failed" | "budget_conflict"
   agents_done?: number;
   agents_total?: number;
   itinerary_id?: string | null;
-  reason?: string;
+  reason?: string;              // budget_conflict
+  error?: string;               // planning_failed
   options?: BudgetConflictOption[];
   turn?: number;
 }
 
+export type ReplanChoice = "cheaper_flights" | "reduce_days" | "increase_budget";
+
 export interface BudgetConflictOption {
-  choice: string;
+  choice: ReplanChoice;
   description: string;
   estimated_saving: string;
 }
@@ -127,7 +130,9 @@ export interface UserRead {
 }
 
 // ── Error envelope ────────────────────────────────────────────────────────
+// Every error response carries `error`; `detail` is FastAPI's own field.
 
-export interface ApiError {
-  detail: string | { code: string; message: string };
+export interface ApiErrorBody {
+  detail: unknown;
+  error?: { code: string; message: string };
 }

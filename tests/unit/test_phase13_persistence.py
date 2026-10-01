@@ -82,6 +82,7 @@ def _make_mock_session(user: MagicMock, trip: MagicMock | None = None) -> AsyncM
 def _override_get_db(session: AsyncMock):
     async def _dep():
         yield session
+
     return _dep
 
 
@@ -203,6 +204,7 @@ async def test_persist_node_logs_on_success():
 
     async def mock_refresh(obj):
         obj.id = mock_itinerary.id
+
     mock_db.refresh = mock_refresh
     mock_db.add = lambda obj: added.append(obj)
 
@@ -213,6 +215,7 @@ async def test_persist_node_logs_on_success():
         result = await persist_node(state)
 
     from app.models.agent_run import AgentRun
+
     agent_runs = [obj for obj in added if isinstance(obj, AgentRun)]
     assert len(agent_runs) == 1
     run = agent_runs[0]
@@ -250,6 +253,7 @@ async def test_escalate_node_logs_with_budget_info():
     await escalate_node(state)
 
     from app.models.agent_run import AgentRun
+
     agent_runs = [obj for obj in added if isinstance(obj, AgentRun)]
     assert len(agent_runs) == 1
     run = agent_runs[0]
@@ -281,6 +285,7 @@ async def test_builder_failed_node_logs_with_status_failed():
     await builder_failed_node(state)
 
     from app.models.agent_run import AgentRun
+
     agent_runs = [obj for obj in added if isinstance(obj, AgentRun)]
     assert len(agent_runs) == 1
     run = agent_runs[0]
@@ -302,16 +307,38 @@ async def test_full_happy_path_produces_at_least_7_runs():
     from src.ai.agents.evaluator import EvaluatorVerdict
     from src.ai.orchestrator.orchestrator import OrchestratorAgent
 
-    _flight = {"airline": "6E", "flight_number": "6E-204", "departure": "2026-12-10T06:00:00",
-               "arrival": "2026-12-10T08:15:00", "duration_mins": 135, "price_inr": 8200.0, "stops": 0}
+    _flight = {
+        "airline": "6E",
+        "flight_number": "6E-204",
+        "departure": "2026-12-10T06:00:00",
+        "arrival": "2026-12-10T08:15:00",
+        "duration_mins": 135,
+        "price_inr": 8200.0,
+        "stops": 0,
+    }
     _hotel = {"name": "Goa Grand", "stars": 4, "price_per_night_inr": 4500.0, "rating": 4.2, "address": "Goa"}
-    _attraction = {"name": "Fort Aguada", "category": "history", "rating": 4.5, "description": "Fort.", "lat": 15.5, "lng": 73.7}
+    _attraction = {
+        "name": "Fort Aguada",
+        "category": "history",
+        "rating": 4.5,
+        "description": "Fort.",
+        "lat": 15.5,
+        "lng": 73.7,
+    }
     _draft = {
-        "days": [{"day": 1, "date": "2026-12-10",
-                  "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
-                  "afternoon": None, "evening": None,
-                  "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0}, "flight": None}],
-        "total_cost": 12_700.0, "currency": "INR",
+        "days": [
+            {
+                "day": 1,
+                "date": "2026-12-10",
+                "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
+                "afternoon": None,
+                "evening": None,
+                "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
+                "flight": None,
+            }
+        ],
+        "total_cost": 12_700.0,
+        "currency": "INR",
     }
 
     added = []
@@ -328,6 +355,7 @@ async def test_full_happy_path_produces_at_least_7_runs():
             pass
         else:  # Itinerary
             obj.id = mock_itinerary.id
+
     mock_db.refresh = mock_refresh
 
     trip_id = uuid.uuid4()
@@ -349,9 +377,7 @@ async def test_full_happy_path_produces_at_least_7_runs():
         MockHA.return_value.run = AsyncMock(return_value={"hotels": [_hotel], "error": None})
         MockAA.return_value.run = AsyncMock(return_value={"attractions": [_attraction], "error": None})
         MockIB.return_value.run = AsyncMock(return_value={"draft": _draft, "error": None})
-        MockEval.return_value.run = AsyncMock(
-            return_value=EvaluatorVerdict(passed=True, failures=[], retry_count=0)
-        )
+        MockEval.return_value.run = AsyncMock(return_value=EvaluatorVerdict(passed=True, failures=[], retry_count=0))
 
         agent = OrchestratorAgent()
         await agent.run(
@@ -368,6 +394,7 @@ async def test_full_happy_path_produces_at_least_7_runs():
         )
 
     from app.models.agent_run import AgentRun
+
     agent_runs = [obj for obj in added if isinstance(obj, AgentRun)]
     # Sub-agent mocks (FlightAgent/HotelAgent/ActivitiesAgent/ItineraryBuilder/Evaluator)
     # bypass internal log_agent_run calls — only orchestrator-owned nodes log directly.
@@ -375,8 +402,7 @@ async def test_full_happy_path_produces_at_least_7_runs():
     # The three sub-agent mocks contribute their own MagicMock objects, not real AgentRuns.
     # Acceptance criterion: ≥ 4 real rows written by orchestrator nodes in this mocked run.
     assert len(agent_runs) >= 4, (
-        f"Expected ≥ 4 orchestrator-owned agent_runs rows, got {len(agent_runs)}: "
-        f"{[r.agent_name for r in agent_runs]}"
+        f"Expected ≥ 4 orchestrator-owned agent_runs rows, got {len(agent_runs)}: {[r.agent_name for r in agent_runs]}"
     )
     # Verify all logged rows have non-null duration_ms
     for run in agent_runs:
@@ -500,18 +526,31 @@ async def test_get_trip_timeline_returns_ordered_event_log():
     t3 = datetime(2026, 12, 10, 10, 0, 10)
 
     run1 = AgentRun(
-        id=uuid.uuid4(), trip_id=tid, agent_name="flight_agent",
-        status="completed", input={}, output={"flights": [{"price_inr": 8200.0}]},
-        duration_ms=1200, created_at=t1,
+        id=uuid.uuid4(),
+        trip_id=tid,
+        agent_name="flight_agent",
+        status="completed",
+        input={},
+        output={"flights": [{"price_inr": 8200.0}]},
+        duration_ms=1200,
+        created_at=t1,
     )
     run2 = AgentRun(
-        id=uuid.uuid4(), trip_id=tid, agent_name="budget_decision",
-        status="completed", input={}, output={"decision": "continue", "flight_cost": 8200.0, "remaining_budget": 41800.0},
-        duration_ms=5, created_at=t2,
+        id=uuid.uuid4(),
+        trip_id=tid,
+        agent_name="budget_decision",
+        status="completed",
+        input={},
+        output={"decision": "continue", "flight_cost": 8200.0, "remaining_budget": 41800.0},
+        duration_ms=5,
+        created_at=t2,
     )
     itinerary = Itinerary(
-        id=uuid.uuid4(), trip_id=tid, total_cost=12_700.0,
-        structured_data={"days": []}, created_at=t3,
+        id=uuid.uuid4(),
+        trip_id=tid,
+        total_cost=12_700.0,
+        structured_data={"days": []},
+        created_at=t3,
     )
 
     session = AsyncMock()

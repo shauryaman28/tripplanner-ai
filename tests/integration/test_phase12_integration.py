@@ -32,21 +32,23 @@ ATTRACTIONS = [{"name": "Fort Aguada", "category": "history"}]
 
 
 def _good_draft_json(trip_start: str) -> str:
-    return json.dumps({
-        "days": [
-            {
-                "day": 1,
-                "date": trip_start,
-                "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
-                "afternoon": None,
-                "evening": None,
-                "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
-                "flight": None,
-            }
-        ],
-        "total_cost": 8200.0 + 4500.0,
-        "currency": "INR",
-    })
+    return json.dumps(
+        {
+            "days": [
+                {
+                    "day": 1,
+                    "date": trip_start,
+                    "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
+                    "afternoon": None,
+                    "evening": None,
+                    "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
+                    "flight": None,
+                }
+            ],
+            "total_cost": 8200.0 + 4500.0,
+            "currency": "INR",
+        }
+    )
 
 
 async def _make_trip(db_session) -> Trip:
