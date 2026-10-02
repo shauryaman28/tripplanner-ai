@@ -2,16 +2,21 @@
 
 Duffel responses for the flight-tool tests, and `network_stubs()` — the full
 set of stubs that lets the real app (FastAPI, Postgres, Redis, the LangGraph
-orchestrator) plan a trip with no API keys. The integration tests and the
-Playwright stub backend (tests/e2e/stub_backend.py) both run on it.
+orchestrator) plan a trip and export it with no API keys and no network. The
+integration tests and the Playwright stub backend (tests/e2e/stub_backend.py)
+both run on it.
 """
 
+import io
 import json
 import re
 from contextlib import contextmanager
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from PIL import Image
+
+from app.core.config import settings
 from src.ai.agents.refinement_classifier import RefinementClassification
 
 _DEL = {"latitude": 28.5585, "longitude": 77.1002}
@@ -120,6 +125,26 @@ def flight(price: float, day: str = "2030-01-10") -> dict:
     }
 
 
+def map_tile(colour: str = "#dfe6dc") -> bytes:
+    """A plain 256 × 256 PNG — what a tile server sends for an empty patch of land."""
+    out = io.BytesIO()
+    Image.new("RGB", (256, 256), colour).save(out, "PNG")
+    return out.getvalue()
+
+
+_TILE = map_tile()
+
+# The stub stack shares Redis with the dev servers, and tiles are cached there for a week under a
+# key made from the tile server's URL. The stubs therefore answer for a tile server of their own:
+# under the real one's URL, a real export would be handed these blank tiles from the cache.
+STUB_TILE_URL = "https://tiles.stub.invalid/{z}/{x}/{y}.png"
+
+
+async def fake_tile(_client, _url: str) -> bytes:
+    """Stand-in for the tile download behind the PDF export's static map (app.pdf.static_map)."""
+    return _TILE
+
+
 async def fake_builder_llm(_system: str, user_prompt: str) -> str:
     """Stand-in for the Groq call: a valid draft, one entry per day of the trip, built only from the data in the prompt.
 
@@ -183,5 +208,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
         patch("src.ai.embeddings.embedder._call_embed", AsyncMock(return_value=[0.01] * 1536)),
         patch("app.api.routes.trips.classify_refinement", AsyncMock(return_value=_TARGETED_HOTEL)),
+        patch("app.pdf.static_map._download_tile", fake_tile),
+        patch.object(settings, "MAP_TILE_URL", STUB_TILE_URL),
     ):
         yield tools

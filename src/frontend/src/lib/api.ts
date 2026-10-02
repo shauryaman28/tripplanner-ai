@@ -64,6 +64,20 @@ class ApiError extends Error {
   }
 }
 
+/** A failed response as an ApiError, with the message from the error envelope when there is one. */
+async function apiError(res: Response): Promise<ApiError> {
+  let detail = `HTTP ${res.status}`;
+  try {
+    const body: ApiErrorBody = await res.json();
+    detail = body.error?.message ?? (typeof body.detail === "string" ? body.detail : detail);
+  } catch {
+    // ignore parse error; use the status string
+  }
+  // An expired or revoked token: forget it, so the pages' auth guards send the user to /login.
+  if (res.status === 401) clearToken();
+  return new ApiError(res.status, detail);
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -76,19 +90,7 @@ async function request<T>(
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`/api${path}`, { ...options, headers });
-
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const body: ApiErrorBody = await res.json();
-      detail = body.error?.message ?? (typeof body.detail === "string" ? body.detail : detail);
-    } catch {
-      // ignore parse error; use the status string
-    }
-    // An expired or revoked token: forget it, so the pages' auth guards send the user to /login.
-    if (res.status === 401) clearToken();
-    throw new ApiError(res.status, detail);
-  }
+  if (!res.ok) throw await apiError(res);
 
   // 204 No Content
   if (res.status === 204) return undefined as T;
@@ -206,6 +208,38 @@ export async function getItinerary(tripId: string): Promise<Itinerary> {
 
 export async function getTripStatus(tripId: string): Promise<TripStatusResponse> {
   return request<TripStatusResponse>(`/trips/${tripId}/status`);
+}
+
+// ---------------------------------------------------------------------------
+// PDF export (Phase 19)
+// ---------------------------------------------------------------------------
+
+export interface PdfFile {
+  blob: Blob;
+  /** the name the backend gave the file, e.g. "trip-goa-2027-12-10.pdf" */
+  filename: string;
+  /** the plan has places to show, but the map could not be drawn this time — the PDF came without it */
+  mapMissing: boolean;
+}
+
+/** The latest itinerary as a PDF. The answer is the file itself, not JSON. */
+export async function downloadTripPdf(tripId: string): Promise<PdfFile> {
+  const token = getToken();
+  const res = await fetch(`/api/trips/${tripId}/export/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw await apiError(res);
+
+  const blob = await res.blob();
+  // A 200 that is not a PDF (a proxy's error page) must not be saved as one.
+  if (!blob.type.includes("pdf")) throw new ApiError(res.status, "The server did not send a PDF.");
+
+  const named = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "");
+  return {
+    blob,
+    filename: named?.[1] ?? "trip-itinerary.pdf",
+    mapMissing: res.headers.get("X-Itinerary-Map") === "unavailable",
+  };
 }
 
 export { ApiError };

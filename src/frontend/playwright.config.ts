@@ -1,10 +1,14 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Browser E2E tests. Run from src/frontend:  npx playwright test
  *
- * Needs Docker Postgres + Redis (docker compose up postgres redis -d) and the
- * Python venv on PATH (or PYTHON=/path/to/python).
+ * Needs Docker Postgres + Redis (docker compose up postgres redis -d). The stub
+ * backend runs on the repo's own virtualenv (.venv) when there is one, so the
+ * venv does not have to be active; PYTHON=/path/to/python picks another.
  *
  * The tests run on their own stack — a stub backend and a second Next.js dev
  * server, on their own ports, database and build directory — so they are
@@ -14,6 +18,13 @@ const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3100);
 const API_PORT = Number(process.env.E2E_API_PORT ?? 8100);
 const WEB = `http://localhost:${WEB_PORT}`;
 const API = `http://localhost:${API_PORT}`;
+
+// The backend is started from the repo root, so a PYTHON given as a path is pinned to this
+// directory first — "../../.venv/bin/python" used to be looked up two levels above the repo.
+const VENV_PYTHON = path.resolve(__dirname, "../../.venv/bin/python");
+const PYTHON = process.env.PYTHON
+  ? process.env.PYTHON.includes("/") ? path.resolve(process.env.PYTHON) : process.env.PYTHON
+  : existsSync(VENV_PYTHON) ? VENV_PYTHON : "python";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -36,7 +47,7 @@ export default defineConfig({
   webServer: [
     {
       // The real app with external APIs stubbed — see tests/e2e/stub_backend.py
-      command: `${process.env.PYTHON ?? "python"} -m tests.e2e.stub_backend`,
+      command: `"${PYTHON}" -m tests.e2e.stub_backend`,
       cwd: "../..",
       url: `${API}/ping`,
       env: { PORT: String(API_PORT), CORS_ORIGINS: WEB },

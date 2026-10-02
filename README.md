@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 18 / 50 — Map View**
+**Status: Phase 19 / 50 — PDF Export**
 
 ---
 
@@ -27,6 +27,9 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
                                       Postgres + pgvector
                                          Redis pub/sub
                                         SSE → Frontend
+
+A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
+itinerary (cover, day by day, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
 ```
 
 ---
@@ -82,20 +85,23 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 363 tests
+# Unit + contract tests (no Docker, no network) — 457 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 16 tests, incl. the full
-# plan → refine → replan pipeline through the HTTP API. They use their own
+# Integration tests (Docker Postgres + Redis) — 17 tests, incl. the full
+# plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser tests (Playwright) — 12 tests: 4 end-to-end flows + 8 for the change summary. Starts its own stack: a stub backend
+# Browser tests (Playwright) — 13 tests: 5 end-to-end flows + 8 for the change summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
 # `tripplanner_db_e2e` database, and a second Next.js dev server on :3100.
 cd src/frontend
 npx playwright install chromium   # once
-npx playwright test               # venv not active? PYTHON=../../.venv/bin/python npx playwright test
+npx playwright test               # uses the repo's .venv by itself; PYTHON=/path/to/python picks another
+
+# Frontend static checks
+npx tsc --noEmit && npm run lint
 ```
 The E2E stack uses its own ports, database and build directory, so it can run
 while your dev servers (:8000 / :3000) are up and never touches dev data.
@@ -107,13 +113,13 @@ while your dev servers (:8000 / :3000) are up and never touches dev data.
 ```
 tripplanner-ai/
 ├── src/
-│   ├── frontend/                        ← Phases 17–18: Next.js 14 App Router
+│   ├── frontend/                        ← Phases 17–19: Next.js 14 App Router
 │   │   ├── package.json
 │   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
 │   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
 │   │   ├── tsconfig.json
 │   │   ├── playwright.config.ts         ← starts the E2E stack (stub backend :8100, dev server :3100)
-│   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, budget conflict
+│   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, PDF download, budget conflict
 │   │   ├── e2e/changes.spec.ts          ← what the assistant says changed (pure function tests)
 │   │   └── src/
 │   │       ├── app/
@@ -125,10 +131,11 @@ tripplanner-ai/
 │   │       │       ├── page.tsx         ← trip cards & new-trip form
 │   │       │       └── [id]/page.tsx    ← the plan, the assistant, live progress
 │   │       ├── components/              ← ItineraryView, CostSummary, DayCard, ItineraryMap (Phase 18),
-│   │       │                              AgentProgressPanel, MessageThread, ChatInput, AppHeader, Brand, ui
+│   │       │                              DownloadPdfButton + Toast (Phase 19), AgentProgressPanel,
+│   │       │                              MessageThread, ChatInput, AppHeader, Brand, ui
 │   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), map.ts (pins, routes,
 │   │                                      day colours), changes.ts (what a change request changed),
-│   │                                      places.ts, format.ts, types.ts
+│   │                                      download.ts, places.ts, format.ts, types.ts
 │   ├── backend/
 │   │   ├── Dockerfile
 │   │   └── app/
@@ -138,7 +145,7 @@ tripplanner-ai/
 │   │       │   └── routes/
 │   │       │       ├── auth.py          ← POST /auth/register, /auth/login
 │   │       │       ├── health.py        ← GET /ping
-│   │       │       ├── trips.py         ← All trip routes + SSE + GET /status
+│   │       │       ├── trips.py         ← All trip routes + SSE + GET /status + GET /export/pdf
 │   │       │       ├── users.py         ← GET/PUT /users/preferences (Phase 16)
 │   │       │       └── admin.py         ← GET /admin/embedding-health (Phase 14)
 │   │       ├── core/
@@ -148,7 +155,15 @@ tripplanner-ai/
 │   │       │   ├── session.py           ← async SQLAlchemy
 │   │       │   └── redis.py             ← async Redis singleton
 │   │       ├── models/                  ← SQLModel table models
-│   │       └── schemas/                 ← Pydantic request/response schemas
+│   │       ├── schemas/                 ← Pydantic request/response schemas
+│   │       └── pdf/                     ← Phase 19: the itinerary as a PDF
+│   │           ├── export.py            ← draw the map if it can be drawn, then build the PDF
+│   │           ├── plan.py              ← what the pages say — pure, mirrors the trip page's rules
+│   │           ├── static_map.py        ← map picture from tiles (httpx + Pillow), tiles cached in Redis
+│   │           ├── document.py          ← the pages: cover, day by day, cost breakdown, map (ReportLab)
+│   │           ├── flowables.py         ← pins, cards, chips, the logo — drawn on the PDF canvas
+│   │           ├── formatting.py, theme.py ← ₹ / dates / labels, and the site's colours and day palette
+│   │           └── fonts/               ← Inter + Fraunces subsets (OFL), with the script that builds them
 │   └── ai/
 │       ├── llm.py                       ← model IDs + tolerant JSON parsing of LLM replies
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
@@ -177,16 +192,16 @@ tripplanner-ai/
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (356 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (450 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 7 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 16 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 17 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
-│   └── fakes.py                         ← network stubs shared by integration + E2E
+│   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–18) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–19) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -222,11 +237,12 @@ tripplanner-ai/
 | — | Out-of-scope trip hardening: destination lookup, LLM fallback, day coverage (DECISIONS #90–#96) | ✅ Done | 18 unit + 1 integration |
 | 1–17 | End-to-end audit ([docs/phase1-17_audit.md](docs/phase1-17_audit.md)) | ✅ Done | 26 regression unit + 5 pipeline/schema integration |
 | 18 | Map View (Leaflet) + frontend redesign ([docs/phase18_build_log.md](docs/phase18_build_log.md)) | ✅ Done | 33 unit + 4 Playwright E2E |
-| 19–20 | PDF export & frontend polish | ⏳ | |
+| 19 | PDF Export — ReportLab, static map from OpenStreetMap tiles ([docs/phase19_build_log.md](docs/phase19_build_log.md)) | ✅ Done | 94 unit + 1 integration + 1 Playwright E2E |
+| 20 | Frontend polish | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 363 unit + contract, 16 integration, 12 browser (4 end-to-end flows + 8 change-summary) — all passing.** Zero network calls in CI.
+**Total: 457 unit + contract, 17 integration, 13 browser (5 end-to-end flows + 8 change-summary) — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -243,7 +259,9 @@ tripplanner-ai/
 | `OPENTRIPMAP_API_KEY` | Attractions | https://opentripmap.io |
 | `OPENWEATHER_API_KEY` | Weather tool — optional, not used by planning yet | https://openweathermap.org/api |
 
-Five keys, all free tier. Geocoding uses Nominatim (OpenStreetMap) and needs no key.
+Five keys, all free tier. Geocoding uses Nominatim (OpenStreetMap) and needs no key — and neither
+does the map in the exported PDF, which is drawn from OpenStreetMap tiles (`MAP_TILE_URL` points it
+at another tile server; with the tiles unreachable the PDF simply comes without the map).
 
 Gemini's free tier allows about 20 requests a day per model. When it runs out, the short prompts go
 to Groq's small model (`GROQ_SMALL_MODEL`) instead, so planning keeps working.
@@ -270,6 +288,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Layer | Technology |
 |-------|------------|
 | Frontend | Next.js 14, Tailwind CSS, Leaflet (react-leaflet), lucide-react icons |
+| PDF export | ReportLab (pure Python) + Pillow; Inter and Fraunces embedded (Phase 19) |
 | Backend | FastAPI, Uvicorn, Python 3.11 |
 | Auth | JWT (python-jose + passlib/bcrypt) |
 | SSE | sse-starlette + Redis pub/sub |

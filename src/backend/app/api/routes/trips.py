@@ -12,6 +12,7 @@ GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
 GET    /trips/{id}/status        polling fallback for the SSE stream (Phase 17)
 GET    /trips/{id}/itinerary     latest itinerary for the trip
 GET    /trips/{id}/itineraries   all itinerary versions, newest first (Phase 15)
+GET    /trips/{id}/export/pdf    latest itinerary as a PDF download (Phase 19)
 GET    /trips/{id}/runs          all agent_runs for debugging; optional ?turn=N filter
 GET    /trips/{id}/timeline      ordered event log: agent_runs + itineraries (Phase 13)
 GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
@@ -29,18 +30,19 @@ from datetime import timedelta
 from typing import Any
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep
+from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep, get_redis_or_none
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.agent_run import AgentRun
 from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
 from app.models.user import User
+from app.pdf import NothingToExport, build_plan, export_itinerary
 from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
 from app.schemas.trip import ClarifyRequest, PlanRequest, RefineRequest, ReplanRequest, TripCreate, TripRead
@@ -510,13 +512,8 @@ async def get_trip_status(
 # ── GET /trips/{id}/itinerary ──────────────────────────────────────────────
 
 
-@router.get("/{trip_id}/itinerary", response_model=ItineraryRead)
-async def get_itinerary(
-    trip_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> Itinerary:
-    await _get_trip_or_404(trip_id, current_user.id, db)
+async def _latest_itinerary_or_404(trip_id: uuid.UUID, db: AsyncSession) -> Itinerary:
+    """The newest itinerary version — every turn saves a new row (Phase 15)."""
     result = await db.execute(
         select(Itinerary).where(Itinerary.trip_id == trip_id).order_by(Itinerary.created_at.desc()).limit(1)
     )
@@ -524,6 +521,16 @@ async def get_itinerary(
     if not itinerary:
         raise HTTPException(status_code=404, detail="No itinerary has been generated for this trip yet.")
     return itinerary
+
+
+@router.get("/{trip_id}/itinerary", response_model=ItineraryRead)
+async def get_itinerary(
+    trip_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Itinerary:
+    await _get_trip_or_404(trip_id, current_user.id, db)
+    return await _latest_itinerary_or_404(trip_id, db)
 
 
 # ── GET /trips/{id}/itineraries ────────────────────────────────────────────
@@ -546,6 +553,67 @@ async def list_itineraries(
         select(Itinerary).where(Itinerary.trip_id == trip_id).order_by(Itinerary.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+# ── GET /trips/{id}/export/pdf ─────────────────────────────────────────────
+
+
+@router.get(
+    "/{trip_id}/export/pdf",
+    response_class=Response,
+    responses={
+        200: {"content": {"application/pdf": {}}, "description": "The itinerary as a PDF file."},
+        404: {"description": "No such trip, or it has no itinerary to export yet."},
+    },
+)
+async def export_trip_pdf(
+    trip_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    tile_cache: aioredis.Redis | None = Depends(get_redis_or_none),
+) -> Response:
+    """Phase 19 — the latest itinerary as a PDF: cover, day by day, cost breakdown, map.
+
+    Answers with `Content-Disposition: attachment; filename="trip-<destination>-<start date>.pdf"`.
+    The map is drawn from map tiles; when they cannot be fetched the PDF is
+    sent without it and `X-Itinerary-Map` says so:
+
+        included      the map page is in the PDF
+        unavailable   the plan has places to show, but the map could not be drawn
+        none          nothing in the plan has a location (or no tile server is configured)
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+    itinerary = await _latest_itinerary_or_404(trip_id, db)
+    try:
+        plan = build_plan(
+            destination=trip.destination,
+            start_date=trip.start_date,
+            end_date=trip.end_date,
+            travellers=trip.group_size,
+            budget=trip.budget,
+            interests=trip.interests,
+            structured_data=itinerary.structured_data,
+            saved_total=itinerary.total_cost,
+        )
+    except NothingToExport as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await db.close()  # the map can take seconds to fetch — don't pin a pooled DB connection to it
+
+    try:
+        exported = await export_itinerary(plan, cache=tile_cache, trip_id=trip_id)
+    except Exception:
+        logger.exception("PDF export failed for trip %s", trip_id)
+        raise HTTPException(status_code=500, detail="The PDF could not be generated.")
+
+    return Response(
+        content=exported.content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "X-Itinerary-Map": exported.map_status,
+            "Cache-Control": "private, no-store",  # the next refinement changes it
+        },
+    )
 
 
 # ── GET /trips/{id}/similar ────────────────────────────────────────────────
