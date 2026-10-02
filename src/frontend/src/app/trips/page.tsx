@@ -98,7 +98,9 @@ export default function TripsPage() {
           <h2 className="mb-4 font-display text-lg font-semibold text-gray-900">New trip</h2>
           <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label htmlFor="destination" className="mb-1 block text-xs font-medium text-gray-600">Destination</label>
+              <label htmlFor="destination" className="mb-1 block text-xs font-medium text-gray-600">
+                Destination <span className="text-muted font-normal">(city or region — describe the trip in the chat next)</span>
+              </label>
               <input
                 id="destination"
                 required

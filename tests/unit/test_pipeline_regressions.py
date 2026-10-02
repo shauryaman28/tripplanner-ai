@@ -196,6 +196,7 @@ def _client(trip: Trip | None, runs: list[AgentRun] | None = None):
     trip_result, runs_result = MagicMock(), MagicMock()
     trip_result.scalar_one_or_none.return_value = trip
     runs_result.scalars.return_value.all.return_value = runs or []
+    runs_result.scalars.return_value.first.return_value = runs[-1] if runs else None
     db.execute = AsyncMock(side_effect=[trip_result, runs_result])
     redis = AsyncMock()
     redis.get = AsyncMock(return_value=None)
@@ -270,7 +271,7 @@ async def test_replan_persists_the_chosen_adjustment():
         resp = await client.post(f"/trips/{trip.id}/replan", json={"choice": "increase_budget"})
 
     assert resp.status_code == 200
-    assert trip.budget == 50_000.0  # saved on the trip, so a second "increase_budget" compounds
+    assert trip.budget == 50_000.0  # +25%, saved on the trip
     assert '"choice": "increase_budget"' in redis.publish.await_args.args[1]
 
 
@@ -345,3 +346,38 @@ async def test_embedding_health_reports_backlog():
         resp = await client.get("/admin/embedding-health")
 
     assert resp.json() == {"status": "degraded", "in_flight": 1, "pending_retry": 2}
+
+
+@pytest.mark.asyncio
+async def test_a_sentence_in_the_destination_field_is_parsed_into_a_place():
+    """People type the whole request into "Destination"; the place inside it must win."""
+    from src.ai.orchestrator.orchestrator import intent_parsing_node
+
+    parsed = {"destination": "Ayodhya", "origin": "Delhi", "interests": ["history"], "budget": 999.0}
+    state = {**_STATE, "destination": "Relaxed trip from Delhi, to Ayodhya and history"}
+
+    with patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value=parsed)) as extract:
+        result = await intent_parsing_node(state)
+        untouched = await intent_parsing_node({**_STATE, "destination": "New Delhi"})
+
+    assert result["destination"] == "Ayodhya" and result["origin"] == "Delhi" and result["interests"] == ["history"]
+    assert result["budget"] == _STATE["budget"]  # the form's other fields still win
+    extract.assert_awaited_once()  # a plain place name with no free text needs no LLM call
+    assert untouched["destination"] == "New Delhi"
+
+
+@pytest.mark.asyncio
+async def test_increase_budget_reaches_what_the_flights_need():
+    """₹18,234 of flights on a ₹20,000 budget: +25% is still a conflict — raise to a budget that clears the check."""
+    trip = _trip(uuid.uuid4(), status="failed")
+    trip.budget = 20_000.0
+    last_check = AgentRun(
+        trip_id=trip.id, agent_name="budget_decision", status="completed", output={"flight_cost": 18_234.0}
+    )
+
+    with _client(trip, [last_check]) as (client, _, __):
+        resp = await client.post(f"/trips/{trip.id}/replan", json={"choice": "increase_budget"})
+
+    assert resp.status_code == 200
+    assert trip.budget == 36_500.0
+    assert make_budget_decision([{"price_inr": 18_234.0}], trip.budget).decision == "continue"

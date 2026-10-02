@@ -44,6 +44,31 @@ def duffel_response(*offers: dict) -> MagicMock:
     return response
 
 
+def liteapi_response(*hotels: tuple[str, float], stars: int = 4) -> MagicMock:
+    """Stand-in for the httpx.Response of POST /hotels/rates; each hotel is (name, total price for the stay in INR)."""
+    response = MagicMock()
+    response.json.return_value = {
+        "hotels": [
+            {
+                "id": f"h{i}",
+                "name": name,
+                "stars": stars,
+                "rating": 8.5,
+                "address": "Beach Road",
+                "city_name": "Goa",
+                "latitude": 15.5,
+                "longitude": 73.8,
+            }
+            for i, (name, _) in enumerate(hotels)
+        ],
+        "data": [
+            {"hotelId": f"h{i}", "roomTypes": [{"offerRetailRate": {"amount": total, "currency": "INR"}}]}
+            for i, (_, total) in enumerate(hotels)
+        ],
+    }
+    return response
+
+
 # ── Whole-pipeline stubs ───────────────────────────────────────────────────
 
 HOTELS = [{"name": "Goa Grand", "stars": 4, "price_per_night_inr": 4500.0, "rating": 4.2, "address": "Calangute"}]
@@ -113,7 +138,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={})),
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
-        patch("src.ai.embeddings.embedder._call_openai_embed", AsyncMock(return_value=[0.01] * 1536)),
+        patch("src.ai.embeddings.embedder._call_embed", AsyncMock(return_value=[0.01] * 1536)),
         patch("app.api.routes.trips.classify_refinement", AsyncMock(return_value=_TARGETED_HOTEL)),
     ):
         yield tools

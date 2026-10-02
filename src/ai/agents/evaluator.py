@@ -178,7 +178,7 @@ def check_duplicate_activities(draft: dict) -> EvaluatorFailure | None:
             slot = day.get(slot_name)
             if slot and slot.get("activity"):
                 name = slot["activity"]
-                if name in seen:
+                if name in seen and name not in _ALLOWED_FALLBACK_PHRASES:  # free time may fill several slots
                     dupes.add(name)
                 seen.add(name)
         if dupes:

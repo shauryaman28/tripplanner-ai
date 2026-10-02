@@ -35,12 +35,10 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 1440
 
     # LLMs (Phase 6+) — model IDs are settings so a retired model is an env change, not a code change
-    GOOGLE_API_KEY: str = ""
+    GOOGLE_API_KEY: str = ""  # Gemini: intent parsing, refinement classifier, embeddings
     GEMINI_MODEL: str = "gemini-3.5-flash"
-    GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
-    ANTHROPIC_API_KEY: str = ""  # Phase 16 — PreferenceExtractor (Claude Haiku 4.5)
-    OPENAI_API_KEY: str = ""  # Phase 14 — embeddings
+    GROQ_API_KEY: str = ""  # itinerary builder, preference extractor
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     @property
     def cors_origins(self) -> list[str]:
@@ -49,9 +47,9 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# The Gemini, Groq and OpenAI SDKs read their keys from os.environ, which
+# The Gemini and Groq SDKs read their keys from os.environ, which
 # pydantic-settings does not populate. Export exactly these — not the whole
 # .env, which would also switch on things like LangSmith tracing.
-for _key in ("GOOGLE_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY"):
+for _key in ("GOOGLE_API_KEY", "GROQ_API_KEY"):
     if getattr(settings, _key):
         os.environ.setdefault(_key, getattr(settings, _key))

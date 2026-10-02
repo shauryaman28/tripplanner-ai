@@ -19,7 +19,7 @@
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
-The notable rewrites: `tools.py` (mocks → real APIs, then Amadeus → Duffel for flights),
+The notable rewrites: `tools.py` (mocks → real APIs, then Amadeus → Duffel for flights and LiteAPI for hotels),
 `orchestrator.py` and `trips.py` (audit), and `main.py` (routers, CORS, error envelope, startup recovery).
 
 ---
@@ -84,12 +84,11 @@ Everything else can stay as the defaults for local dev. `.env` always lives in t
 **repo root** — the backend, Alembic and the MCP server all read it from there,
 whatever directory you start them from.
 
-To actually plan a trip you need `GOOGLE_API_KEY` (only when you send free text),
-`GROQ_API_KEY` (itinerary builder) and at least one data source:
-`DUFFEL_ACCESS_TOKEN` (flights) or `OPENTRIPMAP_API_KEY` (attractions). Without a
-key a tool returns a structured `ToolError` instead of crashing, and the trip is
-planned from whatever data is available. There is currently no hotel provider
-(Amadeus self-service was shut down on 2026-07-17).
+To plan a real trip, fill in the five keys listed in `.env.example`:
+`GOOGLE_API_KEY` (Gemini), `GROQ_API_KEY`, `DUFFEL_ACCESS_TOKEN` (flights),
+`LITEAPI_API_KEY` (hotels) and `OPENTRIPMAP_API_KEY` (attractions). All have a free
+tier. Without a key that tool returns a structured `ToolError` instead of crashing,
+and the trip is planned from whatever data is available.
 
 No keys at all? Steps 15–16 run the whole flow on a stub backend.
 
@@ -512,12 +511,12 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **7 (Router)** | Pass state with `destination=None` → `router()` returns `"clarify"`, not `"search"`. Pass state with all fields → returns `"search"`. The router is a pure Python function — zero LLM calls, fully deterministic. |
 | **7 (Clarify API)** | `POST /plan` on a trip with no interests and no `raw_input` → `{"status": "clarification_needed", "question": ...}`. `POST /clarify` with `{"answer": "history and beaches"}` → `planning_started`. Send state with `{"date": None}` through retry → `not state.get(field)` correctly refills it (the old `field not in state` bug would loop forever). |
 | **8** | Run HotelAgent with no `budget_per_night` → it asks a question instead of searching. Inside the orchestrator the same situation is logged as a failed search (`MISSING_INPUT`), never as a silent empty success. |
-| **9** | Remove `DUFFEL_ACCESS_TOKEN` → the flight badge fails on the stream, hotels and activities are still planned, the trip completes. Missing interests → `["sightseeing"]`. |
+| **9** | Remove `DUFFEL_ACCESS_TOKEN` (or `LITEAPI_API_KEY`) → that badge fails on the stream, the other agents still run, the trip completes without that data. Missing interests → `["sightseeing"]`. |
 | **10** | Budget ₹40,000, flights ₹28,000 → `escalate`: `budget_conflict` arrives before `planning_failed`. `POST /replan {"choice":"cheaper_flights"}` searches with a 65% cap and one more stop. `reduce_days` on a 2-day trip → `422`. |
 | **11** | Make the builder quote a hotel at the wrong price → `budget_mismatch` (the total is recomputed from the hotel search results). A plan far *below* the user's budget passes. Retries stop at 3 and the trip fails with the evaluator's reasons. |
 | **12** | Force `db.commit` to raise inside `persist_node` → neither the itinerary row nor the status change is written. |
 | **13** | Raise inside the graph → trip is `failed`, `planning_failed` is published, nothing stays `planning`. Kill the server mid-run and restart → the stuck trip is marked `failed` at startup. |
-| **14** | Unset `OPENAI_API_KEY` → `planning_complete` is not delayed, the trip is `completed`, one `pending_retry` row exists, `GET /admin/embedding-health` says `degraded`; restart → it is retried. |
+| **14** | Unset `GOOGLE_API_KEY` → `planning_complete` is not delayed, the trip is `completed`, one `pending_retry` row exists, `GET /admin/embedding-health` says `degraded`; restart → it is retried. |
 | **15** | Refine twice → turns 2 and 3, each on the previous turn's state. A refinement that fails leaves the trip `completed` with the earlier itinerary. `POST /refine` before any successful plan → `409`. |
 | **16** | `PUT /users/preferences` with `"preferred_airlines": ["IndiGo"]` → `422` (IATA codes only). The extractor never overwrites a preference you set. |
 | **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 3 passed. |

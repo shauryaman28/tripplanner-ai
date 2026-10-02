@@ -23,9 +23,8 @@ class MCPSettings(BaseSettings):
     # Duffel (flights)
     DUFFEL_ACCESS_TOKEN: str = ""
 
-    # Amadeus (hotels)
-    AMADEUS_CLIENT_ID: str = ""
-    AMADEUS_CLIENT_SECRET: str = ""
+    # LiteAPI (hotels)
+    LITEAPI_API_KEY: str = ""
 
     # OpenTripMap (attractions)
     OPENTRIPMAP_API_KEY: str = ""

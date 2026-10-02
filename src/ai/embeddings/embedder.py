@@ -1,19 +1,22 @@
-"""Phase 14 — Real embedding generation using OpenAI text-embedding-3-small.
+"""Phase 14 — Real embedding generation using Gemini `gemini-embedding-001`.
+
+The roadmap names OpenAI text-embedding-3-small; Gemini is used instead so the
+app needs no OpenAI key. It is asked for 1536 dimensions — the size of the
+`embeddings.vector` column — so the schema is unchanged.
 
 Two embeddings are written per itinerary:
   1. Full-text embedding   — all day/slot/hotel descriptions concatenated.
   2. Structured summary    — compact "{destination} N days M INR. Top activities: …"
      string that gives a stronger similarity signal for search (Phase 23).
 
-Both rows land in the `embeddings` table with embedding_model="text-embedding-3-small".
+Both rows land in the `embeddings` table with embedding_model=EMBEDDING_MODEL.
 
-On any OpenAI failure the writer falls back to a single row with
+On any embedding failure the writer falls back to a single row with
 embedding_model="pending_retry" and vector=NULL so the trip is still
 marked completed and the system degrades gracefully. The startup recovery
 in main.py re-queues these rows automatically.
 
-The public seam for tests is `_call_openai_embed`; patch it to avoid network
-calls, exactly as the tool tests patch the Amadeus client.
+The public seam for tests is `_call_embed`; patch it to avoid network calls.
 """
 
 from __future__ import annotations
@@ -21,12 +24,18 @@ from __future__ import annotations
 import logging
 import uuid
 
+import httpx
 from sqlmodel import select
-from tenacity import retry, stop_after_attempt, wait_exponential_jitter
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential_jitter
+
+try:
+    from app.core.config import settings
+except ImportError:
+    from src.backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIM = 1536
 PENDING_RETRY_MODEL = "pending_retry"
 
@@ -87,26 +96,37 @@ def build_summary_text(
     return f"{destination} {num_days} days {cost_str} INR {budget_label}. Top activities: {activities_str}."
 
 
-# ── OpenAI call (the single network seam — patch this in tests) ───────────
+# ── Embedding call (the single network seam — patch this in tests) ────────
+
+
+class EmbeddingNotConfigured(RuntimeError):
+    """No API key — retrying cannot help."""
 
 
 @retry(
     wait=wait_exponential_jitter(initial=1, max=30),
     stop=stop_after_attempt(4),
+    retry=retry_if_not_exception_type(EmbeddingNotConfigured),
     reraise=True,
 )
-async def _call_openai_embed(text: str) -> list[float]:
-    """Call text-embedding-3-small with exponential back-off + jitter.
+async def _call_embed(text: str) -> list[float]:
+    """Embed one text with exponential back-off + jitter.
 
-    tenacity retries on any exception (covers rate-limit 429s, transient
-    network errors, and OpenAI 5xx). After 4 attempts the exception is
+    tenacity retries on any exception (rate-limit 429s, transient network
+    errors, 5xx) except a missing key. After 4 attempts the exception is
     re-raised so the caller can write a pending_retry row.
     """
-    from openai import AsyncOpenAI
+    if not settings.GOOGLE_API_KEY:
+        raise EmbeddingNotConfigured("GOOGLE_API_KEY is not configured")
 
-    client = AsyncOpenAI()
-    response = await client.embeddings.create(model=EMBEDDING_MODEL, input=text)
-    return response.data[0].embedding
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{EMBEDDING_MODEL}:embedContent",
+            headers={"x-goog-api-key": settings.GOOGLE_API_KEY},  # header, not URL: errors never carry the key
+            json={"content": {"parts": [{"text": text}]}, "outputDimensionality": EMBEDDING_DIM},
+        )
+        response.raise_for_status()
+        return response.json()["embedding"]["values"]
 
 
 # ── Row writer ────────────────────────────────────────────────────────────
@@ -123,7 +143,7 @@ async def write_embedding_rows(
 
     Failure handling
     ─────────────────
-    If the OpenAI call fails after all retries:
+    If the embedding call fails after all retries:
       1. Roll back any partially-added rows.
       2. Write ONE pending_retry row (vector=NULL, model="pending_retry").
       3. Commit the fallback row — the trip stays COMPLETED.
@@ -172,7 +192,7 @@ async def write_embedding_rows(
     # ── Generate vectors and write rows ─────────────────────────────────────
     try:
         for text in texts:
-            vector = await _call_openai_embed(text)
+            vector = await _call_embed(text)
             db.add(
                 Embedding(
                     itinerary_id=itinerary_id,

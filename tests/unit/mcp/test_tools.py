@@ -35,7 +35,7 @@ from src.ai.mcp_server.tools import (
     search_flights,
     search_hotels,
 )
-from tests.fakes import duffel_offer, duffel_response
+from tests.fakes import duffel_offer, duffel_response, liteapi_response
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 PAST = (date.today() - timedelta(days=1)).isoformat()
@@ -44,12 +44,11 @@ PAST = (date.today() - timedelta(days=1)).isoformat()
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
-def _fake_settings(client_id="fake_id", secret="fake_secret", otm="fake_key", owm="fake_key", duffel="fake_token"):
+def _fake_settings(otm="fake_key", owm="fake_key", duffel="fake_token", liteapi="fake_key"):
     """Return a MagicMock that looks like a configured mcp_settings."""
     s = MagicMock()
     s.DUFFEL_ACCESS_TOKEN = duffel
-    s.AMADEUS_CLIENT_ID = client_id
-    s.AMADEUS_CLIENT_SECRET = secret
+    s.LITEAPI_API_KEY = liteapi
     s.OPENTRIPMAP_API_KEY = otm
     s.OPENWEATHER_API_KEY = owm
     return s
@@ -178,7 +177,7 @@ def test_search_hotels_invalid_dates():
 
 
 def test_search_hotels_no_api_key():
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(client_id="", secret="")):
+    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings(liteapi="")):
         result = search_hotels(
             HotelSearchInput(
                 destination="Goa",
@@ -192,103 +191,70 @@ def test_search_hotels_no_api_key():
     assert result.code == "API_NOT_CONFIGURED"
 
 
-def test_search_hotels_unknown_destination():
-    with patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()):
-        result = search_hotels(
-            HotelSearchInput(
-                destination="Atlantis",
-                check_in="2025-12-10",
-                check_out="2025-12-15",
-                budget_per_night=5_000,
-                guests=1,
-            )
-        )
+def test_search_hotels_malformed_date_is_a_tool_error():
+    result = search_hotels(
+        HotelSearchInput(destination="Goa", check_in="soon", check_out="2025-12-15", budget_per_night=5_000)
+    )
     assert isinstance(result, ToolError)
-    assert result.code == "UNKNOWN_DESTINATION"
+    assert result.code == "INVALID_DATES"
+
+
+def _search_hotels(*responses, geocode=None, **input_overrides):
+    """Run search_hotels against faked LiteAPI responses; returns (result, httpx.post mock)."""
+    params = {"destination": "Goa", "check_in": "2025-12-10", "check_out": "2025-12-15", "budget_per_night": 5_000}
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools._geocode", return_value=geocode),
+        patch("src.ai.mcp_server.tools.httpx.post", side_effect=list(responses)) as mock_post,
+    ):
+        return search_hotels(HotelSearchInput(**{**params, **input_overrides})), mock_post
 
 
 def test_search_hotels_valid():
-    """Happy path — Amadeus hotel search mocked."""
-    hotels_list_resp = MagicMock()
-    hotels_list_resp.data = [{"hotelId": "HLGOAGOA"}]
+    """Happy path — LiteAPI prices the whole stay; the tool reports the nightly price."""
+    result, mock_post = _search_hotels(liteapi_response(("Goa Grand", 22_500.0)), guests=2)
 
-    offers_resp = MagicMock()
-    offers_resp.data = [
-        {
-            "hotel": {
-                "name": "Goa Grand",
-                "rating": "4",
-                "address": {"lines": ["Beach Road"], "cityName": "Goa"},
-            },
-            "offers": [{"price": {"base": "4500.00"}}],
-        }
-    ]
+    assert isinstance(result, list) and len(result) == 1
+    hotel = result[0]
+    assert isinstance(hotel, Hotel)
+    assert hotel.name == "Goa Grand" and hotel.stars == 4
+    assert hotel.price_per_night_inr == 4_500.0  # ₹22,500 over 5 nights
+    assert (hotel.lat, hotel.lng) == (15.5, 73.8)
 
-    with (
-        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
-        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
-        patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
-    ):
-        client = MockClient.return_value
-        client.reference_data.locations.hotels.by_city.get.return_value = hotels_list_resp
-        client.shopping.hotel_offers_search.get.return_value = offers_resp
-
-        result = search_hotels(
-            HotelSearchInput(
-                destination="Goa",
-                check_in="2025-12-10",
-                check_out="2025-12-15",
-                budget_per_night=5_000,
-                guests=2,
-            )
-        )
-
-    assert isinstance(result, list)
-    assert len(result) == 1
-    assert isinstance(result[0], Hotel)
-    assert result[0].price_per_night_inr <= 5_000
+    body = mock_post.call_args.kwargs["json"]
+    assert body["cityName"] == "Goa" and body["currency"] == "INR"
+    assert body["occupancies"] == [{"adults": 2}]
 
 
-def test_search_hotels_respects_budget():
-    """Hotels over budget_per_night must be filtered out."""
-    hotels_list_resp = MagicMock()
-    hotels_list_resp.data = [{"hotelId": "H1"}, {"hotelId": "H2"}]
+def test_search_hotels_respects_budget_and_sorts_by_price():
+    """Hotels over budget_per_night must be filtered out; the rest come cheapest first."""
+    result, _ = _search_hotels(
+        liteapi_response(("Mid", 20_000.0), ("Expensive", 45_000.0), ("Cheap", 7_500.0)),
+    )
+    assert [h.name for h in result] == ["Cheap", "Mid"]
 
-    offers_resp = MagicMock()
-    offers_resp.data = [
-        {
-            "hotel": {"name": "Cheap", "rating": "3", "address": {"lines": [""], "cityName": "Goa"}},
-            "offers": [{"price": {"base": "1500.00"}}],
-        },
-        {
-            "hotel": {"name": "Expensive", "rating": "5", "address": {"lines": [""], "cityName": "Goa"}},
-            "offers": [{"price": {"base": "9000.00"}}],  # over budget
-        },
-    ]
 
-    with (
-        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
-        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
-        patch("src.ai.mcp_server.tools.set_cached_sync"),
-        patch("src.ai.mcp_server.tools.AmadeusClient") as MockClient,
-    ):
-        client = MockClient.return_value
-        client.reference_data.locations.hotels.by_city.get.return_value = hotels_list_resp
-        client.shopping.hotel_offers_search.get.return_value = offers_resp
+def test_search_hotels_nothing_in_budget_names_the_cheapest():
+    result, _ = _search_hotels(liteapi_response(("Expensive", 45_000.0)))
+    assert isinstance(result, ToolError) and result.code == "NO_RESULTS"
+    assert "9,000" in result.error
 
-        result = search_hotels(
-            HotelSearchInput(
-                destination="Goa",
-                check_in="2025-12-10",
-                check_out="2025-12-15",
-                budget_per_night=2_000,
-                guests=1,
-            )
-        )
 
-    assert isinstance(result, list)
-    assert all(h.price_per_night_inr <= 2_000 for h in result)
+def test_search_hotels_puts_guests_two_to_a_room():
+    _, mock_post = _search_hotels(liteapi_response(("Goa Grand", 22_500.0)), guests=5)
+    assert mock_post.call_args.kwargs["json"]["occupancies"] == [{"adults": 2}, {"adults": 2}, {"adults": 1}]
+
+
+def test_search_hotels_falls_back_to_a_radius_search_for_regions():
+    """ "Kerala" matches no city in LiteAPI → search around its geocoded centre instead."""
+    result, mock_post = _search_hotels(
+        liteapi_response(), liteapi_response(("Backwater Inn", 15_000.0)), geocode=(10.35, 76.51), destination="Kerala"
+    )
+    assert [h.name for h in result] == ["Backwater Inn"]
+    fallback = mock_post.call_args_list[1].kwargs["json"]
+    assert (fallback["latitude"], fallback["longitude"]) == (10.35, 76.51) and "cityName" not in fallback
 
 
 # ── get_attractions ────────────────────────────────────────────────────────
@@ -311,7 +277,7 @@ def test_get_attractions_valid():
     """Happy path — OpenTripMap geocode + radius search mocked via httpx."""
     geo_response = MagicMock()
     geo_response.raise_for_status = MagicMock()
-    geo_response.json.return_value = {"lat": 15.4909, "lon": 73.8278}
+    geo_response.json.return_value = [{"lat": "15.4909", "lon": "73.8278"}]
 
     radius_response = MagicMock()
     radius_response.raise_for_status = MagicMock()
@@ -346,7 +312,7 @@ def test_get_attractions_no_matching_interests_returns_results():
     (unmapped interests fall back to 'interesting_places' kind)."""
     geo_response = MagicMock()
     geo_response.raise_for_status = MagicMock()
-    geo_response.json.return_value = {"lat": 15.4909, "lon": 73.8278}
+    geo_response.json.return_value = [{"lat": "15.4909", "lon": "73.8278"}]
 
     radius_response = MagicMock()
     radius_response.raise_for_status = MagicMock()
@@ -376,7 +342,7 @@ def test_get_attractions_geocode_not_found():
     """Destination that OpenTripMap can't geocode → NOT_FOUND ToolError."""
     geo_response = MagicMock()
     geo_response.raise_for_status = MagicMock()
-    geo_response.json.return_value = {}  # no lat/lon → geocode failed
+    geo_response.json.return_value = []  # no match → geocode failed
 
     with (
         patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
@@ -508,3 +474,31 @@ def test_provider_errors_never_leak_the_api_key():
     for result, code in ((attractions, "OTM_ERROR"), (weather, "OWM_ERROR")):
         assert isinstance(result, ToolError) and result.code == code
         assert "SECRET-KEY" not in result.error and "401" in result.error
+
+
+def test_get_attractions_searches_each_interest_and_skips_unnamed_places():
+    """One query per interest (results are nearest-first, so a combined query crowds interests out)."""
+
+    def places(*names):
+        response = MagicMock()
+        response.json.return_value = [
+            {"name": n, "kinds": "beaches", "rate": 3, "point": {"lat": 1, "lon": 2}} for n in names
+        ]
+        return response
+
+    with (
+        patch("src.ai.mcp_server.tools.mcp_settings", _fake_settings()),
+        patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
+        patch("src.ai.mcp_server.tools.set_cached_sync"),
+        patch("src.ai.mcp_server.tools._geocode", return_value=(15.3, 74.1)),
+        patch(
+            "src.ai.mcp_server.tools.httpx.get",
+            side_effect=[places("Baga Beach", ""), places("Fort Aguada", "Baga Beach")],
+        ) as mock_get,
+    ):
+        result = get_attractions(AttractionInput(destination="Goa", interests=["beaches", "history"], limit=6))
+
+    assert [a.name for a in result] == ["Baga Beach", "Fort Aguada"]  # unnamed dropped, duplicate kept once
+    kinds = [call.kwargs["params"]["kinds"] for call in mock_get.call_args_list]
+    assert kinds == ["beaches", "historic,museums,cultural"]  # "beaches" matched via its singular
+    assert all(call.kwargs["params"]["limit"] == 3 for call in mock_get.call_args_list)

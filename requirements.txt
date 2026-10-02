@@ -32,14 +32,11 @@ mcp[cli]>=1.10.0   # structured tool results (list returns)
 
 # ── Agents (Phase 6+) ─────────────────────────────────────────
 langgraph>=0.2.0
-langchain-google-genai>=1.0.0  # Gemini Flash — FlightAgent, HotelAgent, ActivitiesAgent, Orchestrator
-langchain-groq>=0.2.0          # Phase 12 — ItineraryBuilder (Groq/Llama 3.3, free tier)
-langchain-anthropic>=0.3.0     # Phase 16 — PreferenceExtractor (Claude Haiku 4.5)
+langchain-google-genai>=1.0.0  # Gemini Flash — intent parsing, refinement classifier
+langchain-groq>=0.2.0          # ItineraryBuilder + PreferenceExtractor (Groq, free tier)
 
 # ── External APIs (Phase 3) ───────────────────────────────────
-amadeus>=9.0.0   # hotels only — flights moved to Duffel (plain httpx)
 httpx>=0.27.0
 
 # ── Embeddings (Phase 14) ─────────────────────────────────────
-openai>=1.0.0      # AsyncOpenAI client + text-embedding-3-small
-tenacity>=8.0.0    # exponential back-off for OpenAI rate limits
+tenacity>=8.0.0    # exponential back-off around the Gemini embedding call

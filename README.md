@@ -1,7 +1,7 @@
 # AI Trip Planner
 
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
-> Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq Llama 3.3 · Claude Haiku · pgvector.
+> Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
 **Status: Phase 17 / 50 — Frontend: Chat Interface & SSE Streaming**
 
@@ -19,9 +19,9 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
                                           └─────┴─────────────┘
                                                 │
                                         MCP Server (5 tools)
-                               Duffel · OpenTripMap · OpenWeatherMap
+                         Duffel · LiteAPI · OpenTripMap · OpenWeatherMap
                                                 │
-                                   ItineraryBuilder (Groq Llama 3.3)
+                                   ItineraryBuilder (Groq gpt-oss-120b)
                                       → Evaluator (deterministic)
                                                 │
                                       Postgres + pgvector
@@ -148,7 +148,7 @@ tripplanner-ai/
 │       ├── llm.py                       ← model IDs + tolerant JSON parsing of LLM replies
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
 │       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
-│       ├── embeddings/                  ← Phase 14: OpenAI embedding writer
+│       ├── embeddings/                  ← Phase 14: Gemini embedding writer
 │       ├── utils/
 │       │   ├── run_logger.py            ← Phase 6: writes agent_runs
 │       │   ├── conversation.py          ← Phase 7B/15: Redis history + planning state
@@ -163,7 +163,7 @@ tripplanner-ai/
 │       │   ├── refinement_classifier.py ← Phase 15: which agents a follow-up message re-runs
 │       │   └── preference_extractor.py  ← Phase 16: learning lasting preferences from trips
 │       ├── builder/
-│       │   └── builder.py               ← Phase 12: ItineraryBuilder (Groq Llama 3.3), data-scope + budget-math validation
+│       │   └── builder.py               ← Phase 12: ItineraryBuilder (Groq gpt-oss-120b), data-scope + budget-math validation
 │       └── orchestrator/
 │           └── orchestrator.py          ← Phase 9–16: full graph with preference injection, refinement & loops
 ├── migrations/                          ← Alembic migrations
@@ -197,7 +197,7 @@ tripplanner-ai/
 |-------|-------------|--------|-------|
 | 1 | Repo & Local Infrastructure | ✅ Done | 4 unit + 1 integration |
 | 2 | MCP Server (protocol + mocked tools) | ✅ Done | 23 tool tests |
-| 3 | MCP Server (real APIs: Duffel, OpenTripMap, OWM) | ✅ Done | 31 tool + 7 contract tests |
+| 3 | MCP Server (real APIs: Duffel, LiteAPI, OpenTripMap, OWM) | ✅ Done | 36 tool + 7 contract tests |
 | 4 | Database schema & migrations | ✅ Done | — |
 | 5 | FastAPI gateway, JWT auth, SSE skeleton | ✅ Done | 5 auth + 6 trip + 4 health |
 | 6 | FlightAgent: one agent, one tool | ✅ Done | 6 agent + 4 MCP client + 2 logger |
@@ -208,7 +208,7 @@ tripplanner-ai/
 | 11 | Evaluator Agent: Self-Checking | ✅ Done | 18 evaluator + 1 retry-chain |
 | 12 | Itinerary Builder | ✅ Done | 6 builder + 8 orchestrator (new) + 2 integration |
 | 13 | Persistence: Storing Every Run | ✅ Done | 9 agent_runs + timeline |
-| 14 | Embedding Generation (OpenAI) | ✅ Done | 21 unit + 4 integration |
+| 14 | Embedding Generation (Gemini, 1536-dim) | ✅ Done | 21 unit + 4 integration |
 | 15 | Multi-Turn Refinement | ✅ Done | 27 unit tests |
 | 16 | User Preferences & Personalisation | ✅ Done | 56 unit tests |
 | 17 | Frontend: Chat Interface & SSE Streaming | ✅ Done | 6 status unit + 3 Playwright E2E |
@@ -219,7 +219,7 @@ tripplanner-ai/
 
 **Total: 288 unit + contract, 14 integration, 3 browser E2E — all passing.** Zero network calls in CI.
 
-> ⚠️ Not yet verified against live APIs: see "Still not verified" in [docs/phase1-17_audit.md](docs/phase1-17_audit.md). Hotels currently have no provider.
+> Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
 ---
 
@@ -227,19 +227,17 @@ tripplanner-ai/
 
 | Variable | Service | Sign-up |
 |---|---|---|
-| `GOOGLE_API_KEY` | Intent parsing + refinement classifier (Gemini Flash) | https://aistudio.google.com/apikey |
-| `GROQ_API_KEY` | Itinerary Builder (Llama 3.3) | https://console.groq.com |
-| `DUFFEL_ACCESS_TOKEN` | Flights (test-mode token is enough) | https://duffel.com |
+| `GOOGLE_API_KEY` | Gemini — intent parsing, refinement classifier, embeddings | https://aistudio.google.com/apikey |
+| `GROQ_API_KEY` | Groq — itinerary builder, preference extraction | https://console.groq.com |
+| `DUFFEL_ACCESS_TOKEN` | Flights (a test-mode token returns sandbox offers) | https://duffel.com |
+| `LITEAPI_API_KEY` | Hotels (the free sandbox key is enough) | https://liteapi.travel |
 | `OPENTRIPMAP_API_KEY` | Attractions | https://opentripmap.io |
-| `OPENWEATHER_API_KEY` | Weather | https://openweathermap.org/api |
-| `OPENAI_API_KEY` | Embeddings — optional | https://platform.openai.com |
-| `ANTHROPIC_API_KEY` | Preference extraction — optional | https://console.anthropic.com |
+| `OPENWEATHER_API_KEY` | Weather tool — optional, not used by planning yet | https://openweathermap.org/api |
 
-**Hotels:** Amadeus closed its self-service portal on 2026-07-17 and no replacement is wired in yet.
-`search_hotels` returns `API_NOT_CONFIGURED` and trips are planned without a hotel.
+Five keys, all free tier. Geocoding uses Nominatim (OpenStreetMap) and needs no key.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
-A missing optional key degrades one feature (embeddings are queued as `pending_retry`; preferences fall back to a heuristic) — it never fails a trip.
+A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.
 Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is an `.env` change.
 
 ---
@@ -261,11 +259,11 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Auth | JWT (python-jose + passlib/bcrypt) |
 | SSE | sse-starlette + Redis pub/sub |
 | Agents | LangGraph, MCP SDK |
-| LLMs | Gemini Flash (intent parsing, refinement), Groq Llama 3.3 (itinerary), Claude Haiku 4.5 (preference extraction) |
+| LLMs | Gemini Flash (intent parsing, refinement), Groq gpt-oss-120b (itinerary, preference extraction) |
 | Database | PostgreSQL 16 + pgvector |
 | Cache | Redis 7 |
 | ORM | SQLModel + Alembic |
-| Embeddings | OpenAI text-embedding-3-small (Phase 14) |
+| Embeddings | Gemini `gemini-embedding-001` at 1536 dimensions (Phase 14) |
 | Observability | LangSmith, Sentry (Phase 26+) |
 | Deploy | Railway (backend), Vercel (frontend), Neon (DB), Upstash (Redis) |
 
