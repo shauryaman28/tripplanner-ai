@@ -263,3 +263,14 @@
 95. **The page keeps listening when the request that starts a run fails on the way back.** If `POST /plan` or `/refine` errors (a proxy timeout), the page now asks `GET /status` before giving up: when the trip is "planning", it waits for the outcome as usual instead of telling the user something went wrong while a run is in flight.
 
 96. **The MCP SDK is pinned below 2.0.** `requirements.txt` allowed any version; CI and every fresh install picked up 2.x, which renames the result fields the client reads (`isError` → `is_error`, `structuredContent` → `structured_content`), so every tool result would have been unparseable. The app is built and verified on 1.x.
+
+---
+
+## The assistant says what changed (2026-10-02)
+
+97. **After a change request the assistant lists what changed — worked out by comparing the two plans, not by a model.** The reply used to be "Done — the plan now comes to ₹X". The page holds the itinerary from before the request and the one that came back; `lib/changes.ts` compares them and reports the stay, the flight, places added / removed / moved, the trip's length and dates, the destination, and how the total moved ("Stay: Umaid Mahal → Radisson Blu (₹8,014 → ₹11,766 a night)"). A model writing this summary could claim a change that did not happen; a diff cannot. When nothing a traveller would notice is different, the assistant says the plan came out the same. It is done in the frontend because both plans are already there on either path a run can end (SSE or polling) — no new endpoint, no stored text to keep in step.
+
+98. **A targeted refinement changes only what was asked for.** The summary (#97) showed what #55 had missed: the builder rewrites the whole plan each time and had never seen the previous one, so a new hotel came with every stop reshuffled, different activities swapped the hotel back, and "add a food stop" removed every stop that was not food. Now the builder is shown the current plan and told to keep the rest (prompt v8); the lists it chooses from are narrowed to what the plan already uses for everything the request is not about; newly found places are added to the plan's places instead of replacing them.
+
+99. **A flights refinement keeps the flights already found in the running.** The plan always carries the cheapest flight, and prices move between searches (a re-search for "make it cheaper" came back ₹169 dearer). With the earlier flights still on the list the cheapest can only stay or improve; when nothing cheaper turns up, the assistant says the plan is unchanged. Consequence: such a refinement can no longer end in a budget conflict unless the plan had no flights before.
+

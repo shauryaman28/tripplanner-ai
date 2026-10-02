@@ -82,7 +82,7 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 359 tests
+# Unit + contract tests (no Docker, no network) — 363 tests
 pytest tests/unit/ tests/contract/ -v
 
 # Integration tests (Docker Postgres + Redis) — 16 tests, incl. the full
@@ -90,7 +90,7 @@ pytest tests/unit/ tests/contract/ -v
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser E2E (Playwright) — 4 tests. Starts its own stack: a stub backend
+# Browser tests (Playwright) — 12 tests: 4 end-to-end flows + 8 for the change summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
 # `tripplanner_db_e2e` database, and a second Next.js dev server on :3100.
 cd src/frontend
@@ -114,6 +114,7 @@ tripplanner-ai/
 │   │   ├── tsconfig.json
 │   │   ├── playwright.config.ts         ← starts the E2E stack (stub backend :8100, dev server :3100)
 │   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, budget conflict
+│   │   ├── e2e/changes.spec.ts          ← what the assistant says changed (pure function tests)
 │   │   └── src/
 │   │       ├── app/
 │   │       │   ├── globals.css          ← component classes (.btn, .card, .pin…) and Leaflet overrides
@@ -126,7 +127,8 @@ tripplanner-ai/
 │   │       ├── components/              ← ItineraryView, CostSummary, DayCard, ItineraryMap (Phase 18),
 │   │       │                              AgentProgressPanel, MessageThread, ChatInput, AppHeader, Brand, ui
 │   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), map.ts (pins, routes,
-│   │                                      day colours), places.ts, format.ts, types.ts
+│   │                                      day colours), changes.ts (what a change request changed),
+│   │                                      places.ts, format.ts, types.ts
 │   ├── backend/
 │   │   ├── Dockerfile
 │   │   └── app/
@@ -175,7 +177,7 @@ tripplanner-ai/
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (352 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (356 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 7 tests)
 │   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 16 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
@@ -216,6 +218,7 @@ tripplanner-ai/
 | 15 | Multi-Turn Refinement | ✅ Done | 27 unit tests |
 | 16 | User Preferences & Personalisation | ✅ Done | 56 unit tests |
 | 17 | Frontend: Chat Interface & SSE Streaming | ✅ Done | 6 status unit + 3 Playwright E2E |
+| — | Change summary in the chat; refinements change only what was asked (DECISIONS #97–#99) | ✅ Done | 4 unit + 8 browser |
 | — | Out-of-scope trip hardening: destination lookup, LLM fallback, day coverage (DECISIONS #90–#96) | ✅ Done | 18 unit + 1 integration |
 | 1–17 | End-to-end audit ([docs/phase1-17_audit.md](docs/phase1-17_audit.md)) | ✅ Done | 26 regression unit + 5 pipeline/schema integration |
 | 18 | Map View (Leaflet) + frontend redesign ([docs/phase18_build_log.md](docs/phase18_build_log.md)) | ✅ Done | 33 unit + 4 Playwright E2E |
@@ -223,7 +226,7 @@ tripplanner-ai/
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 359 unit + contract, 16 integration, 4 browser E2E — all passing.** Zero network calls in CI.
+**Total: 363 unit + contract, 16 integration, 12 browser (4 end-to-end flows + 8 change-summary) — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 

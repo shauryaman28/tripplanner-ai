@@ -300,7 +300,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **359 passed**, no network, no Docker.
+Expected: **363 passed**, no network, no Docker.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -475,7 +475,9 @@ Things to try:
 - Click a pin → popup. Click a day in the map legend → only that day. Click a stop's **Map**
   button in a day card → the map scrolls into view with that pin open.
 - Ask for a change ("Switch to a nicer hotel") → the plan dims while it updates; only that search
-  runs again.
+  runs again, and the assistant replies with what changed ("Stay: A → B (₹8,014 → ₹11,766 a night)")
+  and how the total moved. The stops stay where they were. "Add some forts" adds places without
+  removing the others; "Make it cheaper" with nothing cheaper says the plan came out the same.
 - Create a trip with a budget the flights eat up (e.g. ₹12,000) → "Over budget" with three options.
   Reload — the options are still there.
 - Narrow the window to phone width → the plan comes first, with an "Ask for a change" button.
@@ -490,7 +492,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 4 passed
+npx playwright test                 # 12 passed
 ```
 
 Playwright runs `python -m tests.e2e.stub_backend`, so the venv must be active (or set
@@ -537,4 +539,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **16** | `PUT /users/preferences` with `"preferred_airlines": ["IndiGo"]` → `422` (IATA codes only). The extractor never overwrites a preference you set. |
 | **Scope** | Create a trip to "London" and plan it → it fails within seconds: "London is in United Kingdom. This planner covers trips within India for now." Nothing is saved, and the reason is still there after a reload (`GET /status` → `failure_reason`). Try to create a 30-night trip → refused ("at most 14 nights"). Empty `GOOGLE_API_KEY` (or exhaust Gemini's 20 requests a day) → planning and refinements still work: the log says "Gemini unavailable … asking Groq". |
 | **18 (Map)** | Open a planned trip → the map under the day cards shows numbered pins coloured by day, a line joining each day's stops, a gold hotel pin and airport markers; click a pin for its details. Null a slot's `lat` in the itinerary JSON → that pin disappears, the place is listed under the map and its day card says "No map location" — the map still renders. `GET /trips/{id}/runs` → the `persist` row's `unmapped_activities` lists it. |
-| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 4 passed. |
+| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 12 passed. |

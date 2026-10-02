@@ -131,7 +131,11 @@ test("register, create trip, plan, see itinerary cards and map, refine", async (
   await chat.fill("Change hotels to something closer to the beach");
   await chat.press("Enter");
   await expect(page.getByText(/looking for a different place to stay/i)).toBeVisible();
-  await expect(page.getByText(/the plan now comes to/i)).toBeVisible({ timeout: 90_000 });
+  // the assistant says what changed — worked out by comparing the two plans
+  const changes = page.getByRole("list", { name: "What changed" });
+  await expect(changes).toBeVisible({ timeout: 90_000 });
+  await expect(changes.getByRole("listitem")).toHaveText(["Stay: Goa Grand → Baga Beach House (same price, ₹4,500 a night)"]);
+  await expect(page.getByText("Done. The total stays at ₹17,200.")).toBeVisible();
   await expect(itinerary.getByRole("article").first()).toContainText("Baga Beach House"); // the other hotel
   // only the hotel search ran again; the other two are carried forward as done (not "not started")
   await expect(progress.getByText("Found 2 hotels")).toBeVisible();

@@ -668,6 +668,87 @@ async def test_refine_targeted_hotel_reruns_only_hotel_agent_and_keeps_flights()
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("refinement", "builder_hotels", "builder_attractions"),
+    [
+        # different activities → the hotel in the plan is the only one on offer; the new finds join
+        # the places already in the plan, so adding one stop does not cost the others
+        ("targeted_activities", ["Old Inn"], ["Reis Magos Fort", "Fort Aguada"]),
+        # a different hotel → every hotel found is on offer; only the places already in the plan
+        ("targeted_hotel", ["Beach House", "Sea View"], ["Fort Aguada"]),
+        # different flights → neither the hotel nor the places may change
+        ("targeted_flights", ["Old Inn"], ["Fort Aguada"]),
+    ],
+)
+async def test_a_targeted_refinement_only_offers_the_builder_a_choice_in_what_was_asked_for(
+    refinement, builder_hotels, builder_attractions
+):
+    """Asking for different activities once swapped the hotel too: the builder re-chose from the full list."""
+    from contextlib import ExitStack
+
+    from src.ai.orchestrator.orchestrator import OrchestratorAgent
+
+    prior = {
+        **_PRIOR,
+        "hotels": [
+            {"name": "Old Inn", "price_per_night_inr": 3_000.0},
+            {"name": "Grand", "price_per_night_inr": 9_000.0},
+        ],
+        "attractions": [{"name": "Fort Aguada"}, {"name": "Baga Beach"}],
+        "draft_itinerary": {
+            "days": [
+                {"day": 1, "date": "2026-12-10", "morning": {"activity": "Fort Aguada"}, "hotel": {"name": "Old Inn"}},
+                {"day": 2, "date": "2026-12-11", "hotel": {"name": "Old Inn"}},
+                {"day": 3, "date": "2026-12-12"},
+            ],
+            "total_cost": 14_000.0,
+        },
+    }
+    with ExitStack() as stack:
+        mocks = _orchestrator_mocks(
+            stack,
+            FlightAgent={"flights": [{"airline": "AI", "price_inr": 7_000.0}], "error": None},
+            HotelAgent={
+                "hotels": [
+                    {"name": "Beach House", "price_per_night_inr": 4_000.0},
+                    {"name": "Sea View", "price_per_night_inr": 5_000.0},
+                ],
+                "error": None,
+            },
+            ActivitiesAgent={"attractions": [{"name": "Reis Magos Fort"}], "error": None},
+            ItineraryBuilder={"draft": _DRAFT, "error": None},
+        )
+        stack.enter_context(patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={})))
+        await OrchestratorAgent().refine(refinement, prior, "a change", turn=2)
+
+    offered = mocks["ItineraryBuilder"].run.await_args_list[0].kwargs  # the first build, before any retry
+    assert [h["name"] for h in offered["hotels"]] == builder_hotels
+    assert [a["name"] for a in offered["attractions"]] == builder_attractions
+    # ...and it is shown the plan it is changing, so the rest can stay where it is
+    assert offered["trip_meta"]["previous_plan"][0] == {
+        "date": "2026-12-10",
+        "morning": "Fort Aguada",
+        "afternoon": None,
+        "evening": None,
+        "hotel": "Old Inn",
+    }
+    if refinement == "targeted_flights":
+        # the flight already in the plan stays in the running: "cheaper" can never come back dearer
+        assert sorted(f["price_inr"] for f in offered["flights"]) == [7_000.0, 8_000.0]
+
+
+def test_the_builder_is_told_to_change_only_what_was_asked():
+    from src.ai.builder.builder import _build_user_prompt
+
+    meta = {"destination": "Goa", "start_date": "2026-12-10", "end_date": "2026-12-11", "request": "a nicer hotel"}
+    outline = [{"date": "2026-12-10", "morning": "Fort Aguada", "afternoon": None, "evening": None, "hotel": "Old Inn"}]
+
+    prompt = _build_user_prompt({**meta, "previous_plan": outline}, [], [], [])
+    assert '"morning": "Fort Aguada"' in prompt and "Change ONLY what the request asks for" in prompt
+    assert "current itinerary" not in _build_user_prompt(meta, [], [], [])  # nothing to keep to on a re-plan
+
+
+@pytest.mark.asyncio
 async def test_refine_targeted_hotel_failure_keeps_previous_hotels():
     from contextlib import ExitStack
 
@@ -698,7 +779,9 @@ async def test_refine_targeted_flights_runs_budget_check_and_escalates_on_confli
 
     with ExitStack() as stack:
         mocks = _orchestrator_mocks(stack, FlightAgent={"flights": [{"price_inr": 40_000.0}], "error": None})
-        result = await OrchestratorAgent().refine("targeted_flights", _PRIOR, "make it cheaper", publish_fn=publish)
+        # the plan had no flights yet (the earlier search failed), so the dear ones found now are all there is
+        no_flights = {**_PRIOR, "flights": []}
+        result = await OrchestratorAgent().refine("targeted_flights", no_flights, "make it cheaper", publish_fn=publish)
 
     assert result["budget_decision"]["decision"] == "escalate"
     assert "budget_conflict" in [e.get("event") for e in published]

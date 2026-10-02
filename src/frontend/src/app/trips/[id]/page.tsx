@@ -24,6 +24,7 @@ import ItineraryView from "@/components/ItineraryView";
 import MessageThread, { AssistantAvatar, type Message } from "@/components/MessageThread";
 import { TripStatusBadge } from "@/components/ui";
 import { clarifyTrip, getItinerary, getToken, getTrip, getTripStatus, planTrip, refineTrip, replanTrip } from "@/lib/api";
+import { describeChanges } from "@/lib/changes";
 import { formatDateRange, formatINR, nightsBetween, plural } from "@/lib/format";
 import { WHOLE_RUN, deriveAgentStates, useSSE, type RunScope } from "@/lib/sse";
 import type { AgentStatus, BudgetConflict, BudgetConflictOption, Itinerary, ReplanChoice, Trip, TripStatus } from "@/lib/types";
@@ -352,23 +353,30 @@ export default function TripDetailPage() {
   phaseRef.current = phase;
   const itineraryRef = useRef(itinerary);
   itineraryRef.current = itinerary;
+  const tripRef = useRef(trip);
+  tripRef.current = trip;
   const eventsRef = useRef(events);
   const agentStatesRef = useRef<RunScope["carried"]>({});
   // True while a run's outcome is still owed; SSE and polling race to report it.
   const awaitingOutcome = useRef(false);
 
-  const addMessage = useCallback((role: Message["role"], text: string) => {
-    setMessages((prev) => [...prev, { role, text, id: uid() }]);
+  const addMessage = useCallback((role: Message["role"], text: string, points?: string[]) => {
+    setMessages((prev) => [...prev, { role, text, points, id: uid() }]);
   }, []);
 
   useEffect(() => {
     if (trip) document.title = `${trip.destination} · TripPlanner AI`;
   }, [trip]);
 
-  // Keep the newest message in view by scrolling the thread itself — never the page.
+  // Keep the newest message in view by scrolling the thread itself — never the page. A reply
+  // taller than the thread (a list of changes) is shown from its first line, not its last.
   useEffect(() => {
     const thread = threadRef.current;
-    if (thread) thread.scrollTop = thread.scrollHeight;
+    if (!thread) return;
+    thread.scrollTop = thread.scrollHeight;
+    const newest = thread.querySelector<HTMLElement>("[aria-live] > :last-child");
+    const cutOff = newest ? thread.getBoundingClientRect().top - newest.getBoundingClientRect().top : 0;
+    if (cutOff > 0) thread.scrollTop -= cutOff + 12;
   }, [messages.length]);
 
   // Small screens stack the plan above the assistant: a run that delivers a plan scrolls up to
@@ -451,17 +459,22 @@ export default function TripDetailPage() {
         try {
           const [latest, refreshed] = await Promise.all([getItinerary(tripId), getTrip(tripId)]);
           const total = formatINR(latest.total_cost ?? latest.structured_data?.total_cost ?? 0);
+          // After a change request: say what is different now, by comparing the two plans.
+          const summary =
+            previous?.structured_data && latest.structured_data
+              ? describeChanges(previous.structured_data, latest.structured_data, { before: tripRef.current, after: refreshed })
+              : null;
           if (latest.id === previous?.id) {
             // Polling sees a refinement that failed as "completed" — the plan it left alone still
             // stands — so an unchanged itinerary is the only sign that nothing happened.
             addMessage("assistant", "That change couldn't be made, so your itinerary is unchanged.");
-          } else if (previous && JSON.stringify(latest.structured_data) === JSON.stringify(previous.structured_data)) {
+          } else if (summary && !summary.changed) {
             addMessage("assistant", "I searched again and the plan came out the same. Tell me more about what you'd like instead.");
+          } else if (summary) {
+            addMessage("assistant", `Done. ${summary.headline}`, summary.points);
+            setDelivered((count) => count + 1);
           } else {
-            addMessage(
-              "assistant",
-              previous ? `Done — the plan now comes to ${total}.` : `Your itinerary is ready — ${total} in total. Ask me for any change.`,
-            );
+            addMessage("assistant", `Your itinerary is ready — ${total} in total. Ask me for any change.`);
             setDelivered((count) => count + 1);
           }
           refreshProgress();
