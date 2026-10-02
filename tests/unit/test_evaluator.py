@@ -22,6 +22,7 @@ from src.ai.agents.evaluator import (
     EvaluatorVerdict,
     check_activity_dates,
     check_budget_consistency,
+    check_day_coverage,
     check_duplicate_activities,
     check_hallucinated_activities,
     evaluate_itinerary,
@@ -31,6 +32,7 @@ from src.ai.agents.evaluator import (
 
 TRIP_START = "2026-12-10"
 TRIP_END = "2026-12-17"
+DRAFT_END = "2026-12-10"  # _good_draft() plans a single day
 
 ATTRACTIONS = [
     {"name": "Fort Aguada", "category": "history"},
@@ -120,12 +122,33 @@ def test_check_hallucinated_activities_passes_for_known_activities():
     assert check_hallucinated_activities(draft, ATTRACTIONS) is None
 
 
+# ── Fixture 1b: missing_days ────────────────────────────────────────────────
+
+
+def test_check_day_coverage_catches_a_plan_that_stops_early():
+    """A year-long trip once came back as one day and was saved as planned."""
+    failure = check_day_coverage(_good_draft(), TRIP_START, TRIP_END)  # 8 days asked for, 1 planned
+    assert failure.check == "missing_days"
+    assert "8 days" in failure.detail and "2026-12-11" in failure.detail and "2 more" in failure.detail
+
+
+def test_check_day_coverage_catches_a_repeated_day():
+    draft = _good_draft()
+    draft["days"].append({**draft["days"][0], "day": 2})
+    assert "more than one entry for 2026-12-10" in check_day_coverage(draft, TRIP_START, DRAFT_END).detail
+
+
+def test_check_day_coverage_passes_when_every_day_is_planned():
+    assert check_day_coverage(_good_draft(), TRIP_START, DRAFT_END) is None
+    assert check_day_coverage(_good_draft(), "not a date", TRIP_END) is None  # nothing to check against
+
+
 # ── evaluate_itinerary combined ────────────────────────────────────────────
 
 
 def test_evaluate_itinerary_good_itinerary_passes_all_checks():
     verdict = evaluate_itinerary(
-        _good_draft(), TRIP_START, TRIP_END, expected_budget_total=5200, attractions=ATTRACTIONS
+        _good_draft(), TRIP_START, DRAFT_END, expected_budget_total=5200, attractions=ATTRACTIONS
     )
     assert verdict.passed is True
     assert verdict.failures == []
@@ -199,7 +222,7 @@ async def test_evaluator_agent_run_logs_agent_run_completed():
     verdict = await agent.run(
         draft=_good_draft(),
         trip_start=TRIP_START,
-        trip_end=TRIP_END,
+        trip_end=DRAFT_END,
         expected_budget_total=5200,
         attractions=ATTRACTIONS,
         db=mock_session,

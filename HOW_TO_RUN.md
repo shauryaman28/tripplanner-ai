@@ -300,7 +300,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **341 passed**, no network, no Docker.
+Expected: **359 passed**, no network, no Docker.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -308,7 +308,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **15 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **16 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → refine → add-day,
 budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -535,5 +535,6 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **14** | Unset `GOOGLE_API_KEY` → `planning_complete` is not delayed, the trip is `completed`, one `pending_retry` row exists, `GET /admin/embedding-health` says `degraded`; restart → it is retried. |
 | **15** | Refine twice → turns 2 and 3, each on the previous turn's state. A refinement that fails leaves the trip `completed` with the earlier itinerary. `POST /refine` before any successful plan → `409`. |
 | **16** | `PUT /users/preferences` with `"preferred_airlines": ["IndiGo"]` → `422` (IATA codes only). The extractor never overwrites a preference you set. |
+| **Scope** | Create a trip to "London" and plan it → it fails within seconds: "London is in United Kingdom. This planner covers trips within India for now." Nothing is saved, and the reason is still there after a reload (`GET /status` → `failure_reason`). Try to create a 30-night trip → refused ("at most 14 nights"). Empty `GOOGLE_API_KEY` (or exhaust Gemini's 20 requests a day) → planning and refinements still work: the log says "Gemini unavailable … asking Groq". |
 | **18 (Map)** | Open a planned trip → the map under the day cards shows numbered pins coloured by day, a line joining each day's stops, a gold hotel pin and airport markers; click a pin for its details. Null a slot's `lat` in the itinerary JSON → that pin disappears, the place is listed under the map and its day card says "No map location" — the map still renders. `GET /trips/{id}/runs` → the `persist` row's `unmapped_activities` lists it. |
 | **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 4 passed. |

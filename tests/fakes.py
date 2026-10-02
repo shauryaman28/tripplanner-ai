@@ -121,12 +121,18 @@ def flight(price: float, day: str = "2030-01-10") -> dict:
 
 
 async def fake_builder_llm(_system: str, user_prompt: str) -> str:
-    """Stand-in for the Groq call: a valid 2-day draft built only from the data in the prompt.
+    """Stand-in for the Groq call: a valid draft, one entry per day of the trip, built only from the data in the prompt.
 
-    Like a real model it names places and leaves the coordinates wrong or
-    missing — the builder attaches the real ones from the source data.
+    Two attractions a day until they run out, then free days; the hotel on every
+    day but the last. Like a real model it names places and leaves the
+    coordinates wrong or missing — the builder attaches the real ones from the
+    source data.
     """
-    start = date.fromisoformat(re.search(r"from (\d{4}-\d{2}-\d{2}) to", user_prompt).group(1))
+    start, end = (
+        date.fromisoformat(d)
+        for d in re.search(r"from (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})", user_prompt).groups()
+    )
+    last = (end - start).days
     flights, hotels, attractions = (
         json.loads(re.search(rf"Available {kind} \(JSON\): (\[.*?\])\n", user_prompt).group(1))
         for kind in ("flights", "hotels", "attractions")
@@ -145,10 +151,10 @@ async def fake_builder_llm(_system: str, user_prompt: str) -> str:
             "morning": slot(2 * n),
             "afternoon": slot(2 * n + 1),
             "evening": None,
-            "hotel": hotel,
+            "hotel": hotel if n < last else None,  # N days, N-1 nights
             "flight": None,
         }
-        for n in range(2)
+        for n in range(last + 1)
     ]
     total = min((f["price_inr"] for f in flights), default=0) + sum(
         d["hotel"]["cost_per_night"] for d in days if d["hotel"]

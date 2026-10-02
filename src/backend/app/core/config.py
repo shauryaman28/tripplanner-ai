@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.5-flash"
     GROQ_API_KEY: str = ""  # itinerary builder, preference extractor
     GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_SMALL_MODEL: str = "openai/gpt-oss-20b"  # stands in for Gemini when it is unavailable (src/ai/llm.py)
 
     @property
     def cors_origins(self) -> list[str]:

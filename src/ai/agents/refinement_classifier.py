@@ -37,10 +37,9 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
-from src.ai.llm import GEMINI_MODEL, parse_json_object
+from src.ai.llm import ask, parse_json_object
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +113,7 @@ async def classify_refinement(
     message: str,
     conversation_history: list[dict],
 ) -> RefinementClassification:
-    """Classify a refinement message using Gemini Flash at temperature=0.
+    """Classify a refinement message with one short LLM call at temperature=0.
 
     Returns a RefinementClassification. On any LLM or parse failure, falls
     back to "full_replan" — the safest default (re-derives everything from
@@ -131,12 +130,11 @@ async def classify_refinement(
     prompt = _SYSTEM_PROMPT.format(history=history_text, message=message)
 
     try:
-        llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
-        return RefinementClassification(**parse_json_object((await llm.ainvoke(prompt)).content))
+        return RefinementClassification(**parse_json_object(await ask(prompt)))
 
     except Exception as exc:
-        logger.warning("RefinementClassifier failed (%s) — defaulting to full_replan", exc)
+        logger.warning("RefinementClassifier failed (%s) — defaulting to full_replan", str(exc)[:200])
         return RefinementClassification(
             refinement_type="full_replan",
-            reason=f"Classification failed ({exc}); safe fallback.",
+            reason=f"Classification failed ({str(exc)[:200]}); safe fallback.",
         )

@@ -277,7 +277,9 @@ def test_get_attractions_valid():
     """Happy path — OpenTripMap geocode + radius search mocked via httpx."""
     geo_response = MagicMock()
     geo_response.raise_for_status = MagicMock()
-    geo_response.json.return_value = [{"lat": "15.4909", "lon": "73.8278"}]
+    geo_response.json.return_value = [  # what Nominatim says for a well-known place
+        {"lat": "15.4909", "lon": "73.8278", "class": "boundary", "importance": 0.65, "address": {"country_code": "in"}}
+    ]
 
     radius_response = MagicMock()
     radius_response.raise_for_status = MagicMock()
@@ -312,7 +314,9 @@ def test_get_attractions_no_matching_interests_returns_results():
     (unmapped interests fall back to 'interesting_places' kind)."""
     geo_response = MagicMock()
     geo_response.raise_for_status = MagicMock()
-    geo_response.json.return_value = [{"lat": "15.4909", "lon": "73.8278"}]
+    geo_response.json.return_value = [  # what Nominatim says for a well-known place
+        {"lat": "15.4909", "lon": "73.8278", "class": "boundary", "importance": 0.65, "address": {"country_code": "in"}}
+    ]
 
     radius_response = MagicMock()
     radius_response.raise_for_status = MagicMock()

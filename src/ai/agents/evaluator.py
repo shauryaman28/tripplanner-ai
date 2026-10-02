@@ -1,11 +1,13 @@
 """Evaluator Agent — Phase 11: Self-checking before itinerary finalization.
 
 Intended to run after ItineraryBuilder (Phase 12) produces a draft itinerary
-and before that draft is persisted / shown to the user. Catches four
+and before that draft is persisted / shown to the user. Catches five
 categories of correctness failure:
 
   1. date_out_of_range     — a day in the itinerary falls outside the trip's
                               travel window (trip.start_date .. trip.end_date)
+     missing_days          — a date in that window has no day in the itinerary,
+                              or has two (DECISIONS.md #93)
   2. budget_mismatch       — itinerary total_cost differs by more than 5% from
                               the total recomputed from source prices
                               (expected_total_cost: the estimate_budget
@@ -14,7 +16,7 @@ categories of correctness failure:
   4. hallucinated_activity — an activity name that wasn't in ActivitiesAgent's
                               get_attractions results
 
-Design decision (DECISIONS.md #21): all four checks are pure, deterministic
+Design decision (DECISIONS.md #21): all the checks are pure, deterministic
 functions — not an LLM call. These are objectively verifiable conditions
 (date comparison, arithmetic within a tolerance, set membership, duplicate
 detection); an LLM adds cost, latency, and non-determinism for zero benefit.
@@ -41,7 +43,7 @@ Wired into the graph by orchestrator.evaluate_node (Phase 12).
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 from pydantic import BaseModel
@@ -64,6 +66,7 @@ _ALLOWED_FALLBACK_PHRASES: frozenset[str] = frozenset({FREE_TIME})
 class EvaluatorFailure(BaseModel):
     check: Literal[
         "date_out_of_range",
+        "missing_days",
         "budget_mismatch",
         "duplicate_activity",
         "hallucinated_activity",
@@ -128,6 +131,39 @@ def check_activity_dates(draft: dict, trip_start: str, trip_end: str) -> Evaluat
             detail=f"Day(s) {bad_days} fall outside the trip window {trip_start} to {trip_end}.",
         )
     return None
+
+
+# ── Check 1b: one entry per day of the trip ────────────────────────────────
+
+
+def check_day_coverage(draft: dict, trip_start: str, trip_end: str) -> EvaluatorFailure | None:
+    """Every date from start to end has exactly one day in the plan.
+
+    A year-long trip once came back as a single day and was saved as "planned".
+    """
+    try:
+        start = date.fromisoformat(trip_start)
+        end = date.fromisoformat(trip_end)
+    except (ValueError, TypeError):
+        return None  # can't validate without valid trip dates
+
+    expected = [(start + timedelta(days=n)).isoformat() for n in range((end - start).days + 1)]
+    planned = [day.get("date") for day in draft.get("days", [])]
+    missing = [d for d in expected if d not in planned]
+    repeated = sorted({d for d in planned if d and planned.count(d) > 1})
+    if not missing and not repeated:
+        return None
+
+    problems = []
+    if missing:
+        shown = ", ".join(missing[:5]) + (f" and {len(missing) - 5} more" if len(missing) > 5 else "")
+        problems.append(f"no plan for {shown}")
+    if repeated:
+        problems.append(f"more than one entry for {', '.join(repeated)}")
+    return EvaluatorFailure(
+        check="missing_days",
+        detail=f"The trip is {len(expected)} days ({trip_start} to {trip_end}) but the itinerary has {'; '.join(problems)}.",
+    )
 
 
 # ── Check 2: budget consistency within 5% ──────────────────────────────────
@@ -222,7 +258,7 @@ def evaluate_itinerary(
     attractions: list[dict],
     retry_count: int = 0,
 ) -> EvaluatorVerdict:
-    """Run all four checks and return a single EvaluatorVerdict.
+    """Run every check and return a single EvaluatorVerdict.
 
     Pure function — no I/O, no mocks needed in tests. All failures found
     are reported, not just the first (helps the caller pick the best
@@ -232,6 +268,7 @@ def evaluate_itinerary(
 
     for failure in (
         check_activity_dates(draft, trip_start, trip_end),
+        check_day_coverage(draft, trip_start, trip_end),
         check_budget_consistency(draft, expected_budget_total),
         check_duplicate_activities(draft),
         check_hallucinated_activities(draft, attractions),
@@ -247,6 +284,7 @@ def evaluate_itinerary(
 
 _FAILURE_TO_AGENT: dict[str, str] = {
     "date_out_of_range": "activities_agent",
+    "missing_days": "activities_agent",
     "duplicate_activity": "activities_agent",
     "hallucinated_activity": "activities_agent",
     "budget_mismatch": "flight_agent",

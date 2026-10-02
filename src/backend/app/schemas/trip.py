@@ -8,6 +8,10 @@ from app.schemas.types import UTCDateTime
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
+# The searches return at most ten attractions and the builder writes every day in one reply:
+# past two weeks a plan is mostly empty days, and a year-long one came back as a single day.
+MAX_TRIP_NIGHTS = 14
+
 
 class TripCreate(BaseModel):
     destination: Annotated[NonBlank, Field(max_length=200)]
@@ -29,6 +33,8 @@ class TripCreate(BaseModel):
     def end_after_start(cls, v: date, info) -> date:
         if "start_date" in info.data and v <= info.data["start_date"]:
             raise ValueError("end_date must be after start_date")
+        if "start_date" in info.data and (v - info.data["start_date"]).days > MAX_TRIP_NIGHTS:
+            raise ValueError(f"a trip can be at most {MAX_TRIP_NIGHTS} nights long")
         return v
 
 

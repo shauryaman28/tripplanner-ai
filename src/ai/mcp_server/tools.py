@@ -17,6 +17,7 @@ Rules:
 
 import logging
 import re
+import threading
 from datetime import date, datetime, timedelta
 
 import httpx
@@ -52,6 +53,7 @@ ATTRACTION_RADIUS_M = 30_000  # wide enough to reach the coast from a region's c
 TTL_GEOCODE = 2_592_000  # 30 days — places don't move, and Nominatim asks clients to cache
 
 COUNTRY_CODE = "IN"  # the planner covers trips within India (INR budgets, Indian airports)
+COUNTRY_NAME = "India"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -249,28 +251,100 @@ _CLIMATE: dict[str, dict[int, tuple[float, float, str]]] = {
 _CLIMATE_DEFAULT: dict[int, tuple[float, float, str]] = {m: (32, 25, "Partly Cloudy") for m in range(1, 13)}
 
 
-def _geocode(destination: str) -> tuple[float, float] | None:
-    """(lat, lon) of a place via Nominatim, or None if it is unknown. Raises httpx errors.
+class OutsideCoverage(Exception):
+    """The destination is a real place, but not in the country the planner covers."""
 
-    Nominatim ranks by prominence, so "Manali" is the hill station, not the
-    Chennai suburb a population-ranked geocoder returns.
-    """
-    cache_key = make_cache_key("geocode", {"q": destination.strip().lower()})
-    cached = get_cached_sync(cache_key)
-    if cached is not None:
-        return tuple(cached) if cached else None
+    def __init__(self, destination: str, country: str):
+        self.country = country
+        super().__init__(
+            f"{destination.strip()} is in {country}. This planner covers trips within {COUNTRY_NAME} for now."
+        )
 
+
+def _nominatim(query: str, country_code: str | None = None) -> list[dict]:
+    """Up to five Nominatim matches, best first. Raises httpx errors."""
+    params = {"q": query, "format": "json", "limit": 5, "addressdetails": 1, "accept-language": "en"}
+    if country_code:
+        params["countrycodes"] = country_code.lower()
     resp = httpx.get(
         "https://nominatim.openstreetmap.org/search",
-        params={"q": destination, "countrycodes": COUNTRY_CODE.lower(), "format": "json", "limit": 1},
+        params=params,
         headers={"User-Agent": "tripplanner-ai (github.com/shauryaman28/tripplanner-ai)"},
         timeout=10,
     )
     resp.raise_for_status()
-    matches = resp.json()
-    coords = (float(matches[0]["lat"]), float(matches[0]["lon"])) if matches else None
-    set_cached_sync(cache_key, list(coords) if coords else [], TTL_GEOCODE)
-    return coords
+    return resp.json()
+
+
+def _best_place(matches: list[dict]) -> dict | None:
+    """The first match that is somewhere you can travel to: a settlement or region, else a natural feature.
+
+    Never a road, shop or building that merely shares the name — "London"
+    searched inside India is "The London Bridge", a road in Pune.
+    """
+    for classes in (("place", "boundary"), ("natural",)):
+        if found := next((m for m in matches if m.get("class") in classes), None):
+            return found
+    return None
+
+
+# Below this Nominatim importance an in-country match is a minor place; a famous namesake abroad
+# is then the likelier meaning ("Bali" is also a town in Rajasthan, "Dubai" a village in Kerala).
+_CONFIDENT_IMPORTANCE = 0.3
+_geocode_lock = (
+    threading.Lock()
+)  # one lookup at a time: Nominatim allows 1 request/s, and the second caller hits the cache
+
+
+def _geocode(destination: str) -> tuple[float, float] | None:
+    """(lat, lon) of a destination, or None if no such place is known.
+
+    Raises OutsideCoverage when the name means a place in another country, and
+    httpx errors when Nominatim cannot be reached.
+
+    Nominatim ranks by prominence, so "Manali" is the hill station, not the
+    Chennai suburb a population-ranked geocoder returns. The in-country search
+    comes first; a weak or missing match there is checked against the whole
+    world, so a foreign city is reported as such instead of being planned as
+    whatever shares its name at home.
+    """
+    cache_key = make_cache_key("geocode:v2", {"q": destination.strip().lower()})
+    with _geocode_lock:
+        cached = get_cached_sync(cache_key)
+        if cached is None:
+            cached = _lookup_place(destination)
+            set_cached_sync(cache_key, cached, TTL_GEOCODE)
+
+    if cached.get("outside"):
+        raise OutsideCoverage(destination, cached["outside"])
+    return (cached["lat"], cached["lon"]) if "lat" in cached else None
+
+
+def _lookup_place(destination: str) -> dict:
+    """{"lat", "lon"} for a place in the covered country, {"outside": country} for one abroad, {} if unknown."""
+
+    def located(match: dict) -> dict:
+        return {"lat": float(match["lat"]), "lon": float(match["lon"])}
+
+    def importance(match: dict | None) -> float:
+        return float((match or {}).get("importance") or 0)
+
+    at_home = _nominatim(destination, COUNTRY_CODE)
+    local = _best_place(at_home)
+    if importance(local) >= _CONFIDENT_IMPORTANCE:
+        return located(local)
+
+    best = _best_place(_nominatim(destination))
+    address = (best or {}).get("address") or {}
+    abroad = best is not None and address.get("country_code", "").upper() != COUNTRY_CODE
+    # A namesake abroad wins only when it is clearly the better-known place.
+    if abroad and importance(best) >= importance(local) + 0.2:
+        return {"outside": address.get("country") or "another country"}
+    # Otherwise the in-country match stands — even one that is only a station or a landmark
+    # ("Alleppey"), when nothing else answers to the name.
+    if match := local or (None if abroad else best) or (at_home[0] if at_home else None):
+        return located(match)
+    return {}
 
 
 def _city_to_iata(city: str) -> str | None:
@@ -536,7 +610,10 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
         # LiteAPI's own city match is exact for cities. A region ("Kerala") matches
         # no city, so fall back to a radius around its geocoded centre.
         found = search({"cityName": input.destination.strip(), "countryCode": COUNTRY_CODE})
-        if not found and (coords := _geocode(input.destination)):
+        if not found:
+            coords = _geocode(input.destination)
+            if coords is None:
+                return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
             found = search({"latitude": coords[0], "longitude": coords[1], "radius": HOTEL_SEARCH_RADIUS_M})
 
         hotels = sorted(
@@ -554,6 +631,8 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
         set_cached_sync(cache_key, [h.model_dump() for h in hotels], TTL_HOTELS)
         return hotels
 
+    except OutsideCoverage as exc:
+        return ToolError(error=str(exc), code="OUTSIDE_COVERAGE")
     except httpx.HTTPStatusError as exc:
         logger.error("LiteAPI hotel search error: HTTP %s", exc.response.status_code)
         return ToolError(error=f"LiteAPI error: HTTP {exc.response.status_code}", code="LITEAPI_ERROR")
@@ -587,7 +666,7 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
         # Step 1 — geocode destination name to lat/lon
         coords = _geocode(input.destination)
         if coords is None:
-            return ToolError(error=f"Could not geocode destination: {input.destination}", code="NOT_FOUND")
+            return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
         lat, lon = coords
 
         # Step 2 — one search per interest. Results come back nearest-first, so a
@@ -645,6 +724,8 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
         set_cached_sync(cache_key, [a.model_dump() for a in attractions], TTL_ATTRACTIONS)
         return attractions
 
+    except OutsideCoverage as exc:
+        return ToolError(error=str(exc), code="OUTSIDE_COVERAGE")
     except httpx.HTTPStatusError as exc:
         # str(exc) contains the request URL, API key included — report the status only.
         logger.error("OpenTripMap error: HTTP %s", exc.response.status_code)

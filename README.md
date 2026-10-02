@@ -82,10 +82,10 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 341 tests
+# Unit + contract tests (no Docker, no network) — 359 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 15 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 16 tests, incl. the full
 # plan → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
@@ -175,9 +175,9 @@ tripplanner-ai/
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (334 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (352 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 7 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 15 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 16 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E
@@ -216,13 +216,14 @@ tripplanner-ai/
 | 15 | Multi-Turn Refinement | ✅ Done | 27 unit tests |
 | 16 | User Preferences & Personalisation | ✅ Done | 56 unit tests |
 | 17 | Frontend: Chat Interface & SSE Streaming | ✅ Done | 6 status unit + 3 Playwright E2E |
+| — | Out-of-scope trip hardening: destination lookup, LLM fallback, day coverage (DECISIONS #90–#96) | ✅ Done | 18 unit + 1 integration |
 | 1–17 | End-to-end audit ([docs/phase1-17_audit.md](docs/phase1-17_audit.md)) | ✅ Done | 26 regression unit + 5 pipeline/schema integration |
 | 18 | Map View (Leaflet) + frontend redesign ([docs/phase18_build_log.md](docs/phase18_build_log.md)) | ✅ Done | 33 unit + 4 Playwright E2E |
 | 19–20 | PDF export & frontend polish | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 341 unit + contract, 15 integration, 4 browser E2E — all passing.** Zero network calls in CI.
+**Total: 359 unit + contract, 16 integration, 4 browser E2E — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -233,13 +234,19 @@ tripplanner-ai/
 | Variable | Service | Sign-up |
 |---|---|---|
 | `GOOGLE_API_KEY` | Gemini — intent parsing, refinement classifier, embeddings | https://aistudio.google.com/apikey |
-| `GROQ_API_KEY` | Groq — itinerary builder, preference extraction | https://console.groq.com |
+| `GROQ_API_KEY` | Groq — itinerary builder, preference extraction; also answers Gemini's prompts when Gemini is unavailable | https://console.groq.com |
 | `DUFFEL_ACCESS_TOKEN` | Flights (a test-mode token returns sandbox offers) | https://duffel.com |
 | `LITEAPI_API_KEY` | Hotels (the free sandbox key is enough) | https://liteapi.travel |
 | `OPENTRIPMAP_API_KEY` | Attractions | https://opentripmap.io |
 | `OPENWEATHER_API_KEY` | Weather tool — optional, not used by planning yet | https://openweathermap.org/api |
 
 Five keys, all free tier. Geocoding uses Nominatim (OpenStreetMap) and needs no key.
+
+Gemini's free tier allows about 20 requests a day per model. When it runs out, the short prompts go
+to Groq's small model (`GROQ_SMALL_MODEL`) instead, so planning keeps working.
+
+**Scope:** trips within India, up to 14 nights. A destination abroad ("London") is refused with a
+clear message rather than planned as its nearest namesake.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.

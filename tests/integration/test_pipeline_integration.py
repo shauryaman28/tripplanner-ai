@@ -146,7 +146,12 @@ async def test_plan_then_refine_end_to_end(db_session):
         assert [t["id"] for t in (await client.get("/trips?status=completed")).json()] == [trip_id]
         first = (await client.get(f"/trips/{trip_id}/itinerary")).json()
         assert first["total_cost"] == 8_200 + 2 * 4_500
-        assert [d["hotel"]["name"] for d in first["structured_data"]["days"]] == ["Goa Grand", "Goa Grand"]
+        # one entry per day of the trip; the last day is the departure, with no hotel night
+        assert [(d["hotel"] or {}).get("name") for d in first["structured_data"]["days"]] == [
+            "Goa Grand",
+            "Goa Grand",
+            None,
+        ]
 
         # ── Phase 17: status endpoint + SSE event order ──
         status = (await client.get(f"/trips/{trip_id}/status")).json()
@@ -276,6 +281,32 @@ async def test_plan_survives_missing_flight_and_hotel_providers(db_session):
             "hotel_agent": "failed",
             "activities_agent": "completed",
         }
+
+
+@pytest.mark.asyncio
+async def test_a_destination_the_planner_cannot_serve_fails_with_the_reason(db_session):
+    """ "London": no airport, and the place is abroad → the run stops and says so; nothing is saved as a plan."""
+    from src.ai.mcp_server.models import ToolError
+
+    abroad = ToolError(
+        error="London is in United Kingdom. This planner covers trips within India for now.", code="OUTSIDE_COVERAGE"
+    )
+    no_airport = ToolError(error="Unknown airport: 'London'.", code="UNKNOWN_DESTINATION")
+
+    async with _stack(flight_tool=lambda *_: no_airport, hotel_tool=lambda *_: abroad) as (client, events, tools):
+        tools["activities"].return_value = abroad
+        await _login(client)
+        trip_id = await _create_trip(client)
+        await client.post(f"/trips/{trip_id}/plan")
+        runs = await _run_finished(client, trip_id, orchestrator_rows=1)
+
+        names = [r["agent_name"] for r in runs]
+        assert "nothing_found" in names and "itinerary_builder" not in names  # no build-and-retry over nothing
+        assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "failed"
+        assert (await client.get(f"/trips/{trip_id}/itinerary")).status_code == 404
+        assert events[-1]["event"] == "planning_failed" and events[-1]["error"] == abroad.error
+        # ...and a page loaded later can still say why
+        assert (await client.get(f"/trips/{trip_id}/status")).json()["failure_reason"] == abroad.error
 
 
 @pytest.mark.asyncio

@@ -456,14 +456,16 @@ async def get_trip_status(
                 "agents_total": 3,
                 "agents": {"flight_agent": "pending" | "completed" | "failed", ...}
             },
-            "budget_conflict": {"reason": "...", "options": [...]} | null
+            "budget_conflict": {"reason": "...", "options": [...]} | null,
+            "failure_reason": "..." | null
         }
 
     Derived from agent_runs — no extra state to keep in sync. While a run is in
     flight only its own rows count, so a re-plan starts again from 0/3 instead
     of showing the previous run's results. `budget_conflict` is set when the
     last run ended in one, so its options survive a page reload (the SSE event
-    that first carried them is gone by then).
+    that first carried them is gone by then). `failure_reason` does the same
+    for a run that failed for any other reason the planner can name.
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
@@ -473,14 +475,18 @@ async def get_trip_status(
     run_ends = [i for i, run in enumerate(runs) if run.agent_name == "orchestrator"]
     since_last_end = runs[run_ends[-1] + 1 :] if run_ends else runs  # the run in flight, or one that crashed
 
-    conflict = None
+    conflict = failure_reason = None
     if trip.status == TripStatus.FAILED:
         previous_end = run_ends[-2] + 1 if len(run_ends) > 1 else 0
-        latest_run = since_last_end or runs[previous_end:]
-        escalation = next((run for run in latest_run if run.agent_name == "escalate"), None)
-        if escalation is not None:
-            output = escalation.output or {}
+        latest_run = {run.agent_name: run.output or {} for run in since_last_end or runs[previous_end:]}
+        if (output := latest_run.get("escalate")) is not None:
             conflict = {"reason": output.get("reason", ""), "options": output.get("options", [])}
+        elif (output := latest_run.get("nothing_found")) is not None:
+            failure_reason = output.get("reason")
+        elif (output := latest_run.get("builder_failed")) is not None:
+            failure_reason = (output.get("builder_error") or {}).get("error") or "; ".join(
+                failure.get("detail", "") for failure in output.get("evaluator_failures") or []
+            )
 
     if trip.status == TripStatus.PLANNING:
         runs = since_last_end
@@ -497,6 +503,7 @@ async def get_trip_status(
             "agents": agents,
         },
         "budget_conflict": conflict,
+        "failure_reason": failure_reason or None,
     }
 
 
@@ -590,6 +597,7 @@ _AGENT_LABELS: dict[str, str] = {
     "persist": "Saved itinerary to database",
     "escalate": "Budget conflict — offered alternatives to user",
     "builder_failed": "Itinerary build failed after maximum retries",
+    "nothing_found": "Nothing found for the destination — no plan built",
     "preference_extractor": "Learned traveller preferences from the trip",
     "orchestrator": "Finished planning run",
 }
