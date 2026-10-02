@@ -28,7 +28,7 @@ bcrypt==4.0.1   # pinned — passlib can't read __about__ from bcrypt>=4.1, brea
 sse-starlette>=2.1.0
 
 # ── MCP ───────────────────────────────────────────────────────
-mcp[cli]>=1.10.0   # structured tool results (list returns)
+mcp[cli]>=1.10.0,<2   # structured tool results (list returns); 2.x renames result fields (isError → is_error) and is untested here
 
 # ── Agents (Phase 6+) ─────────────────────────────────────────
 langgraph>=0.2.0
