@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
 from src.ai.agents.activities_agent import ActivitiesAgent
-from src.ai.agents.budget_decision import make_budget_decision, replan_flight_budget
+from src.ai.agents.budget_decision import make_budget_decision, replan_flight_budget, viable_budget
 from src.ai.agents.evaluator import (
     MAX_EVALUATOR_RETRIES,
     EvaluatorAgent,
@@ -68,12 +68,13 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 TRIP_FIELDS = ("destination", "origin", "start_date", "end_date", "budget", "group_size", "interests")
-_RUNTIME_KEYS = ("db", "trip_id", "publish_fn")  # live objects — never logged, saved or returned
+_RUNTIME_KEYS = ("db", "trip_id", "publish_fn", "on_complete")  # live objects — never logged, saved or returned
 
 # "Ask vs. assume" defaults (prompts/orchestrator_v3.md): these are assumed, never asked for.
 DEFAULT_ORIGIN = "DEL"
 DEFAULT_INTERESTS = ["sightseeing"]
 MAX_FLIGHT_STOPS = 2
+ATTRACTIONS_LIMIT = 10  # the tool's maximum — enough variety for a week without repeats
 
 
 # ── State ─────────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ class OrchestratorState(TypedDict, total=False):
 
     # Runtime helpers — never stored in DB
     publish_fn: Any | None
+    on_complete: Any | None  # async callable(state), awaited just before planning_complete is published
     db: Any | None
     trip_id: Any | None
 
@@ -166,6 +168,7 @@ async def _set_trip_status(state: OrchestratorState, status: TripStatus) -> None
     trip = await db.get(Trip, trip_id)
     if trip is not None:
         trip.status = status
+        _sync_trip(trip, state)  # keep what intent parsing corrected (e.g. the destination) even if the run failed
         db.add(trip)
         await db.commit()
 
@@ -334,7 +337,7 @@ async def _search_activities(state: OrchestratorState) -> dict:
         {
             "destination": state.get("destination", ""),
             "interests": state.get("interests") or DEFAULT_INTERESTS,
-            "limit": 5,
+            "limit": ATTRACTIONS_LIMIT,
         },
         "attractions",
         "attractions",
@@ -349,25 +352,39 @@ async def _search_activities(state: OrchestratorState) -> dict:
 # ── Nodes ─────────────────────────────────────────────────────────────────
 
 
+def _is_free_text(destination: str | None) -> bool:
+    """A destination field holding a sentence ("Relaxed trip from Delhi to Ayodhya") rather than a place name."""
+    return bool(destination) and len(destination.split()) > 3
+
+
 async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
     """Fill trip fields from free text. Existing fields win unless `intent_override` is set.
+
+    People also type a whole request into the trip's destination field; such a
+    destination is parsed as free text too, and the place found in it replaces it.
 
     An LLM failure is logged and the run carries on with the fields it already has.
     """
     raw = state.get("raw_input")
+    destination_text = state.get("destination") if _is_free_text(state.get("destination")) else None
+    message = " ".join(filter(None, [destination_text, raw]))
     extracted: dict = {}
     status = "completed"
 
     async with timed_run() as timer:
-        if raw:
+        if message:
             try:
-                parsed = await _extract_intent(raw)
+                parsed = await _extract_intent(message)
             except Exception:
                 logger.warning("Intent parsing failed — continuing with existing trip fields", exc_info=True)
                 parsed, status = {}, "failed"
 
             override = state.get("intent_override", False)
-            extracted = {k: v for k, v in parsed.items() if override or not state.get(k)}
+            extracted = {
+                k: v
+                for k, v in parsed.items()
+                if override or not state.get(k) or (k == "destination" and destination_text)
+            }
 
             # "Let's go in January instead" moves the start only — keep the trip the same length.
             if "start_date" in extracted and "end_date" not in extracted and _iso_date(state.get("start_date")):
@@ -377,8 +394,8 @@ async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
     await _log(
         state,
         "intent_parsing",
-        input={"raw_input": raw},
-        output={"extracted_fields": extracted, "pass_through": not raw},
+        input={"raw_input": raw, "destination_text": destination_text},
+        output={"extracted_fields": extracted, "pass_through": not message},
         duration_ms=timer.duration_ms,
         status=status,
     )
@@ -442,6 +459,8 @@ async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
 
     budget_conflict_options: list[dict] | None = None
     if decision.decision == "escalate":
+        # Offer a budget that actually clears the check, never less than +25%.
+        target_budget = max(total_budget * 1.25, viable_budget(decision.flight_cost))
         budget_conflict_options = [
             {
                 "choice": "cheaper_flights",
@@ -455,8 +474,8 @@ async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
             },
             {
                 "choice": "increase_budget",
-                "description": "Increase total budget by 25%",
-                "estimated_saving": f"Additional ₹{total_budget * 0.25:,.0f}",
+                "description": f"Increase total budget to ₹{target_budget:,.0f}",
+                "estimated_saving": f"Additional ₹{target_budget - total_budget:,.0f}",
             },
         ]
 
@@ -648,7 +667,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     )
 
     # Phase 14: embeddings run in the background (own DB session, never raises) so
-    # the OpenAI call and its retries cannot delay `planning_complete`.
+    # the embedding call and its retries cannot delay `planning_complete`.
     spawn(generate_embeddings(itinerary.id))
 
     return {**state, "itinerary_id": itinerary.id}
@@ -686,7 +705,18 @@ async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
 
 
 async def merge_node(state: OrchestratorState) -> OrchestratorState:
-    """Publish planning_complete. Not logged — pure publish, no decision."""
+    """Publish planning_complete. Not logged — pure publish, no decision.
+
+    `on_complete` runs first: the caller saves whatever a follow-up request
+    needs (the refinement state) BEFORE clients are told they may send one.
+    """
+    on_complete = state.get("on_complete")
+    if on_complete is not None and state.get("itinerary_id"):
+        try:
+            await on_complete(_public(state))
+        except Exception:
+            logger.warning("on_complete hook failed", exc_info=True)
+
     statuses = (state.get("flight_status"), state.get("hotel_status"), state.get("activities_status"))
     await _publish(
         state,
@@ -828,6 +858,7 @@ class OrchestratorAgent:
         trip_id: uuid.UUID | None = None,
         publish_fn=None,
         turn: int = 1,
+        on_complete=None,
     ) -> dict:
         full_state = {
             **_RESULT_DEFAULTS,
@@ -836,6 +867,7 @@ class OrchestratorAgent:
             "db": db if db is not None else input_state.get("db"),
             "trip_id": trip_id if trip_id is not None else input_state.get("trip_id"),
             "publish_fn": publish_fn if publish_fn is not None else input_state.get("publish_fn"),
+            "on_complete": on_complete,
         }
 
         async with timed_run() as timer:
@@ -860,6 +892,7 @@ class OrchestratorAgent:
         trip_id: uuid.UUID | None = None,
         publish_fn=None,
         turn: int = 2,
+        on_complete=None,
     ) -> dict:
         """Turn 2+: apply one refinement to an already-planned trip.
 
@@ -877,7 +910,9 @@ class OrchestratorAgent:
                 fresh.update(raw_input=refinement_message, intent_override=True)
             else:
                 fresh["end_date"] = _shift_date(fresh.get("end_date"), 1)
-            return await self.run(fresh, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn)
+            return await self.run(
+                fresh, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn, on_complete=on_complete
+            )
 
         state: OrchestratorState = {
             **_RESULT_DEFAULTS,
@@ -888,6 +923,7 @@ class OrchestratorAgent:
             "db": db,
             "trip_id": trip_id,
             "publish_fn": publish_fn,
+            "on_complete": on_complete,
         }
 
         async with timed_run() as timer:

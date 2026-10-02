@@ -27,16 +27,15 @@ from src.ai.mcp_server.tools import (
     search_flights,
     search_hotels,
 )
-from tests.fakes import duffel_offer, duffel_response
+from tests.fakes import duffel_offer, duffel_response, liteapi_response
 
 FUTURE = (date.today() + timedelta(days=30)).isoformat()
 
 
-def _settings(client_id="k", secret="s", otm="k", owm="k", duffel="k"):
+def _settings(otm="k", owm="k", duffel="k", liteapi="k"):
     s = MagicMock()
     s.DUFFEL_ACCESS_TOKEN = duffel
-    s.AMADEUS_CLIENT_ID = client_id
-    s.AMADEUS_CLIENT_SECRET = secret
+    s.LITEAPI_API_KEY = liteapi
     s.OPENTRIPMAP_API_KEY = otm
     s.OPENWEATHER_API_KEY = owm
     return s
@@ -84,30 +83,13 @@ class TestFlightContract:
 
 class TestHotelContract:
     def test_hotel_has_all_required_fields(self):
-        """Hotel shape: name, stars, price_per_night_inr, rating, address."""
-        hotels_resp = MagicMock()
-        hotels_resp.data = [{"hotelId": "H1"}]
-        offers_resp = MagicMock()
-        offers_resp.data = [
-            {
-                "hotel": {
-                    "name": "Test Hotel",
-                    "rating": "4",
-                    "address": {"lines": ["Road"], "cityName": "Goa"},
-                },
-                "offers": [{"price": {"base": "3000.00"}}],
-            }
-        ]
-
+        """Hotel shape: name, stars, price_per_night_inr, rating, address (+ optional lat/lng)."""
         with (
             patch("src.ai.mcp_server.tools.mcp_settings", _settings()),
             patch("src.ai.mcp_server.tools.get_cached_sync", return_value=None),
             patch("src.ai.mcp_server.tools.set_cached_sync"),
-            patch("src.ai.mcp_server.tools.AmadeusClient") as MC,
+            patch("src.ai.mcp_server.tools.httpx.post", return_value=liteapi_response(("Goa Grand", 15_000.0))),
         ):
-            c = MC.return_value
-            c.reference_data.locations.hotels.by_city.get.return_value = hotels_resp
-            c.shopping.hotel_offers_search.get.return_value = offers_resp
             result = search_hotels(
                 HotelSearchInput(
                     destination="Goa", check_in="2025-12-10", check_out="2025-12-15", budget_per_night=5_000, guests=1
@@ -131,7 +113,7 @@ class TestAttractionContract:
         """Attraction shape: name, category, rating, description, lat?, lng?."""
         geo_response = MagicMock()
         geo_response.raise_for_status = MagicMock()
-        geo_response.json.return_value = {"lat": 15.4909, "lon": 73.8278}
+        geo_response.json.return_value = [{"lat": "15.4909", "lon": "73.8278"}]
 
         radius_response = MagicMock()
         radius_response.raise_for_status = MagicMock()

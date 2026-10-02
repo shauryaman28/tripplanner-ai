@@ -19,6 +19,7 @@ Verification:
 
 from __future__ import annotations
 
+import math
 from typing import Literal
 
 from pydantic import BaseModel
@@ -134,6 +135,15 @@ def make_budget_decision(
         flight_cost=flight_cost,
         total_budget=total_budget,
     )
+
+
+def viable_budget(flight_cost: float) -> float:
+    """Smallest total budget (rounded up to ₹500) at which this flight cost passes the check outright.
+
+    It is what "increase the budget" has to reach: a fixed +25% is a dead end
+    when the flights alone are most of the budget.
+    """
+    return math.ceil(flight_cost / (1 - REPLAN_THRESHOLD) / 500) * 500
 
 
 def replan_flight_budget(original_budget: float, attempt: int) -> float:

@@ -39,7 +39,7 @@ async def generate_embeddings(itinerary_id: uuid.UUID) -> None:
 
     Resolves the itinerary and its parent trip from the DB, then delegates
     to write_embedding_rows in src.ai.embeddings.embedder which handles
-    the OpenAI call, retry logic, and pending_retry fallback.
+    the embedding call, retry logic, and pending_retry fallback.
     """
     await _count_in_flight(+1)
     try:

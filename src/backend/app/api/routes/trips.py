@@ -45,6 +45,7 @@ from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
 from app.schemas.trip import ClarifyRequest, PlanRequest, RefineRequest, ReplanRequest, TripCreate, TripRead
 from app.schemas.types import as_utc
+from src.ai.agents.budget_decision import viable_budget
 from src.ai.agents.refinement_classifier import classify_refinement
 from src.ai.orchestrator.orchestrator import TRIP_FIELDS, OrchestratorAgent
 from src.ai.utils.conversation import (
@@ -64,8 +65,10 @@ router = APIRouter(prefix="/trips", tags=["trips"])
 SUB_AGENTS = ("flight_agent", "hotel_agent", "activities_agent")
 INTERESTS_QUESTION = "What kinds of activities do you enjoy? (e.g. history, food, adventure, beach)"
 
-# run(agent, db, publish) → final orchestrator state
-OrchestratorCall = Callable[[OrchestratorAgent, AsyncSession, Callable[[dict], Awaitable[None]]], Awaitable[dict]]
+# run(agent, db, hooks) → final orchestrator state; hooks = {"publish_fn": ..., "on_complete": ...}
+OrchestratorCall = Callable[
+    [OrchestratorAgent, AsyncSession, dict[str, Callable[[dict], Awaitable[None]]]], Awaitable[dict]
+]
 
 
 # ── Planning runs ──────────────────────────────────────────────────────────
@@ -92,19 +95,25 @@ async def _run_orchestrator(
 ) -> None:
     """Background task behind /plan, /clarify, /replan and /refine.
 
-    On success the final state is saved to Redis — it is what the next
-    POST /refine carries forward. Whatever happens, the trip never stays stuck
-    in "planning": a crash marks it failed and tells the SSE stream. A trip
-    that already has an itinerary (a refinement) falls back to "completed",
-    because the previous itinerary still stands.
+    The orchestrator calls `save_state` just before it publishes
+    planning_complete, so the state POST /refine carries forward is in Redis by
+    the time a client can ask for a refinement. Whatever happens, the trip
+    never stays stuck in "planning": a crash marks it failed and tells the SSE
+    stream. A trip that already has an itinerary (a refinement) falls back to
+    "completed", because the previous itinerary still stands.
     """
 
     async def publish(event: dict) -> None:
         await redis.publish(_events_channel(trip_id), json.dumps(event, default=str))
 
+    async def save_state(state: dict) -> None:
+        await save_trip_state(redis, str(trip_id), {k: v for k, v in state.items() if k != "itinerary_id"})
+        total = (state.get("draft_itinerary") or {}).get("total_cost") or 0
+        await append_history(redis, str(trip_id), "assistant", f"Itinerary ready (₹{total:,.0f}).", turn)
+
     async with AsyncSessionLocal() as db:
         try:
-            result = await run(OrchestratorAgent(), db, publish)
+            result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
         except Exception as exc:
             logger.exception("Planning run crashed for trip %s", trip_id)
             fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
@@ -116,12 +125,6 @@ async def _run_orchestrator(
                 logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
         else:
             if result.get("itinerary_id"):
-                try:  # the itinerary is already committed — a Redis hiccup here must not fail the trip
-                    await save_trip_state(redis, str(trip_id), {k: v for k, v in result.items() if k != "itinerary_id"})
-                    total = (result.get("draft_itinerary") or {}).get("total_cost") or 0
-                    await append_history(redis, str(trip_id), "assistant", f"Itinerary ready (₹{total:,.0f}).", turn)
-                except Exception:
-                    logger.warning("Could not save planning state for trip %s", trip_id, exc_info=True)
                 return
             fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed
 
@@ -258,9 +261,7 @@ async def plan_trip(
         )
 
     await start_history(redis, str(trip_id), state.get("raw_input") or f"Plan a trip to {trip.destination}.")
-    await _start_run(
-        trip, db, redis, lambda agent, bg_db, publish: agent.run(state, db=bg_db, trip_id=trip_id, publish_fn=publish)
-    )
+    await _start_run(trip, db, redis, lambda agent, bg_db, hooks: agent.run(state, db=bg_db, trip_id=trip_id, **hooks))
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
@@ -284,9 +285,7 @@ async def clarify_trip(
     state = {**_trip_state(trip), **{k: saved[k] for k in TRIP_FIELDS if saved.get(k)}, "raw_input": body.answer}
 
     await append_history(redis, str(trip_id), "user", body.answer)
-    await _start_run(
-        trip, db, redis, lambda agent, bg_db, publish: agent.run(state, db=bg_db, trip_id=trip_id, publish_fn=publish)
-    )
+    await _start_run(trip, db, redis, lambda agent, bg_db, hooks: agent.run(state, db=bg_db, trip_id=trip_id, **hooks))
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
 
@@ -301,8 +300,11 @@ async def replan_trip(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
-    """Re-plan after a budget conflict. The chosen adjustment is saved on the trip,
-    so choosing "increase_budget" twice really does compound."""
+    """Re-plan after a budget conflict. The chosen adjustment is saved on the trip.
+
+    "increase_budget" raises the budget to what the last flight search needs to
+    pass the budget check (and by at least 25%), so the option is never a dead end.
+    """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
     _ensure_not_planning(trip)
 
@@ -315,14 +317,27 @@ async def replan_trip(
             raise HTTPException(status_code=422, detail="The trip is too short to remove 2 days.")
         trip.end_date = new_end
     else:
-        trip.budget = round(trip.budget * 1.25, 2)
+        last_check = (
+            (
+                await db.execute(
+                    select(AgentRun)
+                    .where(AgentRun.trip_id == trip_id, AgentRun.agent_name == "budget_decision")
+                    .order_by(AgentRun.created_at.desc())
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
+        flight_cost = (last_check.output or {}).get("flight_cost") or 0 if last_check else 0
+        trip.budget = max(round(trip.budget * 1.25, 2), viable_budget(flight_cost))
 
     state = {**_trip_state(trip), "replan_attempts": replan_attempts}
     await _start_run(
         trip,
         db,
         redis,
-        lambda agent, bg_db, publish: agent.run(state, db=bg_db, trip_id=trip_id, publish_fn=publish),
+        lambda agent, bg_db, hooks: agent.run(state, db=bg_db, trip_id=trip_id, **hooks),
         choice=body.choice,
     )
     return {"status": "replanning_started", "trip_id": str(trip_id), "choice": body.choice}
@@ -367,14 +382,14 @@ async def refine_trip(
         trip,
         db,
         redis,
-        lambda agent, bg_db, publish: agent.refine(
+        lambda agent, bg_db, hooks: agent.refine(
             refinement_type=classification.refinement_type,
             prior_state=prior_state,
             refinement_message=body.message,
             db=bg_db,
             trip_id=trip_id,
-            publish_fn=publish,
             turn=turn,
+            **hooks,
         ),
         turn=turn,
         refinement_type=classification.refinement_type,

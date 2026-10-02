@@ -241,3 +241,17 @@ async def test_evaluator_agent_run_logs_agent_run_failed():
     assert verdict.retry_count == 1
     row = added[0]
     assert row.status == "failed"
+
+
+def test_fallback_phrase_may_repeat_within_a_day():
+    """ "Explore the area" is free time, not an attraction — repeating it is not a duplicate."""
+    draft = {
+        "days": [
+            {
+                "day": 1,
+                "date": "2026-12-10",
+                **{s: {"activity": "Explore the area", "cost": 0} for s in ("morning", "afternoon", "evening")},
+            }
+        ]
+    }
+    assert check_duplicate_activities(draft) is None

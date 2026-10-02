@@ -75,7 +75,9 @@ export default function AgentProgressPanel({ events, sseStatus, active, polled }
 
   // Budget conflict
   const conflictEvent = [...events].reverse().find((e) => e.event === "budget_conflict");
-  const isComplete    = events.some((e) => e.event === "planning_complete");
+  // Events span every run on this page: the run is complete if nothing has started since.
+  const lifecycle     = events.filter((e) => e.event === "planning_started" || e.event === "planning_complete");
+  const isComplete    = !active && lifecycle[lifecycle.length - 1]?.event === "planning_complete";
 
   const agentKeys = Object.keys(AGENT_DISPLAY) as Array<keyof typeof AGENT_DISPLAY>;
 

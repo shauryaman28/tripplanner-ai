@@ -13,7 +13,8 @@ What is extracted
   preferred_airlines    only carriers the traveller explicitly named
   home_city             only if the traveller said where they live
 
-Model: Claude Haiku 4.5 (first use of langchain_anthropic in the agents).
+Model: Groq (`GROQ_MODEL`) — the roadmap names Claude Haiku 4.5; Groq is used
+so the app needs no Anthropic key (the builder already depends on it).
 The dietary / airline / home-city fields are free-text judgement calls, which
 is what the LLM is for. travel_style has a deterministic fallback
 (infer_travel_style) so an LLM outage or an unparseable reply still yields
@@ -34,7 +35,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai.llm import content_to_text, strip_fences
+from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
 from src.ai.utils.preferences import load_preferences, merge_extracted, preferences_to_dict
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -49,7 +50,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "claude-haiku-4-5-20251001"
 _SLOTS = ("morning", "afternoon", "evening")
 _FALLBACK_ACTIVITY = "Explore the area"
 
@@ -157,13 +157,14 @@ def _build_user_prompt(facts: Mapping[str, Any]) -> str:
 
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """The single network seam. Raises if no Anthropic key is configured."""
-    if not settings.ANTHROPIC_API_KEY:
-        raise RuntimeError("ANTHROPIC_API_KEY is not configured")
+    """The single network seam. Raises if no Groq key is configured."""
+    if not settings.GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY is not configured")
 
-    from langchain_anthropic import ChatAnthropic
+    from langchain_groq import ChatGroq
 
-    llm = ChatAnthropic(model=_MODEL, temperature=0, max_tokens=300, api_key=settings.ANTHROPIC_API_KEY)
+    # A reasoning model spends tokens thinking before it answers: 300 left nothing for the JSON.
+    llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=2048)
     response = await llm.ainvoke([("system", system_prompt), ("user", user_prompt)])
     return content_to_text(response.content)
 
@@ -184,7 +185,7 @@ def _coerce_extraction(parsed: Any) -> dict[str, Any]:
 
 
 async def extract_preferences(facts: Mapping[str, Any]) -> dict[str, Any]:
-    """Ask Claude Haiku for preferences; fall back to the heuristic for travel_style.
+    """Ask the LLM for preferences; fall back to the heuristic for travel_style.
 
     Never raises: any LLM / parse failure degrades to the deterministic
     travel_style alone.

@@ -1,16 +1,16 @@
 """
 Integration test for Phase 14 — Embedding generation against real Postgres.
 
-Requires Docker Postgres and an OPENAI_API_KEY (or mocks the OpenAI call so
-the DB write itself is what gets validated).
+Requires Docker Postgres. The embedding call is mocked so
+the DB write itself is what gets validated.
 
 Run with:
     RUN_INTEGRATION=1 pytest tests/integration/test_phase14_integration.py -v
 
-The test mocks _call_openai_embed (same seam as unit tests) so it validates:
+The test mocks _call_embed (same seam as unit tests) so it validates:
   - The two Embedding rows are correctly inserted via write_embedding_rows
   - SELECT array_length(vector, 1) returns 1536 for both rows
-  - embedding_model column is "text-embedding-3-small" for both rows
+  - embedding_model column is "gemini-embedding-001" for both rows
   - A simulated OpenAI failure leaves exactly one pending_retry row
   - Startup recovery cleans up pending_retry rows and re-queues generation
 """
@@ -90,7 +90,7 @@ async def test_write_embedding_rows_inserts_two_rows(db_session):
     itinerary, destination = await _make_itinerary(db_session)
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await write_embedding_rows(
@@ -105,7 +105,7 @@ async def test_write_embedding_rows_inserts_two_rows(db_session):
 
     assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}"
     for row in rows:
-        assert row.embedding_model == "text-embedding-3-small"
+        assert row.embedding_model == "gemini-embedding-001"
         assert row.vector is not None
         assert len(row.vector) == 1536
 
@@ -119,7 +119,7 @@ async def test_write_embedding_rows_failure_writes_pending_retry(db_session):
     itinerary_id = itinerary.id  # the embedder's rollback expires `itinerary`
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(side_effect=Exception("OpenAI timeout")),
     ):
         await write_embedding_rows(
@@ -145,7 +145,7 @@ async def test_generate_embeddings_end_to_end(db_session):
     itinerary, _ = await _make_itinerary(db_session)
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await generate_embeddings(itinerary.id)
@@ -154,7 +154,7 @@ async def test_generate_embeddings_end_to_end(db_session):
     rows = (await db_session.execute(select(Embedding).where(Embedding.itinerary_id == itinerary.id))).scalars().all()
 
     assert len(rows) == 2
-    assert all(r.embedding_model == "text-embedding-3-small" for r in rows)
+    assert all(r.embedding_model == "gemini-embedding-001" for r in rows)
 
 
 @pytest.mark.asyncio
@@ -174,7 +174,7 @@ async def test_pending_retry_cleanup_on_recovery(db_session):
     await db_session.commit()
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await write_embedding_rows(
@@ -189,6 +189,6 @@ async def test_pending_retry_cleanup_on_recovery(db_session):
 
     # Stale row gone; exactly 2 fresh rows
     pending = [r for r in rows if r.embedding_model == "pending_retry"]
-    fresh = [r for r in rows if r.embedding_model == "text-embedding-3-small"]
+    fresh = [r for r in rows if r.embedding_model == "gemini-embedding-001"]
     assert len(pending) == 0
     assert len(fresh) == 2
