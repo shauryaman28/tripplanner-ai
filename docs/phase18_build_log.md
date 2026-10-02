@@ -151,4 +151,4 @@ every state.
 - Reloading the page in the middle of a targeted refinement shows all three searches as running
   until it finishes: the page cannot know which one is being repeated.
 - ESLint is not configured for the frontend (`npm run lint` asks to set it up). Type-checking
-  (`npx tsc --noEmit`) and the production build are the static checks.
+  (`npx tsc --noEmit`) and the production build are the static checks. *(Configured in Phase 19.)*

@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_SMALL_MODEL: str = "openai/gpt-oss-20b"  # stands in for Gemini when it is unavailable (src/ai/llm.py)
 
+    # Map tiles for the static map in the exported PDF (Phase 19) — the backend's counterpart of the
+    # frontend's NEXT_PUBLIC_MAP_TILE_URL. OpenStreetMap's own server needs no key and is fine for
+    # development; a deployment points this at a tile provider it has an account with. Empty = no map.
+    MAP_TILE_URL: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    MAP_ATTRIBUTION: str = "© OpenStreetMap contributors"
+
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

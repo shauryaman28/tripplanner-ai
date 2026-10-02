@@ -44,7 +44,8 @@ interface Props {
 
 // Tiles are configuration. The default is OpenStreetMap's own server, which needs no key
 // (fine for development; a deployment should point these at a tile provider it has an account with).
-const TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+// Its usage policy names this one URL — the older a/b/c subdomains are not to be used any more.
+const TILE_URL = process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION =
   process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ??
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';

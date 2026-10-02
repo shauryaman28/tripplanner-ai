@@ -84,6 +84,7 @@ class OrchestratorState(TypedDict, total=False):
     raw_input: str | None
     intent_override: bool  # full_replan: fields parsed from raw_input replace existing ones
     refinement_request: str | None  # targeted refinement: the user's message, as builder context
+    previous_plan: list[dict] | None  # targeted refinement: the plan being changed, so the rest of it is kept
 
     destination: str | None
     origin: str | None
@@ -563,6 +564,8 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         trip_meta["preferences"] = prefs
     if state.get("refinement_request"):
         trip_meta["request"] = state["refinement_request"]
+        if state.get("previous_plan"):
+            trip_meta["previous_plan"] = state["previous_plan"]
 
     result = await ItineraryBuilder().run(
         trip_meta=trip_meta,
@@ -890,6 +893,38 @@ _BUILD_RESET = {
 }
 
 
+def _keep_what_the_plan_uses(state: dict, plan: dict, *, hotels: bool, attractions: bool) -> None:
+    """Narrow the builder's choices to what the current plan already uses.
+
+    A targeted refinement changes one thing. The builder writes the whole plan
+    again each time, and given the full lists it would re-choose the rest too:
+    asking for different activities quietly swapped the hotel the traveller had
+    just picked. A list is left alone when nothing in it is in the plan.
+    """
+    days = plan.get("days") or []
+    if hotels:
+        used = {(day.get("hotel") or {}).get("name") for day in days}
+        state["hotels"] = [h for h in state.get("hotels") or [] if h.get("name") in used] or state.get("hotels", [])
+    if attractions:
+        used = {(day.get(slot) or {}).get("activity") for day in days for slot in SLOTS}
+        state["attractions"] = [a for a in state.get("attractions") or [] if a.get("name") in used] or state.get(
+            "attractions", []
+        )
+
+
+def _plan_outline(plan: dict) -> list[dict] | None:
+    """A plan reduced to names — which place in which slot, which hotel — for the builder to keep to."""
+    days = plan.get("days") or []
+    return [
+        {
+            "date": day.get("date"),
+            **{slot: (day.get(slot) or {}).get("activity") for slot in SLOTS},
+            "hotel": (day.get("hotel") or {}).get("name"),
+        }
+        for day in days
+    ] or None
+
+
 def _result_summary(state: dict) -> dict:
     return {
         "flights_count": len(state.get("flights", [])),
@@ -979,6 +1014,7 @@ class OrchestratorAgent:
             **prior_state,
             **_BUILD_RESET,
             "refinement_request": refinement_message,
+            "previous_plan": _plan_outline(prior_state.get("draft_itinerary") or {}),
             "turn": turn,
             "db": db,
             "trip_id": trip_id,
@@ -986,11 +1022,22 @@ class OrchestratorAgent:
             "on_complete": on_complete,
         }
 
+        _keep_what_the_plan_uses(
+            state,
+            prior_state.get("draft_itinerary") or {},
+            hotels=refinement_type != "targeted_hotel",
+            attractions=True,
+        )
+
         async with timed_run() as timer:
             escalated = False
             if refinement_type == "targeted_flights":
                 updates = await _search_flights(state)
                 if updates["flights"]:  # a failed search keeps the previous flights
+                    # The flights already found stay in the running (the plan takes the cheapest), so a
+                    # request for something cheaper can never come back dearer when prices have moved.
+                    known = [f for f in state.get("flights") or [] if f not in updates["flights"]]
+                    updates["flights"] = updates["flights"] + known
                     # "Make it cheaper" → new flights, then the budget check decides whether the plan still stands.
                     state = await budget_decision_node({**state, **updates, "replan_attempts": 0})
                     escalated = route_after_budget_decision(state) == "escalate"
@@ -1007,6 +1054,12 @@ class OrchestratorAgent:
                     state["interests"] = new_interests
                 updates = await _search_activities(state)
                 if updates["attractions"]:
+                    # the new finds join the places already in the plan: "add a food stop" must not
+                    # cost the traveller every stop that is not food
+                    found = {a.get("name") for a in updates["attractions"]}
+                    updates["attractions"] = updates["attractions"] + [
+                        a for a in state.get("attractions") or [] if a.get("name") not in found
+                    ]
                     state.update(updates)
 
             if escalated:

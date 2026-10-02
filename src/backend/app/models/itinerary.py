@@ -1,8 +1,9 @@
 """Itinerary table.
 
-content       — full markdown or prose (used by PDF export, Phase 19)
-structured_data — day-by-day JSON produced by ItineraryBuilder (Phase 12)
+content       — markdown or prose; reserved, nothing writes it yet
+structured_data — day-by-day JSON produced by ItineraryBuilder (Phase 12),
                   rendered directly by the frontend card view (Phase 17)
+                  and by the PDF export (Phase 19, app/pdf/)
 """
 
 import uuid

@@ -3,6 +3,7 @@
 get_current_user      — Bearer token in Authorization header (standard routes)
 get_current_user_sse  — Bearer token in header OR ?token= query param (SSE)
 get_redis_dep         — thin wrapper so routes don't import redis directly
+get_redis_or_none     — the same client, or None when Redis is not available (cache-only use)
 """
 
 import uuid
@@ -70,3 +71,11 @@ async def get_current_user_sse(
 
 async def get_redis_dep() -> aioredis.Redis:
     return await get_redis()
+
+
+async def get_redis_or_none() -> aioredis.Redis | None:
+    """For a route that uses Redis only as a cache: None when it is not there, instead of a 500."""
+    try:
+        return await get_redis()
+    except RuntimeError:
+        return None

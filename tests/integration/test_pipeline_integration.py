@@ -1,13 +1,16 @@
-"""End-to-end backend test — Phases 5–18 through the public HTTP API.
+"""End-to-end backend test — Phases 5–19 through the public HTTP API.
 
 Real Postgres (Alembic schema), real Redis, the real LangGraph orchestrator,
 real background tasks. Only the external network seams are stubbed: the MCP
-tool calls, the builder / intent LLMs and the OpenAI embedding call.
+tool calls, the builder / intent LLMs, the embedding call and the map tiles
+behind the PDF export.
 
     RUN_INTEGRATION=1 pytest tests/integration/test_pipeline_integration.py -v
 """
 
 import asyncio
+import hashlib
+import io
 import json
 import os
 from contextlib import asynccontextmanager
@@ -17,12 +20,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import redis.asyncio as aioredis
 from httpx import ASGITransport, AsyncClient
+from pypdf import PdfReader
 from sqlmodel import select
 
 from app.core.config import settings
 from app.models.embedding import Embedding
 from src.ai.agents.refinement_classifier import RefinementClassification
-from tests.fakes import flight, network_stubs
+from tests.fakes import STUB_TILE_URL, flight, network_stubs
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("RUN_INTEGRATION"),
@@ -97,6 +101,11 @@ async def _until(condition, what: str, timeout: float = 20.0):
     raise AssertionError(f"timed out waiting for {what}")
 
 
+def _pdf_pages(pdf: bytes) -> list[str]:
+    """The text of each page of an exported PDF, whitespace collapsed."""
+    return [" ".join(page.extract_text().split()) for page in PdfReader(io.BytesIO(pdf)).pages]
+
+
 async def _run_finished(client: AsyncClient, trip_id: str, orchestrator_rows: int) -> list[dict]:
     """Wait for the run's closing "orchestrator" row (it is written last) and return all runs."""
 
@@ -118,6 +127,7 @@ async def test_plan_then_refine_end_to_end(db_session):
 
         trip_id = await _create_trip(client)
         assert (await client.get(f"/trips/{trip_id}/itinerary")).status_code == 404
+        assert (await client.get(f"/trips/{trip_id}/export/pdf")).status_code == 404  # nothing to export yet
 
         resp = await client.post(f"/trips/{trip_id}/plan", json={"raw_input": "A relaxed long weekend in Goa"})
         assert resp.status_code == 202 and resp.json()["status"] == "planning_started"
@@ -174,6 +184,32 @@ async def test_plan_then_refine_end_to_end(db_session):
         assert [e["timestamp"] for e in timeline] == sorted(e["timestamp"] for e in timeline)
         assert sum(e["event_type"] == "itinerary_saved" for e in timeline) == 1
 
+        # ── Phase 19: the saved itinerary downloads as a PDF — cover, days, costs, map ──
+        cache = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        tile_keys = f"maptile:{hashlib.sha1(STUB_TILE_URL.encode()).hexdigest()[:8]}:*"
+        for key in await cache.keys(tile_keys):  # an earlier run's tiles would hide a cache that never fills
+            await cache.delete(key)
+
+        exported = await client.get(f"/trips/{trip_id}/export/pdf")
+        assert exported.status_code == 200 and exported.headers["content-type"] == "application/pdf"
+        assert exported.headers["content-disposition"] == f'attachment; filename="trip-goa-{START}.pdf"'
+        assert exported.headers["x-itinerary-map"] == "included"
+        cover, days, costs, on_the_map = _pdf_pages(exported.content)
+        assert "Goa" in cover and "ESTIMATED TOTAL ₹17,200" in cover and "2 travellers" in cover
+        assert "Fort Aguada" in days and "STAY Goa Grand" in days and "FLIGHT DEL → GOI" in days
+        assert "Flights DEL → GOI · return · 2 travellers ₹8,200" in costs and "Estimated total ₹17,200" in costs
+        assert "Fort Aguada — Day 1, morning" in on_the_map
+        assert [len(page.images) for page in PdfReader(io.BytesIO(exported.content)).pages] == [0, 0, 0, 1]
+
+        # the map's tiles are in Redis for a week, under the stub tile server's keys — never the real one's
+        cached = await cache.keys(tile_keys)
+        assert cached and await cache.ttl(cached[0]) > 6 * 24 * 3600
+        real_provider = hashlib.sha1(type(settings).model_fields["MAP_TILE_URL"].default.encode()).hexdigest()[:8]
+        assert tile_keys.split(":")[1] != real_provider
+        again = await client.get(f"/trips/{trip_id}/export/pdf")
+        assert again.status_code == 200 and sorted(await cache.keys(tile_keys)) == sorted(cached)
+        await cache.aclose()
+
         # ── Phase 15: "closer to the beach" → only HotelAgent re-runs ──
         tools["hotel"].side_effect = lambda *_: BEACH_HOTELS
         flight_calls = tools["flight"].await_count
@@ -196,6 +232,10 @@ async def test_plan_then_refine_end_to_end(db_session):
         assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "completed"
         assert [e.get("turn") for e in events if e.get("event") == "planning_complete"] == [1, 2]
 
+        # Phase 19: the export is of the latest version — the new hotel, the new total
+        refined = " ".join(_pdf_pages((await client.get(f"/trips/{trip_id}/export/pdf")).content))
+        assert "Beach House" in refined and "Goa Grand" not in refined and "ESTIMATED TOTAL ₹20,200" in refined
+
         # a second refinement builds on turn 2's state, not turn 1's
         with patch(
             "app.api.routes.trips.classify_refinement",
@@ -206,6 +246,36 @@ async def test_plan_then_refine_end_to_end(db_session):
         await _run_finished(client, trip_id, orchestrator_rows=3)
         assert (await client.get(f"/trips/{trip_id}")).json()["end_date"] == str(END + timedelta(days=1))
         assert len((await client.get(f"/trips/{trip_id}/itineraries")).json()) == 3
+
+
+@pytest.mark.asyncio
+async def test_pdf_export_is_private_and_survives_a_dead_tile_server(db_session):
+    """Phase 19: only the owner can export a trip; a map that cannot be drawn is left out, not fatal."""
+    from app.core.security import create_access_token
+
+    async with _stack(flight_tool=lambda *_: [flight(8_200.0)]) as (client, _, __):
+        await _login(client)
+        trip_id = await _create_trip(client)
+        await client.post(f"/trips/{trip_id}/plan")
+        await _run_finished(client, trip_id, orchestrator_rows=1)
+        owner = client.headers["Authorization"]
+
+        client.headers.pop("Authorization")
+        assert (await client.get(f"/trips/{trip_id}/export/pdf")).status_code == 401
+        await _login(client)  # somebody else
+        assert (await client.get(f"/trips/{trip_id}/export/pdf")).status_code == 404
+        client.headers["Authorization"] = f"Bearer {create_access_token('not-a-user-id')}"
+        assert (await client.get(f"/trips/{trip_id}/export/pdf")).status_code == 401
+
+        client.headers["Authorization"] = owner
+        with (
+            patch("app.pdf.static_map._download_tile", AsyncMock(side_effect=OSError("tile server is down"))),
+            patch.object(settings, "MAP_TILE_URL", "https://tiles.down.invalid/{z}/{x}/{y}.png"),  # nothing cached
+        ):
+            exported = await client.get(f"/trips/{trip_id}/export/pdf")
+        assert exported.status_code == 200 and exported.headers["x-itinerary-map"] == "unavailable"
+        pages = _pdf_pages(exported.content)
+        assert len(pages) == 3 and "Cost breakdown" in pages[2] and "On the map" not in " ".join(pages)
 
 
 @pytest.mark.asyncio

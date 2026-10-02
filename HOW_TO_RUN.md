@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–18
+# How to Run & Verify — Phases 1–19
 
 ## What changed vs the original codebase?
 
@@ -17,6 +17,7 @@
 | 13–16 | `agent_runs`, `orchestrator.py`, `models.py`, `tools.py` | `preference_extractor.py`, `user_preferences.py`, migrations 002 & 003, unit tests |
 | 17 | `trips.py` (+ `GET /trips/{id}/status`) | Next.js 14 frontend in `src/frontend/`, `tests/unit/test_phase17_backend.py`, `src/frontend/e2e/planning.spec.ts` |
 | 18 | `tools.py`, `models.py`, `builder.py`, `orchestrator.py`, `trips.py` (`budget_conflict` in `/status`), `main.py`, every frontend page and component — see `docs/phase18_build_log.md` | `src/ai/itinerary.py`, `ItineraryMap.tsx`, `CostSummary.tsx`, `AppHeader.tsx`, `Brand.tsx`, `ui.tsx`, `lib/map.ts`, `lib/places.ts`, `lib/format.ts`, `tests/database.py`, `tests/unit/test_phase18_map.py` |
+| 19 | `trips.py` (`GET /trips/{id}/export/pdf`), `deps.py`, `config.py` (`MAP_TILE_URL`), `main.py` (CORS exposes the download's headers), `requirements.txt` (`reportlab`, `pillow`), `ItineraryView.tsx`, `lib/api.ts`, `playwright.config.ts`, `tests/fakes.py` — see `docs/phase19_build_log.md` | `src/backend/app/pdf/` (`export.py`, `plan.py`, `static_map.py`, `document.py`, `flowables.py`, `formatting.py`, `theme.py`, `fonts/`), `DownloadPdfButton.tsx`, `Toast.tsx`, `lib/download.ts`, `tests/unit/test_phase19_pdf.py` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -104,6 +105,9 @@ pip install -r requirements-dev.txt
 
 `requirements.txt` already includes fixes for three issues discovered during first-time setup (see "Known first-run issues" below) — if you're on an older clone missing these, see that section.
 
+Everything installs with `pip` alone. The PDF export (Phase 19) uses ReportLab and Pillow, which need
+no system libraries — nothing to `brew install` or `apt-get`.
+
 ---
 
 ## Step 3 — Start Docker infrastructure
@@ -165,7 +169,9 @@ To also auto-reload on changes under `src/ai`, start it from the repo root inste
 uvicorn app.main:app --reload --app-dir src/backend --reload-dir src
 ```
 
-Or run it in Docker (migrations run on start): `docker compose up backend`.
+Or run it in Docker (migrations run on start): `docker compose up backend --build`. The `--build`
+matters after pulling a change to `requirements.txt`: an image built earlier does not have the new
+packages, and the backend stops on import.
 
 ---
 
@@ -292,7 +298,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–17 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–19 check
 
 Run from the **project root**:
 
@@ -300,7 +306,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **359 passed**, no network, no Docker.
+Expected: **457 passed**, no network, no Docker. The Phase 19 tests build real PDFs and read them back.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -308,11 +314,11 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **16 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **17 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
-`test_pipeline_integration.py` is the one to watch: it drives plan → refine → add-day,
-budget conflict → replan, and a no-provider run through the HTTP API with real
-Postgres, Redis and the real graph — only the external APIs are stubbed.
+`test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
+add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
+Postgres, Redis and the real graph — only the external APIs and the map tiles are stubbed.
 
 ---
 
@@ -475,7 +481,9 @@ Things to try:
 - Click a pin → popup. Click a day in the map legend → only that day. Click a stop's **Map**
   button in a day card → the map scrolls into view with that pin open.
 - Ask for a change ("Switch to a nicer hotel") → the plan dims while it updates; only that search
-  runs again.
+  runs again, and the assistant replies with what changed ("Stay: A → B (₹8,014 → ₹11,766 a night)")
+  and how the total moved. The stops stay where they were. "Add some forts" adds places without
+  removing the others; "Make it cheaper" with nothing cheaper says the plan came out the same.
 - Create a trip with a budget the flights eat up (e.g. ₹12,000) → "Over budget" with three options.
   Reload — the options are still there.
 - Narrow the window to phone width → the plan comes first, with an "Ask for a change" button.
@@ -490,12 +498,54 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 4 passed
+npx playwright test                 # 13 passed
 ```
 
-Playwright runs `python -m tests.e2e.stub_backend`, so the venv must be active (or set
-`PYTHON=/path/to/.venv/bin/python`). Needs Docker Postgres + Redis. The spec asserts the stub's
-data, so it is not meant to run against real API keys — use the manual steps above for that.
+Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
+
+Playwright runs `python -m tests.e2e.stub_backend` on the repo's `.venv` (active or not; set
+`PYTHON=/path/to/python` for another interpreter). Needs Docker Postgres + Redis. The spec asserts
+the stub's data, so it is not meant to run against real API keys — use the manual steps above for that.
+
+---
+
+## Step 17 — Verify Phase 19: PDF export
+
+With the backend running and a planned trip (`$TRIP_ID` from Step 15, `$TOKEN` from Step 7):
+
+```bash
+curl -s -D - -o trip.pdf "http://localhost:8000/trips/$TRIP_ID/export/pdf" \
+  -H "Authorization: Bearer $TOKEN" | grep -iE "^(HTTP|content-type|content-disposition|x-itinerary-map)"
+open trip.pdf      # macOS; any PDF viewer will do
+```
+
+Expected:
+
+```
+HTTP/1.1 200 OK
+content-disposition: attachment; filename="trip-goa-2027-12-10.pdf"
+x-itinerary-map: included
+content-type: application/pdf
+```
+
+The PDF has four sections: a cover (destination, dates, total against the budget), the days
+(flight, morning / afternoon / evening, the stay, each day's cost), a cost breakdown (flights, stay,
+activities — it adds up to the total), and the map with the same day-coloured, numbered pins as
+the web map. The first export of a place fetches its map tiles (about a second); they are then
+kept in Redis for a week.
+
+| Check | Expected |
+|---|---|
+| The same request without the token | `401` |
+| A trip that has not been planned yet | `404` — "No itinerary has been generated for this trip yet." |
+| Another user's trip | `404` — "Trip not found." |
+| Refine the trip, export again | the PDF shows the new plan (it is always the latest version) |
+
+In the browser: open a planned trip → **Download PDF**, beside the "Day by day" heading. The button
+reads "Preparing PDF…" while the file is built, then the browser saves `trip-<destination>-<date>.pdf`.
+
+No tile server needs configuring: the default is OpenStreetMap's. `MAP_TILE_URL` in `.env` points
+the PDF's map at another provider (same template as the frontend's `NEXT_PUBLIC_MAP_TILE_URL`).
 
 ---
 
@@ -537,4 +587,5 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **16** | `PUT /users/preferences` with `"preferred_airlines": ["IndiGo"]` → `422` (IATA codes only). The extractor never overwrites a preference you set. |
 | **Scope** | Create a trip to "London" and plan it → it fails within seconds: "London is in United Kingdom. This planner covers trips within India for now." Nothing is saved, and the reason is still there after a reload (`GET /status` → `failure_reason`). Try to create a 30-night trip → refused ("at most 14 nights"). Empty `GOOGLE_API_KEY` (or exhaust Gemini's 20 requests a day) → planning and refinements still work: the log says "Gemini unavailable … asking Groq". |
 | **18 (Map)** | Open a planned trip → the map under the day cards shows numbered pins coloured by day, a line joining each day's stops, a gold hotel pin and airport markers; click a pin for its details. Null a slot's `lat` in the itinerary JSON → that pin disappears, the place is listed under the map and its day card says "No map location" — the map still renders. `GET /trips/{id}/runs` → the `persist` row's `unmapped_activities` lists it. |
-| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 4 passed. |
+| **19 (PDF)** | Start the backend with `MAP_TILE_URL=https://tiles.unreachable.invalid/{z}/{x}/{y}.png` and export a trip → still `200` and a PDF, one page shorter; `x-itinerary-map: unavailable`; the log says "the map was left out — the tile server could not be reached"; in the browser a note says the PDF came without the map. Set `MAP_TILE_URL=` (empty) → no map and no warning (`none`). Stop Redis → the export still works, it just fetches the tiles every time. In the browser's dev tools, block the request to `/export/pdf` → the toast "PDF generation failed — try again", and the button works again. |
+| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 13 passed. |

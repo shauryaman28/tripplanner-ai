@@ -8,6 +8,7 @@ import { nightsBetween } from "@/lib/format";
 import type { Itinerary, Trip } from "@/lib/types";
 import CostSummary from "./CostSummary";
 import DayCard from "./DayCard";
+import DownloadPdfButton from "./DownloadPdfButton";
 import type { MapFocus } from "./ItineraryMap";
 
 // Leaflet touches `window` at import time, so the map only ever loads in the browser.
@@ -66,15 +67,20 @@ export default function ItineraryView({ itinerary, trip, updating = false }: Pro
         travellers={trip?.group_size ?? null}
       />
 
-      <div className="flex items-end justify-between gap-4 pt-2">
+      {/* on a narrow screen the two actions drop under the heading instead of squeezing it */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-2">
         <div>
           <h2 className="font-display text-2xl font-medium tracking-tight text-ink-900">Day by day</h2>
           <p className="mt-0.5 text-sm text-ink-600">Each day has its own colour — the same one on the map.</p>
         </div>
-        <a href="#trip-map" className="btn-ghost shrink-0 px-3 py-2">
-          <ArrowDown className="h-4 w-4" aria-hidden />
-          Map
-        </a>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {/* PDF export (Phase 19) */}
+          <DownloadPdfButton tripId={itinerary.trip_id} disabled={updating} />
+          <a href="#trip-map" className="btn-ghost shrink-0 px-3 py-2">
+            <ArrowDown className="h-4 w-4" aria-hidden />
+            Map
+          </a>
+        </div>
       </div>
 
       <ol className="space-y-4">

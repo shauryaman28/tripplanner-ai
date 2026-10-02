@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.18.0",
+    version="0.19.0",
     lifespan=lifespan,
 )
 
@@ -114,6 +114,9 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The PDF export names its file and says whether the map made it in (Phase 19). A page on
+    # another origin cannot read either header unless it is listed here.
+    expose_headers=["Content-Disposition", "X-Itinerary-Map"],
 )
 
 
