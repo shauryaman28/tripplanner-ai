@@ -86,7 +86,7 @@ def test_expected_total_cost_uses_source_prices():
 def test_itinerary_far_below_the_users_budget_still_passes():
     """A ₹17,700 plan on a ₹50,000 budget is a good plan, not a budget_mismatch."""
     expected = expected_total_cost(_DRAFT, _FLIGHTS, _HOTELS)
-    assert evaluate_itinerary(_DRAFT, "2026-12-10", "2026-12-12", expected, _ATTRACTIONS).passed
+    assert evaluate_itinerary(_DRAFT, "2026-12-10", "2026-12-11", expected, _ATTRACTIONS).passed
 
 
 def test_misquoted_hotel_price_is_a_budget_mismatch():
@@ -96,7 +96,7 @@ def test_misquoted_hotel_price_is_a_budget_mismatch():
         "total_cost": 10_700.0,
     }
     verdict = evaluate_itinerary(
-        cheap, "2026-12-10", "2026-12-12", expected_total_cost(cheap, _FLIGHTS, _HOTELS), _ATTRACTIONS
+        cheap, "2026-12-10", "2026-12-11", expected_total_cost(cheap, _FLIGHTS, _HOTELS), _ATTRACTIONS
     )
     assert [f.check for f in verdict.failures] == ["budget_mismatch"]
 

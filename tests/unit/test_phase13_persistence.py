@@ -180,7 +180,7 @@ async def test_intent_parsing_node_logs_extraction():
     mock_response = MagicMock()
     mock_response.content = '{"destination": "Goa", "start_date": null, "end_date": null, "budget": 50000, "group_size": null, "interests": null, "origin": null}'
 
-    with patch("src.ai.orchestrator.orchestrator.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(return_value=mock_response)
         await intent_parsing_node(state)
 
@@ -364,7 +364,7 @@ async def test_full_happy_path_produces_at_least_7_runs():
     mock_llm_response.content = '{"destination": null, "origin": null, "start_date": null, "end_date": null, "budget": null, "group_size": null, "interests": null}'
 
     with (
-        patch("src.ai.orchestrator.orchestrator.ChatGoogleGenerativeAI") as MockLLM,
+        patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM,
         patch("src.ai.orchestrator.orchestrator.FlightAgent") as MockFA,
         patch("src.ai.orchestrator.orchestrator.HotelAgent") as MockHA,
         patch("src.ai.orchestrator.orchestrator.ActivitiesAgent") as MockAA,

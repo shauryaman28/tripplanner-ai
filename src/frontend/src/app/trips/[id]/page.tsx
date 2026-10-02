@@ -412,7 +412,13 @@ export default function TripDetailPage() {
           const found = progress?.budget_conflict ?? null;
           setConflict(found);
           setPhase("failed");
-          addMessage("assistant", found ? conflictMessage(found) : "The last planning attempt failed. Describe your trip to try again.");
+          const why = progress?.failure_reason;
+          addMessage(
+            "assistant",
+            found ? conflictMessage(found)
+            : why ? `The last attempt failed: ${why.replace(/\.+$/, "")}.`
+            : "The last planning attempt failed. Describe your trip to try again.",
+          );
         } else {
           setPhase("idle");
         }
@@ -511,7 +517,10 @@ export default function TripDetailPage() {
         setPolledAgents(current.progress.agents);
         if (current.status === "completed") finishRun(true);
         else if (current.status === "failed") {
-          finishRun(false, { error: "see the planning progress for details", conflict: current.budget_conflict });
+          finishRun(false, {
+            error: current.failure_reason ?? "see the planning progress for details",
+            conflict: current.budget_conflict,
+          });
         }
       } catch {
         // transient — the next tick retries
@@ -541,14 +550,21 @@ export default function TripDetailPage() {
       try {
         addMessage("assistant", await call());
       } catch (err: unknown) {
-        awaitingOutcome.current = false;
-        setPhase(previous);
-        addMessage("assistant", `Something went wrong: ${errorText(err)}`);
+        // The request can fail on the way back (a proxy timeout) after the backend has started
+        // the run. Ask before giving up, or the page stops listening to a run that is in flight.
+        const current = await getTripStatus(tripId).catch(() => null);
+        if (current?.status === "planning") {
+          addMessage("assistant", "That took longer than usual to start, but it's running now…");
+        } else {
+          awaitingOutcome.current = false;
+          setPhase(previous);
+          addMessage("assistant", `Something went wrong: ${errorText(err)}`);
+        }
       } finally {
         setSending(false);
       }
     },
-    [resetEvents, addMessage],
+    [tripId, resetEvents, addMessage],
   );
 
   const startPlanning = useCallback(

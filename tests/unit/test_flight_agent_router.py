@@ -97,7 +97,7 @@ async def test_intent_parsing_no_raw_input_passes_through():
         "budget": 20000,
         "passengers": 1,
     }
-    with patch("src.ai.agents.flight_agent.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         result = await intent_parsing_node(state)
 
     # LLM was never instantiated

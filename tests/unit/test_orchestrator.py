@@ -126,7 +126,7 @@ _AFTER_BUDGET_CHECK: OrchestratorState = {
 @pytest.mark.asyncio
 async def test_intent_parsing_no_raw_input_passthrough():
     """No raw_input → state unchanged, no LLM call."""
-    with patch("src.ai.orchestrator.orchestrator.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         result = await intent_parsing_node(_BASE_STATE)
     MockLLM.assert_not_called()
     assert result["destination"] == "Goa"

@@ -113,7 +113,15 @@ class TestAttractionContract:
         """Attraction shape: name, category, rating, description, lat?, lng?."""
         geo_response = MagicMock()
         geo_response.raise_for_status = MagicMock()
-        geo_response.json.return_value = [{"lat": "15.4909", "lon": "73.8278"}]
+        geo_response.json.return_value = [
+            {
+                "lat": "15.4909",
+                "lon": "73.8278",
+                "class": "boundary",
+                "importance": 0.65,
+                "address": {"country_code": "in"},
+            }
+        ]
 
         radius_response = MagicMock()
         radius_response.raise_for_status = MagicMock()

@@ -43,7 +43,16 @@ def _good_draft_json(trip_start: str) -> str:
                     "evening": None,
                     "hotel": {"name": "Goa Grand", "cost_per_night": 4500.0},
                     "flight": None,
-                }
+                },
+                {  # the departure day: the evaluator wants every day of the trip in the plan
+                    "day": 2,
+                    "date": str(date.fromisoformat(trip_start) + timedelta(days=1)),
+                    "morning": None,
+                    "afternoon": None,
+                    "evening": None,
+                    "hotel": None,
+                    "flight": None,
+                },
             ],
             "total_cost": 8200.0 + 4500.0,
             "currency": "INR",

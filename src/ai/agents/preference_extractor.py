@@ -70,7 +70,8 @@ def build_trip_facts(state: Mapping[str, Any]) -> dict[str, Any]:
     """
     draft = state.get("draft_itinerary") or {}
     days = draft.get("days") or []
-    nights = max(len(days), 1)
+    # N days are N-1 nights: count the days with a hotel, or the gaps between days when there is none.
+    nights = sum(1 for d in days if d.get("hotel")) or max(len(days) - 1, 1)
     group_size = state.get("group_size") or 1
     total_cost = draft.get("total_cost")
 

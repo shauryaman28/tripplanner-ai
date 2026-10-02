@@ -148,6 +148,7 @@ export interface TripStatusResponse {
     agents: Record<string, AgentStatus>;
   };
   budget_conflict: BudgetConflict | null;   // set when the last run ended in one — survives a reload
+  failure_reason: string | null;            // why the last run failed, when the planner can say
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────

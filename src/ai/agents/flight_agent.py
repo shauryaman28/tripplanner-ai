@@ -10,12 +10,11 @@ Phase 7: three-node graph — free text → intent parse → route → search or
 import uuid
 from datetime import date
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
-from src.ai.llm import GEMINI_MODEL, parse_json_object
+from src.ai.llm import ask, parse_json_object
 from src.ai.mcp_client.client import call_tool
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -68,10 +67,8 @@ async def intent_parsing_node(state: TripState) -> TripState:
     if not raw:
         return state
 
-    llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
     prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=raw)
-
-    parsed = parse_json_object((await llm.ainvoke(prompt)).content)
+    parsed = parse_json_object(await ask(prompt))
 
     updates: TripState = {}
     for field in ("origin", "destination", "date", "budget", "passengers"):

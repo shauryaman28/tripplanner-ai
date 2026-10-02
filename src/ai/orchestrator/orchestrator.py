@@ -25,7 +25,6 @@ import uuid
 from datetime import date, timedelta
 from typing import Any
 
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
@@ -47,7 +46,7 @@ from src.ai.agents.preference_extractor import PreferenceExtractor
 from src.ai.agents.refinement_classifier import RefinementType
 from src.ai.builder.builder import ItineraryBuilder
 from src.ai.itinerary import FREE_TIME, SLOTS
-from src.ai.llm import GEMINI_MODEL, parse_json_object
+from src.ai.llm import ask, parse_json_object
 from src.ai.utils.embeddings import generate_embeddings
 from src.ai.utils.preferences import (
     build_preference_updates,
@@ -243,10 +242,9 @@ def _clean_intent(parsed: dict) -> dict:
 
 
 async def _extract_intent(message: str) -> dict:
-    """One Gemini call: free text → validated trip fields. Raises on LLM failure."""
-    llm = ChatGoogleGenerativeAI(model=GEMINI_MODEL, temperature=0)
+    """One LLM call: free text → validated trip fields. Raises on LLM failure."""
     prompt = _INTENT_PROMPT.format(today=date.today().isoformat(), message=message)
-    return _clean_intent(parse_json_object((await llm.ainvoke(prompt)).content))
+    return _clean_intent(parse_json_object(await ask(prompt)))
 
 
 # ── Sub-agent runners ──────────────────────────────────────────────────────
@@ -697,6 +695,40 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     return {**state, "itinerary_id": itinerary.id}
 
 
+# A destination the tools could not use: these explain the failure better than "nothing found".
+_DESTINATION_ERROR_CODES = ("OUTSIDE_COVERAGE", "NOT_FOUND")
+
+
+def route_after_search(state: OrchestratorState) -> str:
+    """With no flights, no hotel and nothing to do there is no trip to build — stop instead of saving an empty plan."""
+    found = state.get("flights") or state.get("hotels") or state.get("attractions")
+    return "build" if found else "nothing_found"
+
+
+async def nothing_found_node(state: OrchestratorState) -> OrchestratorState:
+    """Every search came back empty: fail the trip and say why (usually the destination)."""
+    errors = [e for e in (state.get("activities_error"), state.get("hotel_error"), state.get("flight_error")) if e]
+    destination_error = next((e for e in errors if e.get("code") in _DESTINATION_ERROR_CODES), None)
+    reason = (destination_error or {}).get("error") or (
+        f"No flights, places to stay or things to do were found for {state.get('destination') or 'this trip'}, "
+        "so there is nothing to build a plan from."
+    )
+
+    async with timed_run() as timer:
+        await _set_trip_status(state, TripStatus.FAILED)
+
+    await _log(
+        state,
+        "nothing_found",
+        input={"destination": state.get("destination")},
+        output={"reason": reason, "errors": errors, "trip_status": "failed"},
+        duration_ms=timer.duration_ms,
+        status="failed",
+    )
+    await _publish(state, {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": reason})
+    return state
+
+
 async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
     """The build/evaluate loop ran out of retries — fail the trip with an honest reason."""
     builder_error = state.get("builder_error") or {}
@@ -796,6 +828,7 @@ def build_orchestrator_graph():
     graph.add_node("retry_dispatch", retry_dispatch_node)
     graph.add_node("persist", persist_node)
     graph.add_node("builder_failed", builder_failed_node)
+    graph.add_node("nothing_found", nothing_found_node)
     graph.add_node("merge", merge_node)
     graph.add_node("escalate", escalate_node)
     graph.add_node("extract_preferences", extract_preferences_node)
@@ -809,7 +842,9 @@ def build_orchestrator_graph():
         route_after_budget_decision,
         {"continue": "hotel_activities", "replan": "run_flight", "escalate": "escalate"},
     )
-    graph.add_edge("hotel_activities", "build_itinerary")
+    graph.add_conditional_edges(
+        "hotel_activities", route_after_search, {"build": "build_itinerary", "nothing_found": "nothing_found"}
+    )
     graph.add_edge("build_itinerary", "evaluate")
     graph.add_conditional_edges(
         "evaluate",
@@ -821,6 +856,7 @@ def build_orchestrator_graph():
     graph.add_edge("merge", "extract_preferences")
     graph.add_edge("extract_preferences", END)
     graph.add_edge("builder_failed", END)
+    graph.add_edge("nothing_found", END)
     graph.add_edge("escalate", END)
 
     return graph.compile()

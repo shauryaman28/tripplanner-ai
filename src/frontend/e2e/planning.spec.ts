@@ -34,7 +34,7 @@ async function createTrip(page: Page, trip: { destination: string; budget: strin
   await page.getByRole("button", { name: /plan a trip/i }).first().click();
   await page.getByLabel("Destination").fill(trip.destination);
   await page.getByLabel("Start date").fill(`${YEAR}-12-10`);
-  await page.getByLabel("End date").fill(`${YEAR}-12-15`);
+  await page.getByLabel("End date").fill(`${YEAR}-12-12`); // 3 days, 2 nights
   await page.getByLabel(/budget/i).fill(trip.budget);
   await page.getByLabel("Travellers", { exact: true }).fill("2");
   await page.getByLabel(/interests/i).fill(trip.interests);
@@ -80,7 +80,10 @@ test("register, create trip, plan, see itinerary cards and map, refine", async (
   await expect(cards.first()).toContainText("Top attraction");
   await expect(cards.first()).toContainText("Heritage site");
   await expect(cards.nth(1)).toContainText("Basilica of Bom Jesus");
-  await expect(itinerary.getByText("Free time")).toHaveCount(0);
+  await expect(cards.nth(1)).not.toContainText("Free time");
+  // every day of the trip has a card; one with nothing booked says so once
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(2).getByText("Free time")).toHaveCount(1);
 
   // ── 4b. Map (Phase 18): pins per day, a route, popups, hotel + airport ────
   const map = page.getByLabel("Trip map");

@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from datetime import date
 
 from pydantic import BaseModel, ValidationError, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -167,6 +168,18 @@ def _request_block(request: str | None) -> str:
     )
 
 
+def _days_line(start: str | None, end: str | None) -> str:
+    """Spell out how many days the plan must have — left to count them, the model stopped early on long trips."""
+    try:
+        days = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+    except (TypeError, ValueError):
+        return ""
+    return (
+        f'That is {days} days: "days" must have exactly {days} entries, one for every date from {start} to {end} '
+        "inclusive, in order — also when there are fewer attractions than days.\n"
+    )
+
+
 def _build_user_prompt(
     trip_meta: dict,
     flights: list[dict],
@@ -176,7 +189,8 @@ def _build_user_prompt(
     return (
         f"Trip: {trip_meta.get('destination')} "
         f"from {trip_meta.get('start_date')} to {trip_meta.get('end_date')}, "
-        f"{trip_meta.get('group_size', 1)} traveller(s).\n\n"
+        f"{trip_meta.get('group_size', 1)} traveller(s).\n"
+        f"{_days_line(trip_meta.get('start_date'), trip_meta.get('end_date'))}\n"
         f"Available flights (JSON): {json.dumps(flights)}\n\n"
         f"Available hotels (JSON): {json.dumps(hotels)}\n\n"
         f"Available attractions (JSON): {json.dumps(attractions)}\n\n"

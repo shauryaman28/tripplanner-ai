@@ -32,9 +32,12 @@ function coverFor(destination: string): string {
 
 const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
 
-function dayAfter(iso: string): string {
+/** The backend's limit (MAX_TRIP_NIGHTS in schemas/trip.py): longer plans come out mostly empty. */
+const MAX_TRIP_NIGHTS = 14;
+
+function dayAfter(iso: string, days: number = 1): string {
   const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d + 1).toLocaleDateString("en-CA");
+  return new Date(y, m - 1, d + days).toLocaleDateString("en-CA");
 }
 
 function parseInterests(text: string): string[] {
@@ -141,6 +144,10 @@ export default function TripsPage() {
       setFormError("The end date must be after the start date.");
       return;
     }
+    if (nights > MAX_TRIP_NIGHTS) {
+      setFormError(`A trip can be up to ${MAX_TRIP_NIGHTS} nights long — this one is ${nights}.`);
+      return;
+    }
     setCreating(true);
     try {
       const trip = await createTrip({
@@ -235,6 +242,7 @@ export default function TripsPage() {
                   required
                   type="date"
                   min={startDate ? dayAfter(startDate) : today()}
+                  max={startDate ? dayAfter(startDate, MAX_TRIP_NIGHTS) : undefined}
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="input"

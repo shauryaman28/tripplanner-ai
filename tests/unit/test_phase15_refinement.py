@@ -64,7 +64,7 @@ async def test_classify_hotel_message():
     mock_response = MagicMock()
     mock_response.content = '{"refinement_type": "targeted_hotel", "reason": "User wants different hotel."}'
 
-    with patch("src.ai.agents.refinement_classifier.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(return_value=mock_response)
         result = await classify_refinement("Switch to a beachfront hotel", [])
 
@@ -77,7 +77,7 @@ async def test_classify_flight_message():
     mock_response = MagicMock()
     mock_response.content = '{"refinement_type": "targeted_flights", "reason": "User wants direct flight."}'
 
-    with patch("src.ai.agents.refinement_classifier.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(return_value=mock_response)
         result = await classify_refinement("Find me a non-stop flight", [])
 
@@ -90,7 +90,7 @@ async def test_classify_make_it_cheaper_is_targeted_flights():
     mock_response = MagicMock()
     mock_response.content = '{"refinement_type": "targeted_flights", "reason": "Cheapest lever is flights."}'
 
-    with patch("src.ai.agents.refinement_classifier.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(return_value=mock_response)
         result = await classify_refinement("Make it cheaper", [])
 
@@ -102,7 +102,7 @@ async def test_classify_add_a_day_is_add_day():
     mock_response = MagicMock()
     mock_response.content = '{"refinement_type": "add_day", "reason": "Trip extension."}'
 
-    with patch("src.ai.agents.refinement_classifier.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(return_value=mock_response)
         result = await classify_refinement("Add a day to the trip", [])
 
@@ -114,7 +114,7 @@ async def test_classify_destination_change_is_full_replan():
     mock_response = MagicMock()
     mock_response.content = '{"refinement_type": "full_replan", "reason": "Destination changed."}'
 
-    with patch("src.ai.agents.refinement_classifier.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(return_value=mock_response)
         result = await classify_refinement("I'd rather go to Manali", [])
 
@@ -124,7 +124,7 @@ async def test_classify_destination_change_is_full_replan():
 @pytest.mark.asyncio
 async def test_classify_llm_failure_falls_back_to_full_replan():
     """On any exception, classifier must return full_replan — the safe default."""
-    with patch("src.ai.agents.refinement_classifier.ChatGoogleGenerativeAI") as MockLLM:
+    with patch("src.ai.llm.ChatGoogleGenerativeAI") as MockLLM:
         MockLLM.return_value.ainvoke = AsyncMock(side_effect=Exception("API error"))
         result = await classify_refinement("Something weird", [])
 
@@ -610,7 +610,11 @@ _PRIOR = {
     "draft_itinerary": {"days": [], "total_cost": 0},
 }
 _DRAFT = {
-    "days": [{"day": 1, "date": "2026-12-10", "hotel": {"name": "Beach House", "cost_per_night": 4_000.0}}],
+    "days": [
+        {"day": 1, "date": "2026-12-10", "hotel": {"name": "Beach House", "cost_per_night": 4_000.0}},
+        {"day": 2, "date": "2026-12-11"},
+        {"day": 3, "date": "2026-12-12"},
+    ],
     "total_cost": 12_000.0,
     "currency": "INR",
 }
