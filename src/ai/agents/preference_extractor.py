@@ -35,6 +35,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
 from src.ai.utils.preferences import load_preferences, merge_extracted, preferences_to_dict
 from src.ai.utils.run_logger import log_agent_run, timed_run
@@ -50,8 +51,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-_SLOTS = ("morning", "afternoon", "evening")
-_FALLBACK_ACTIVITY = "Explore the area"
 
 # Heuristic thresholds (all-in INR per person per night, i.e. flights included).
 _BUDGET_BELOW_INR = 3_000
@@ -81,10 +80,10 @@ def build_trip_facts(state: Mapping[str, Any]) -> dict[str, Any]:
 
     activities: list[str] = []
     for day in days:
-        for slot_name in _SLOTS:
+        for slot_name in SLOTS:
             slot = day.get(slot_name) or {}
             name = slot.get("activity")
-            if name and name != _FALLBACK_ACTIVITY and name not in activities:
+            if name and name != FREE_TIME and name not in activities:
                 activities.append(name)
 
     return {

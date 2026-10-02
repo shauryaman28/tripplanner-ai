@@ -130,6 +130,24 @@ _STATE = {
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("found", "attempt", "summary"),
+    [(1, 0, "Found 1 flight"), (3, 0, "Found 3 flights"), (1, 2, "Found 1 flight (re-plan attempt 2)")],
+)
+async def test_search_summary_counts_in_plain_english(found, attempt, summary):
+    published = []
+
+    async def publish(event):
+        published.append(event)
+
+    with patch("src.ai.orchestrator.orchestrator.FlightAgent") as MockFA:
+        MockFA.return_value.run = AsyncMock(return_value={"flights": [{"price_inr": 5000.0}] * found})
+        await run_flight_node({**_STATE, "publish_fn": publish, "replan_attempts": attempt})
+
+    assert published == [{"agent": "flight_agent", "status": "completed", "summary": summary}]
+
+
+@pytest.mark.asyncio
 async def test_failed_flight_search_is_published_and_replan_loosens_the_search():
     published = []
 
@@ -381,3 +399,52 @@ async def test_increase_budget_reaches_what_the_flights_need():
     assert resp.status_code == 200
     assert trip.budget == 36_500.0
     assert make_budget_decision([{"price_inr": 18_234.0}], trip.budget).decision == "continue"
+
+
+@pytest.mark.asyncio
+async def test_status_hands_back_the_budget_conflict_after_a_reload():
+    """The SSE event that carried the options is gone after a reload; GET /status must still have them."""
+    trip = _trip(uuid.uuid4(), status="failed")
+    options = [
+        {
+            "choice": "increase_budget",
+            "description": "Increase total budget to ₹36,500",
+            "estimated_saving": "Additional ₹16,500",
+        }
+    ]
+    escalate = AgentRun(
+        trip_id=trip.id,
+        agent_name="escalate",
+        status="completed",
+        output={"reason": "Flights cost ₹18,234.", "options": options},
+    )
+    earlier_run = [_run(trip.id, "flight_agent"), _run(trip.id, "orchestrator")]
+    last_run = [_run(trip.id, "flight_agent"), escalate, _run(trip.id, "orchestrator", "failed")]
+
+    with _client(trip, earlier_run + last_run) as (client, _, __):
+        body = (await client.get(f"/trips/{trip.id}/status")).json()
+
+    assert body["budget_conflict"] == {"reason": "Flights cost ₹18,234.", "options": options}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "trip_status,later_rows",
+    [
+        ("failed", ["flight_agent", "builder_failed", "orchestrator"]),  # a later run failed for another reason
+        ("planning", []),  # a re-plan is running: the old conflict is no longer the news
+        ("completed", ["flight_agent", "persist", "orchestrator"]),
+    ],
+)
+async def test_status_reports_no_conflict_once_it_is_stale(trip_status, later_rows):
+    trip = _trip(uuid.uuid4(), status=trip_status)
+    conflict_run = [
+        _run(trip.id, "flight_agent"),
+        AgentRun(trip_id=trip.id, agent_name="escalate", status="completed", output={"reason": "x", "options": []}),
+        _run(trip.id, "orchestrator", "failed"),
+    ]
+
+    with _client(trip, conflict_run + [_run(trip.id, name) for name in later_rows]) as (client, _, __):
+        body = (await client.get(f"/trips/{trip.id}/status")).json()
+
+    assert body["budget_conflict"] is None

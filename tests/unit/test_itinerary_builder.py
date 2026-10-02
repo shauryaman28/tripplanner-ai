@@ -112,3 +112,37 @@ async def test_itinerary_builder_run_logs_agent_run():
     assert len(added) == 1
     assert added[0].agent_name == "itinerary_builder"
     assert added[0].status == "completed"
+
+
+# ── Shape is checked first, so a malformed reply is a clean retry, never a crash ──
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda d: d["days"][0].update(morning="Fort Aguada"),  # a slot that is a string, not an object
+        lambda d: d.update(days={"day": 1}),  # days that is not a list
+        lambda d: d["days"][0].update(hotel=["Goa Grand"]),  # a hotel that is a list
+        lambda d: d.pop("total_cost"),
+    ],
+)
+async def test_build_itinerary_malformed_shape_is_schema_invalid(mutate):
+    bad = json.loads(_good_draft_json())
+    mutate(bad)
+    with patch("src.ai.builder.builder._call_llm", AsyncMock(return_value=json.dumps(bad))):
+        result = await build_itinerary(TRIP_META, FLIGHTS, HOTELS, ATTRACTIONS)
+
+    assert isinstance(result, BuilderError)
+    assert result.code == "SCHEMA_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_build_itinerary_accepts_null_costs_as_free():
+    draft = json.loads(_good_draft_json())
+    draft["days"][0]["morning"]["cost"] = None  # models write null for "free"
+    with patch("src.ai.builder.builder._call_llm", AsyncMock(return_value=json.dumps(draft))):
+        result = await build_itinerary(TRIP_META, FLIGHTS, HOTELS, ATTRACTIONS)
+
+    assert isinstance(result, ItineraryDraft)
+    assert result.days[0].morning.cost == 0.0

@@ -39,11 +39,38 @@ export interface ActivitySlot {
   cost: number;
   lat?: number | null;
   lng?: number | null;
+  category?: string | null;   // Phase 18 — attached from the attraction search
+  rating?: number | null;     // OpenTripMap popularity rate — see lib/places.ts
 }
 
 export interface HotelSlot {
   name: string;
   cost_per_night: number;
+  stars?: number | null;
+  rating?: number | null;     // guest review score, 0–10
+  address?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+export interface Airport {
+  code: string;               // IATA
+  name?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+/** The outbound flight the itinerary's cost assumes — attached to the arrival day. */
+export interface FlightInfo {
+  airline?: string;
+  flight_number?: string;
+  departure?: string;
+  arrival?: string;
+  duration_mins?: number;
+  price_inr?: number;       // for every traveller; both directions when the trip has a return date
+  stops?: number;
+  origin?: Airport | null;
+  destination?: Airport | null;
 }
 
 export interface DaySchedule {
@@ -53,7 +80,7 @@ export interface DaySchedule {
   afternoon: ActivitySlot | null;
   evening: ActivitySlot | null;
   hotel: HotelSlot | null;
-  flight: Record<string, unknown> | null;
+  flight: FlightInfo | null;
 }
 
 export interface StructuredItinerary {
@@ -102,6 +129,12 @@ export interface BudgetConflictOption {
   estimated_saving: string;
 }
 
+/** Flights left too little of the budget for the rest of the trip — the ways out the user can pick from. */
+export interface BudgetConflict {
+  reason: string;
+  options: BudgetConflictOption[];
+}
+
 export type SSEEvent = SSEConnectedEvent | SSEAgentUpdateEvent;
 
 // ── Progress (from GET /trips/{id}/status) ────────────────────────────────
@@ -114,6 +147,7 @@ export interface TripStatusResponse {
     agents_total: number;
     agents: Record<string, AgentStatus>;
   };
+  budget_conflict: BudgetConflict | null;   // set when the last run ended in one — survives a reload
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────

@@ -1,83 +1,176 @@
 /**
- * Phase 17 E2E smoke test — the check to run before every change.
+ * E2E smoke test — the check to run before every change.
  *
- * Roadmap acceptance: type "Plan a 5-day trip to Goa in December for 2 people,
- * budget ₹50000" → wait for SSE planning_complete → itinerary cards render.
+ * Roadmap acceptance (Phase 17): type "Plan a 5-day trip to Goa in December for
+ * 2 people, budget ₹50000" → wait for SSE planning_complete → itinerary cards render.
  *
- * Also covers register + login, trip creation, the live progress panel,
- * reloading a planned trip, and a refinement turn.
+ * Also covers register + login, trip creation, the live progress panel, the
+ * map (Phase 18), reloading a planned trip, a refinement turn, and a budget
+ * conflict whose options survive a reload.
  *
- * Runs against whatever is on :8000. By default Playwright starts the stub
- * backend (tests/e2e/stub_backend.py — real app, DB, Redis and graph; external
- * APIs faked), so no API keys are needed.
+ * Playwright starts its own stack (playwright.config.ts): the stub backend
+ * (tests/e2e/stub_backend.py — real app, DB, Redis and graph; external APIs
+ * faked) and a frontend pointed at it, on ports of their own. No API keys needed.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const EMAIL = `e2e-${Date.now()}@example.com`;
 const PASSWORD = "test-password-123";
+const YEAR = new Date().getFullYear() + 1;
 
-// The second test logs in with the account the first one registers.
+// The later tests sign in with the account the first one registers.
 test.describe.configure({ mode: "serial" });
 
-test("register, create trip, plan, see itinerary cards, refine", async ({ page }) => {
+async function signIn(page: Page) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(EMAIL);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/trips$/);
+}
+
+async function createTrip(page: Page, trip: { destination: string; budget: string; interests: string }) {
+  await page.getByRole("button", { name: /plan a trip/i }).first().click();
+  await page.getByLabel("Destination").fill(trip.destination);
+  await page.getByLabel("Start date").fill(`${YEAR}-12-10`);
+  await page.getByLabel("End date").fill(`${YEAR}-12-15`);
+  await page.getByLabel(/budget/i).fill(trip.budget);
+  await page.getByLabel("Travellers", { exact: true }).fill("2");
+  await page.getByLabel(/interests/i).fill(trip.interests);
+  await page.getByRole("button", { name: /create & plan/i }).click();
+  await expect(page).toHaveURL(/\/trips\/[a-f0-9-]{36}$/);
+  // Redis pub/sub has no replay: only send once the live stream is subscribed.
+  await expect(page.locator('[data-stream="connected"]')).toBeVisible();
+}
+
+test("register, create trip, plan, see itinerary cards and map, refine", async ({ page }) => {
   // ── 1. Register (auto-login) ─────────────────────────────────────────────
   await page.goto("/login");
   await page.getByRole("button", { name: /create one/i }).click();
   await page.getByLabel("Email").fill(EMAIL);
-  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: /create account/i }).click();
   await expect(page).toHaveURL(/\/trips$/);
 
   // ── 2. Create a trip ─────────────────────────────────────────────────────
-  await page.getByRole("button", { name: /plan a trip/i }).first().click();
-  const year = new Date().getFullYear() + 1;
-  await page.getByLabel("Destination").fill("Goa");
-  await page.getByLabel("Start date").fill(`${year}-12-10`);
-  await page.getByLabel("End date").fill(`${year}-12-15`);
-  await page.getByLabel(/budget/i).fill("50000");
-  await page.getByLabel(/group size/i).fill("2");
-  await page.getByLabel(/interests/i).fill("beach, food");
-  await page.getByRole("button", { name: /create & plan/i }).click();
-  await expect(page).toHaveURL(/\/trips\/[a-f0-9-]{36}$/);
+  await createTrip(page, { destination: "Goa", budget: "50000", interests: "beach, food" });
 
   // ── 3. Plan from the chat, with the SSE stream live ──────────────────────
-  const progress = page.getByLabel("Planning progress");
-  await expect(progress.getByText("Live")).toBeVisible();
-
-  const chat = page.getByRole("textbox", { name: /trip description/i });
+  const chat = page.getByRole("textbox", { name: /message the trip assistant/i });
   await chat.fill("Plan a 5-day trip to Goa in December for 2 people, budget ₹50000");
   await chat.press("Enter");
 
   // ── 4. planning_complete arrives over SSE → itinerary cards render ───────
   const itinerary = page.getByLabel("Your itinerary");
-  await expect(itinerary.getByText("Day 1", { exact: true })).toBeVisible({ timeout: 90_000 });
-  await expect(itinerary.getByText("Total", { exact: true })).toBeVisible();
+  const progress = page.getByLabel("Planning progress");
+  const dayOne = itinerary.getByRole("article").getByText("Day 1", { exact: true }); // the day card, not the map legend
+  await expect(dayOne).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByLabel("Trip cost").getByText("Estimated total")).toBeVisible();
+  await expect(page.getByLabel("Trip cost").getByText(/under budget/)).toBeVisible();
   await expect(progress.getByText(/planning complete/i)).toBeVisible();
-  await expect(progress.getByText(/found \d+ flights/i)).toBeVisible();
-  await expect(page.getByPlaceholder(/refine your trip/i)).toBeVisible();
+  await expect(progress.getByText("Found 1 flight", { exact: true })).toBeVisible();
+  await expect(progress.getByText("Found 3 attractions")).toBeVisible();
+  await expect(page.getByText(/your itinerary is ready/i)).toBeVisible();
+  await expect(chat).toBeEnabled();
+
+  // each stop says what it is; a spare slot is not padded with "free time"
+  const cards = itinerary.getByRole("article");
+  await expect(cards.first()).toContainText("Fort Aguada");
+  await expect(cards.first()).toContainText("Top attraction");
+  await expect(cards.first()).toContainText("Heritage site");
+  await expect(cards.nth(1)).toContainText("Basilica of Bom Jesus");
+  await expect(itinerary.getByText("Free time")).toHaveCount(0);
+
+  // ── 4b. Map (Phase 18): pins per day, a route, popups, hotel + airport ────
+  const map = page.getByLabel("Trip map");
+  await map.scrollIntoViewIfNeeded();
+  await expect(map.locator(".leaflet-container")).toBeVisible();
+  await expect(map.locator('[data-pin="day-1"]')).toHaveCount(2);
+  await expect(map.locator('[data-pin="day-2"]')).toHaveCount(1);
+  await expect(map.locator('[data-pin="hotel"]')).toHaveCount(1);
+  await expect(map.locator('[data-pin="airport"]')).toHaveCount(2);
+  // different days, different colours
+  const colour = (pin: string) =>
+    map.locator(`[data-pin="${pin}"]`).first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(await colour("day-1")).not.toBe(await colour("day-2"));
+  // day 1 has two stops → one route line; day 2 has one stop → none
+  await expect(map.locator("path.route-day-1")).toHaveCount(1);
+  await expect(map.locator("path.route-day-2")).toHaveCount(0);
+  // pin click → detail popup
+  // (by name: while one popup opens the previous one is still fading out)
+  const popupFor = (place: string) => map.locator(".leaflet-popup-content").filter({ hasText: place });
+  await map.getByTitle(/Day 1 · Morning: Fort Aguada/).click();
+  const popup = popupFor("Fort Aguada");
+  await expect(popup).toContainText("Day 1 · Morning");
+  await expect(popup).toContainText("History");
+  await expect(popup).toContainText("Rating: Top attraction (3 of 3)");
+  await expect(popup).toContainText("Cost estimate");
+  // the legend names every day, and isolates one on request
+  const legend = map.getByLabel("Map legend");
+  await expect(legend).toContainText("Hotel");
+  await legend.getByRole("button", { name: "Day 2" }).click();
+  await expect(legend.getByRole("button", { name: "Day 2" })).toHaveAttribute("aria-pressed", "true");
+  await legend.getByRole("button", { name: "All days" }).click();
+  // a day card's own "Map" button opens that stop's popup
+  await itinerary.getByRole("button", { name: "Show Baga Beach on the map" }).click();
+  await expect(popupFor("Baga Beach")).toContainText("Day 1 · Afternoon");
+  await expect(map.locator(".leaflet-popup-content")).toHaveCount(1); // and the first one has closed
+  await expect(map).toBeInViewport();
 
   // ── 5. A planned trip survives a reload ──────────────────────────────────
   await page.reload();
-  await expect(itinerary.getByText("Day 1", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Goa" })).toBeVisible();
+  await expect(dayOne).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Goa", exact: true })).toBeVisible();
 
   // ── 6. Refinement turn ───────────────────────────────────────────────────
-  await expect(progress.getByText("Live")).toBeVisible();
+  await expect(page.locator('[data-stream="connected"]')).toBeVisible();
   await chat.fill("Change hotels to something closer to the beach");
   await chat.press("Enter");
-  await expect(page.getByText(/refining your trip/i)).toBeVisible();
-  await expect(page.getByPlaceholder(/refine your trip/i)).toBeVisible({ timeout: 90_000 });
-  await expect(itinerary.getByText("Day 1", { exact: true })).toBeVisible();
+  await expect(page.getByText(/looking for a different place to stay/i)).toBeVisible();
+  await expect(page.getByText(/the plan now comes to/i)).toBeVisible({ timeout: 90_000 });
+  await expect(itinerary.getByRole("article").first()).toContainText("Baga Beach House"); // the other hotel
+  // only the hotel search ran again; the other two are carried forward as done (not "not started")
+  await expect(progress.getByText("Found 2 hotels")).toBeVisible();
+  await expect(progress.getByText("Done", { exact: true })).toHaveCount(2);
+
+  // ── 7. …and a reloaded page still shows every search as done ─────────────
+  await page.reload();
+  await expect(itinerary.getByRole("article").first()).toContainText("Baga Beach House");
+});
+
+test("a budget conflict keeps its options across a reload, and re-plans", async ({ page }) => {
+  await signIn(page);
+  // ₹8,200 flights out of ₹12,000 leave too little for the rest → the run stops and offers ways out
+  await createTrip(page, { destination: "Udaipur", budget: "12000", interests: "history" });
+
+  const chat = page.getByRole("textbox", { name: /message the trip assistant/i });
+  await chat.fill("A long weekend of palaces and lakes");
+  await chat.press("Enter");
+
+  const options = page.getByLabel("Budget options");
+  await expect(options.getByText("Over budget")).toBeVisible({ timeout: 90_000 });
+  await expect(options.getByRole("button")).toHaveCount(3);
+
+  // the SSE event that carried the options is gone after a reload — GET /status brings them back
+  await page.reload();
+  await expect(options.getByRole("button")).toHaveCount(3);
+  await expect(page.locator('[data-stream="connected"]')).toBeVisible();
+
+  await options.getByRole("button", { name: /cheaper connecting flights/i }).click();
+  const itinerary = page.getByLabel("Your itinerary");
+  await expect(itinerary.getByRole("article").first()).toBeVisible({ timeout: 90_000 });
+  // ₹2,500 flights + 2 nights at ₹4,500 = ₹11,500 of ₹12,000: inside the budget, only just
+  await expect(page.getByLabel("Trip cost").getByText("Only ₹500 of the budget left")).toBeVisible();
+  await expect(page.getByLabel("Planning progress").getByText("Found 1 flight (re-plan attempt 1)")).toBeVisible();
+  await expect(options).toHaveCount(0);
 });
 
 test("login with existing credentials", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(EMAIL);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\/trips$/);
-  await expect(page.getByText("Goa")).toBeVisible(); // the trip planned above is listed
+  await signIn(page);
+  // the trips planned above are listed
+  await expect(page.getByRole("link", { name: /Goa/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Udaipur/ })).toBeVisible();
 });
 
 test("unauthenticated user is redirected to login", async ({ page }) => {

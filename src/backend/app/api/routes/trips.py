@@ -455,21 +455,35 @@ async def get_trip_status(
                 "agents_done": 0–3,
                 "agents_total": 3,
                 "agents": {"flight_agent": "pending" | "completed" | "failed", ...}
-            }
+            },
+            "budget_conflict": {"reason": "...", "options": [...]} | null
         }
 
     Derived from agent_runs — no extra state to keep in sync. While a run is in
     flight only its own rows count, so a re-plan starts again from 0/3 instead
-    of showing the previous run's results.
+    of showing the previous run's results. `budget_conflict` is set when the
+    last run ended in one, so its options survive a page reload (the SSE event
+    that first carried them is gone by then).
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
     result = await db.execute(select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc()))
     runs = list(result.scalars().all())
+    # Every run ends with an "orchestrator" row, so those rows mark where one run stops and the next starts.
+    run_ends = [i for i, run in enumerate(runs) if run.agent_name == "orchestrator"]
+    since_last_end = runs[run_ends[-1] + 1 :] if run_ends else runs  # the run in flight, or one that crashed
+
+    conflict = None
+    if trip.status == TripStatus.FAILED:
+        previous_end = run_ends[-2] + 1 if len(run_ends) > 1 else 0
+        latest_run = since_last_end or runs[previous_end:]
+        escalation = next((run for run in latest_run if run.agent_name == "escalate"), None)
+        if escalation is not None:
+            output = escalation.output or {}
+            conflict = {"reason": output.get("reason", ""), "options": output.get("options", [])}
+
     if trip.status == TripStatus.PLANNING:
-        # Every run ends with an "orchestrator" row; whatever follows the last one is the run in flight.
-        last_finished = max((i for i, run in enumerate(runs) if run.agent_name == "orchestrator"), default=-1)
-        runs = runs[last_finished + 1 :]
+        runs = since_last_end
 
     agents = dict.fromkeys(SUB_AGENTS, "pending")
     agents.update({run.agent_name: run.status for run in runs if run.agent_name in SUB_AGENTS})  # latest wins
@@ -482,6 +496,7 @@ async def get_trip_status(
             "agents_total": len(SUB_AGENTS),
             "agents": agents,
         },
+        "budget_conflict": conflict,
     }
 
 

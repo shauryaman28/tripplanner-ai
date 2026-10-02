@@ -14,6 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.ai.agents.refinement_classifier import RefinementClassification
 
+_DEL = {"latitude": 28.5585, "longitude": 77.1002}
+_GOI = {"latitude": 15.3806, "longitude": 73.8332}
+
 
 def duffel_offer(
     carrier: str = "6E",
@@ -29,6 +32,8 @@ def duffel_offer(
         "arriving_at": f"{day}T08:15:00",
         "marketing_carrier": {"iata_code": carrier},
         "marketing_carrier_flight_number": number,
+        "origin": {"iata_code": "DEL", "name": "Indira Gandhi International Airport", **_DEL},
+        "destination": {"iata_code": "GOI", "name": "Goa Airport", **_GOI},
     }
     return {
         "total_amount": amount,
@@ -71,9 +76,29 @@ def liteapi_response(*hotels: tuple[str, float], stars: int = 4) -> MagicMock:
 
 # ── Whole-pipeline stubs ───────────────────────────────────────────────────
 
-HOTELS = [{"name": "Goa Grand", "stars": 4, "price_per_night_inr": 4500.0, "rating": 4.2, "address": "Calangute"}]
+HOTELS = [
+    {
+        "name": "Goa Grand",
+        "stars": 4,
+        "price_per_night_inr": 4500.0,
+        "rating": 8.4,
+        "address": "Calangute",
+        "lat": 15.544,
+        "lng": 73.755,
+    }
+]
+# `rating` is OpenTripMap's popularity rate: 1–3, or 5–7 for the same scale on a heritage site.
 ATTRACTIONS = [
-    {"name": "Fort Aguada", "category": "history", "rating": 4.5, "description": "Fort.", "lat": 15.5, "lng": 73.7}
+    {"name": "Fort Aguada", "category": "history", "rating": 7.0, "description": "Fort.", "lat": 15.492, "lng": 73.773},
+    {"name": "Baga Beach", "category": "beach", "rating": 2.0, "description": "Beach.", "lat": 15.556, "lng": 73.752},
+    {
+        "name": "Basilica of Bom Jesus",
+        "category": "spiritual",
+        "rating": 7.0,
+        "description": "Church.",
+        "lat": 15.501,
+        "lng": 73.912,
+    },
 ]
 
 
@@ -90,23 +115,35 @@ def flight(price: float, day: str = "2030-01-10") -> dict:
         "duration_mins": 135,
         "price_inr": price,
         "stops": 0,
+        "origin": {"code": "DEL", "name": "Indira Gandhi International Airport", "lat": 28.5585, "lng": 77.1002},
+        "destination": {"code": "GOI", "name": "Goa Airport", "lat": 15.3806, "lng": 73.8332},
     }
 
 
 async def fake_builder_llm(_system: str, user_prompt: str) -> str:
-    """Stand-in for the Groq call: a valid 2-day draft built only from the data in the prompt."""
+    """Stand-in for the Groq call: a valid 2-day draft built only from the data in the prompt.
+
+    Like a real model it names places and leaves the coordinates wrong or
+    missing — the builder attaches the real ones from the source data.
+    """
     start = date.fromisoformat(re.search(r"from (\d{4}-\d{2}-\d{2}) to", user_prompt).group(1))
-    flights, hotels = (
+    flights, hotels, attractions = (
         json.loads(re.search(rf"Available {kind} \(JSON\): (\[.*?\])\n", user_prompt).group(1))
-        for kind in ("flights", "hotels")
+        for kind in ("flights", "hotels", "attractions")
     )
+    names = [a["name"] for a in attractions]
     hotel = {"name": hotels[0]["name"], "cost_per_night": hotels[0]["price_per_night_inr"]} if hotels else None
+
+    def slot(index: int) -> dict:
+        name = names[index] if index < len(names) else "Explore the area"
+        return {"activity": name, "cost": 0, "lat": None, "lng": None}
+
     days = [
         {
             "day": n + 1,
             "date": str(start + timedelta(days=n)),
-            "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.5, "lng": 73.7},
-            "afternoon": {"activity": "Explore the area", "cost": 0, "lat": None, "lng": None},
+            "morning": slot(2 * n),
+            "afternoon": slot(2 * n + 1),
             "evening": None,
             "hotel": hotel,
             "flight": None,

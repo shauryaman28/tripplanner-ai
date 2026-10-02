@@ -1,4 +1,4 @@
-"""End-to-end backend test — Phases 5–17 through the public HTTP API.
+"""End-to-end backend test — Phases 5–18 through the public HTTP API.
 
 Real Postgres (Alembic schema), real Redis, the real LangGraph orchestrator,
 real background tasks. Only the external network seams are stubbed: the MCP
@@ -226,6 +226,9 @@ async def test_budget_conflict_then_replan_end_to_end(db_session):
         assert seen == ["planning_started", "flight_agent", "budget_conflict", "planning_failed"]
         conflict = events[2]
         assert [o["choice"] for o in conflict["options"]] == ["cheaper_flights", "reduce_days", "increase_budget"]
+        # the same options are still there for a client that reloads the page and missed the event
+        status = (await client.get(f"/trips/{trip_id}/status")).json()
+        assert status["budget_conflict"] == {"reason": conflict["reason"], "options": conflict["options"]}
 
         # a failed trip has nothing to refine
         with patch("app.api.routes.trips.classify_refinement", AsyncMock()):
@@ -241,6 +244,7 @@ async def test_budget_conflict_then_replan_end_to_end(db_session):
             "continue",
         ]
         assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "completed"
+        assert (await client.get(f"/trips/{trip_id}/status")).json()["budget_conflict"] is None
         assert (await client.get(f"/trips/{trip_id}/itinerary")).json()["total_cost"] == 15_000 + 2 * 4_500
 
 
@@ -272,3 +276,39 @@ async def test_plan_survives_missing_flight_and_hotel_providers(db_session):
             "hotel_agent": "failed",
             "activities_agent": "completed",
         }
+
+
+@pytest.mark.asyncio
+async def test_restart_recovery_unsticks_interrupted_runs(db_session):
+    """A run cut off by a restart must not leave its trip "planning" (every later call would be a 409).
+
+    A first plan that was interrupted has nothing to show → failed. An interrupted
+    refinement leaves the previous itinerary standing → completed.
+    """
+    from app.main import _recover_after_restart
+    from app.models.itinerary import Itinerary
+    from app.models.trip import Trip, TripStatus
+    from app.models.user import User
+
+    user = User(email=f"{os.urandom(6).hex()}@example.com", hashed_password="x")
+    db_session.add(user)
+    await db_session.commit()
+
+    def trip(status: TripStatus) -> Trip:
+        return Trip(user_id=user.id, destination="Goa", start_date=START, end_date=END, budget=50_000, status=status)
+
+    first_plan, refinement, untouched = trip(TripStatus.PLANNING), trip(TripStatus.PLANNING), trip(TripStatus.PENDING)
+    db_session.add_all([first_plan, refinement, untouched])
+    await db_session.commit()
+    db_session.add(Itinerary(trip_id=refinement.id, structured_data={"days": []}, total_cost=0.0))
+    await db_session.commit()
+
+    await _recover_after_restart()
+
+    for row in (first_plan, refinement, untouched):
+        await db_session.refresh(row)
+    assert (first_plan.status, refinement.status, untouched.status) == (
+        TripStatus.FAILED,
+        TripStatus.COMPLETED,
+        TripStatus.PENDING,
+    )

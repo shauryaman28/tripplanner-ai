@@ -107,11 +107,32 @@ export function useSSE(tripId: string | null, enabled: boolean = true): UseSSERe
 
 export const AGENT_DISPLAY: Record<string, string> = {
   flight_agent:     "Flights",
-  hotel_agent:      "Hotels",
-  activities_agent: "Activities",
+  hotel_agent:      "Stay",
+  activities_agent: "Things to do",
 };
 
-type AgentState = "pending" | "running" | "completed" | "failed";
+export type AgentState = "pending" | "running" | "completed" | "failed";
+
+/**
+ * What the latest run covers. A refinement repeats one search and carries the
+ * others forward: `carried` holds the states of the searches it leaves alone,
+ * and only events from index `since` on belong to it.
+ */
+export interface RunScope {
+  since: number;
+  carried: Record<string, AgentState>;
+}
+
+export const WHOLE_RUN: RunScope = { since: 0, carried: {} };
+
+/** The latest result event each agent sent in this run (a carried agent keeps the one it had). */
+export function latestAgentEvents(events: SSEAgentUpdateEvent[], scope: RunScope = WHOLE_RUN): Record<string, SSEAgentUpdateEvent> {
+  const latest: Record<string, SSEAgentUpdateEvent> = {};
+  events.forEach((ev, index) => {
+    if (ev.agent && !ev.event && (index >= scope.since || scope.carried[ev.agent])) latest[ev.agent] = ev;
+  });
+  return latest;
+}
 
 /**
  * Per-agent badge state. SSE events are the live source; `polled` (from
@@ -122,12 +143,13 @@ export function deriveAgentStates(
   events: SSEAgentUpdateEvent[],
   polled: Record<string, AgentStatus> = {},
   active: boolean = false,
+  scope: RunScope = WHOLE_RUN,
 ): Record<string, AgentState> {
+  const latest = latestAgentEvents(events, scope);
   const states: Record<string, AgentState> = {};
   for (const agent of Object.keys(AGENT_DISPLAY)) {
-    const fromStream = [...events].reverse().find((ev) => ev.agent === agent && !ev.event)?.status;
-    const result = [fromStream, polled[agent]].find((s) => s === "completed" || s === "failed");
-    states[agent] = (result as AgentState | undefined) ?? (active ? "running" : "pending");
+    const result = [latest[agent]?.status, polled[agent]].find((s) => s === "completed" || s === "failed");
+    states[agent] = scope.carried[agent] ?? (result as AgentState | undefined) ?? (active ? "running" : "pending");
   }
   return states;
 }

@@ -2,6 +2,7 @@
 
 lat/lng added to Attraction in Phase 3 so Phase 18 map view
 can use server-side coordinates instead of client-side geocoding.
+Phase 18 also puts coordinates on Hotel and the two airports on Flight.
 """
 
 from pydantic import BaseModel, Field
@@ -51,6 +52,13 @@ class BudgetInput(BaseModel):
 # ── Outputs ────────────────────────────────────────────────────────────────
 
 
+class Airport(BaseModel):
+    code: str  # IATA
+    name: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+
 class Flight(BaseModel):
     airline: str
     flight_number: str
@@ -59,6 +67,8 @@ class Flight(BaseModel):
     duration_mins: int
     price_inr: float
     stops: int
+    origin: Airport | None = None  # Phase 18 — map info markers
+    destination: Airport | None = None
 
 
 class Hotel(BaseModel):
