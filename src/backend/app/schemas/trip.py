@@ -71,7 +71,7 @@ class ReplanRequest(BaseModel):
     choice meanings:
       cheaper_flights  → re-run flight search with a reduced budget cap and one more stop
       reduce_days      → shorten trip by 2 days (lower hotel cost)
-      increase_budget  → bump total budget by 25% and retry
+      increase_budget  → raise the budget to what the flights need (at least +25%) and retry
     """
 
     choice: Literal["cheaper_flights", "reduce_days", "increase_budget"]

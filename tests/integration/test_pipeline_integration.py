@@ -161,7 +161,7 @@ async def test_plan_then_refine_end_to_end(db_session):
             return rows if len(rows) == 2 else None
 
         rows = await _until(embedded, "embeddings")
-        assert all(r.embedding_model == "text-embedding-3-small" and len(r.vector) == 1536 for r in rows)
+        assert all(r.embedding_model == "gemini-embedding-001" and len(r.vector) == 1536 for r in rows)
         assert (await client.get("/admin/embedding-health")).json()["status"] == "ok"
 
         # ── Phase 13: timeline is one ordered log of runs + itinerary saves ──

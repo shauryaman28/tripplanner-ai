@@ -90,7 +90,12 @@ CRITICAL DATA SCOPE RULE:
 - NEVER invent an activity, hotel, or place name that was not given to you.
 - If there is no attraction data available for a day, set that slot's activity to
   exactly "Explore the area" and cost to 0 — do not invent a substitute.
+- Use each attraction at most once in the whole itinerary, and spread them evenly
+  over the days rather than front-loading. A slot with nothing left to do is null;
+  a day with no attraction at all gets exactly one "Explore the area" slot (cost 0).
 - If the hotels list is empty, set "hotel" to null on every day — do not invent one.
+- Otherwise use ONE hotel for the whole trip. The last day is the departure day:
+  set its "hotel" to null (N days means N-1 hotel nights).
 - If the flights list is empty, the flight cost is 0.
 
 CRITICAL BUDGET RULE:
@@ -158,7 +163,7 @@ def _build_user_prompt(
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
     from langchain_groq import ChatGroq
 
-    llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=4096)
+    llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=8192)  # room for a long trip plus the model's reasoning
     response = await llm.ainvoke([("system", system_prompt), ("user", user_prompt)])
     return content_to_text(response.content)
 

@@ -7,8 +7,9 @@ system could not plan a trip when run for real. Every layer below had been
 tested only through a mock of the layer where its bug lived.
 
 **Answer now:** the full flow runs — real Postgres, real Redis, the real
-LangGraph, real SSE, a real browser — with the external APIs stubbed. What is
-still **not** verified is listed at the bottom, and it matters.
+LangGraph, real SSE, a real browser — with the external APIs stubbed, and the
+planning graph has also completed real trips against the live APIs (see
+"Live verification" below).
 
 ---
 
@@ -90,13 +91,41 @@ Severity: **A** = no trip could complete · **B** = a documented feature did not
 
 ---
 
-## Still not verified — read this before a demo
+## Live verification (added the same day, once real keys were in `.env`)
 
-1. **No live LLM or provider call has succeeded.** The keys in the local `.env` are placeholders. Duffel and OpenTripMap were reached and answered 401, so URLs and headers are plausible, but a real Duffel offer response, Gemini `gemini-3.5-flash`, and Groq have not been exercised. The Duffel mapping is unit-tested against the documented response shape only.
-2. **Hotels have no provider.** `search_hotels` returns `API_NOT_CONFIGURED`; itineraries are built without a hotel. Choosing one (Duffel Stays, Booking, …) is an open decision.
-3. **Currency conversion is a static table** (INR/USD/EUR/GBP). A Duffel account billed in another currency returns `NO_RESULTS`.
-4. **Prompts v5 (builder) and the orchestrator's `sightseeing` rule have not been run against a live model.**
-5. **`add_day` always adds exactly one day**, whatever the message says.
+Every external call has now succeeded against the real service:
+
+| Service | Used for | Result |
+|---|---|---|
+| Gemini `gemini-3.5-flash` | intent parsing | parsed a free-text request into all seven fields |
+| Gemini `gemini-embedding-001` | embeddings | 1536-dim vector |
+| Groq `openai/gpt-oss-120b` | itinerary builder, preference extractor | valid in-scope itinerary in ~5 s; extracted vegetarian / Pune / `6E` |
+| Duffel (test mode) | flights | 5 offers Delhi → Goa |
+| LiteAPI (sandbox) | hotels | Goa, Jaipur, Manali, Kerala |
+| OpenTripMap + Nominatim | attractions, geocoding | beaches + history for Goa; Hadimba Temple for Manali |
+
+Full plans through the real graph and the real MCP subprocess: Goa 5 days from
+free text (16 s, passed first time), Jaipur 3 days from the form (14 s), and a
+too-tight budget (escalated with `budget_conflict`).
+
+Then the whole app on live keys — real backend, Postgres, Redis, SSE:
+
+- **Over HTTP:** Goa planned in 21 s; SSE events in order; 12 timeline rows; two
+  1536-dim embeddings stored; `POST /refine "something nicer, 4 star at least"` →
+  the live classifier chose `targeted_hotel`, only HotelAgent re-ran, and the new
+  version uses the 4-star hotel.
+- **In the browser (Playwright, Chromium):** Jaipur planned from the chat, then
+  "Switch to a more luxurious hotel" → itinerary updated to the pricier hotel.
+
+The live runs found six more problems, all fixed — see DECISIONS #64–72.
+
+## Still not verified
+
+1. **Sandbox data.** The Duffel token is test-mode (offers include the fictional "ZZ" Duffel Airways) and the LiteAPI key is a sandbox key. Real prices need a Duffel live token and a LiteAPI production key (the latter requires a payment method).
+2. **Currency conversion for Duffel is a static table** (INR/USD/EUR/GBP).
+3. **`add_day` always adds exactly one day**, whatever the message says.
+4. **Weather is not part of planning** — the tool exists but nothing calls it until Phase 38. The OpenWeatherMap key set on 2026-10-02 still answered 401 (new keys take a while to activate).
+5. **Budget-conflict → replan and `full_replan` / `add_day` refinements** have run against stubs and in the live graph, but not from the browser on live keys.
 
 ## Not done on purpose
 

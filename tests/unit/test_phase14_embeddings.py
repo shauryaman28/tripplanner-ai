@@ -1,7 +1,7 @@
 """
 Unit tests for Phase 14 — Embedding generation.
 
-All tests mock _call_openai_embed (the single network seam) so nothing here
+All tests mock _call_embed (the single network seam) so nothing here
 makes an OpenAI API call. The pattern mirrors how test_mcp_client.py patches
 the Amadeus SDK.
 
@@ -167,7 +167,7 @@ async def test_write_embedding_rows_success_adds_two_rows():
     itinerary_id = uuid.uuid4()
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await write_embedding_rows(
@@ -189,7 +189,7 @@ async def test_write_embedding_rows_success_uses_correct_model():
     db = _make_mock_db()
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await write_embedding_rows(
@@ -211,7 +211,7 @@ async def test_write_embedding_rows_success_stores_vector():
     db = _make_mock_db()
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await write_embedding_rows(
@@ -235,7 +235,7 @@ async def test_write_embedding_rows_calls_openai_twice():
     db = _make_mock_db()
     mock_embed = AsyncMock(return_value=_FAKE_VECTOR)
 
-    with patch("src.ai.embeddings.embedder._call_openai_embed", mock_embed):
+    with patch("src.ai.embeddings.embedder._call_embed", mock_embed):
         await write_embedding_rows(
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
@@ -256,7 +256,7 @@ async def test_write_embedding_rows_openai_failure_writes_pending_retry():
     itinerary_id = uuid.uuid4()
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(side_effect=Exception("OpenAI 429 rate limit")),
     ):
         await write_embedding_rows(
@@ -282,7 +282,7 @@ async def test_write_embedding_rows_failure_calls_rollback():
     db = _make_mock_db()
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(side_effect=Exception("timeout")),
     ):
         await write_embedding_rows(
@@ -312,7 +312,7 @@ async def test_write_embedding_rows_deletes_stale_pending_retry_rows():
     db = _make_mock_db(stale_rows=[stale])
 
     with patch(
-        "src.ai.embeddings.embedder._call_openai_embed",
+        "src.ai.embeddings.embedder._call_embed",
         AsyncMock(return_value=_FAKE_VECTOR),
     ):
         await write_embedding_rows(
@@ -350,7 +350,7 @@ async def test_generate_embeddings_calls_write_embedding_rows():
 
     with (
         patch("app.db.session.AsyncSessionLocal") as MockSL,
-        patch("src.ai.embeddings.embedder._call_openai_embed", AsyncMock(return_value=_FAKE_VECTOR)),
+        patch("src.ai.embeddings.embedder._call_embed", AsyncMock(return_value=_FAKE_VECTOR)),
     ):
         MockSL.return_value.__aenter__ = AsyncMock(return_value=mock_db)
         MockSL.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -417,7 +417,7 @@ async def test_generate_embeddings_openai_failure_does_not_raise():
     with (
         patch("app.db.session.AsyncSessionLocal") as MockSL,
         patch(
-            "src.ai.embeddings.embedder._call_openai_embed",
+            "src.ai.embeddings.embedder._call_embed",
             AsyncMock(side_effect=Exception("API unreachable")),
         ),
     ):

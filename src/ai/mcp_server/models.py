@@ -26,8 +26,8 @@ class HotelSearchInput(BaseModel):
     destination: str = Field(..., description="City name, e.g. Goa")
     check_in: str = Field(..., description="ISO 8601 date")
     check_out: str = Field(..., description="ISO 8601 date")
-    budget_per_night: float = Field(..., description="Max price per night in INR")
-    guests: int = Field(1, ge=1)
+    budget_per_night: float = Field(..., description="Max price per night in INR for the whole party")
+    guests: int = Field(1, ge=1, le=9)
 
 
 class AttractionInput(BaseModel):
@@ -64,9 +64,11 @@ class Flight(BaseModel):
 class Hotel(BaseModel):
     name: str
     stars: int
-    price_per_night_inr: float
-    rating: float
+    price_per_night_inr: float  # whole party, all rooms
+    rating: float  # guest review score, 0–10 (0 = no reviews)
     address: str
+    lat: float | None = None  # for the Phase 18 map view
+    lng: float | None = None
 
 
 class Attraction(BaseModel):

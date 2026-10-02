@@ -120,10 +120,14 @@ export default function TripDetailPage() {
     (async () => {
       try {
         const loaded = await getTrip(tripId);
-        const existing = await getItinerary(tripId).catch(() => null);
+        const [existing, progress] = await Promise.all([
+          getItinerary(tripId).catch(() => null),
+          getTripStatus(tripId).catch(() => null),
+        ]);
         if (cancelled) return;
         setTrip(loaded);
         setItinerary(existing);
+        if (progress) setPolledAgents(progress.progress.agents); // the stream has no history to replay
         if (loaded.status === "planning") {
           awaitingOutcome.current = true;
           setPhase(existing ? "refining" : "planning");
@@ -161,7 +165,7 @@ export default function TripDetailPage() {
           error = "the itinerary could not be loaded";
         }
       }
-      if (error) addMessage("assistant", `Planning failed: ${error}.`);
+      if (error) addMessage("assistant", `Planning failed: ${error.replace(/\.+$/, "")}.`);
       setPhase(itineraryRef.current ? "complete" : "failed");
     },
     [tripId, addMessage],
@@ -204,9 +208,13 @@ export default function TripDetailPage() {
   const launch = useCallback(
     async (next: "planning" | "refining", call: () => Promise<string>) => {
       const previous = phaseRef.current;
-      resetEvents();
+      // A refinement re-runs one agent and carries the rest forward, so the panel keeps
+      // what it knows; a fresh plan starts every agent again.
+      if (next === "planning") {
+        resetEvents();
+        setPolledAgents({});
+      }
       setConflict(null);
-      setPolledAgents({});
       setSending(true);
       setPhase(next);
       awaitingOutcome.current = true;

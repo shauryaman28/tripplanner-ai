@@ -511,7 +511,7 @@ async def test_list_itineraries_returns_all_versions_newest_first():
 
 @pytest.mark.asyncio
 async def test_run_orchestrator_saves_state_to_redis():
-    """_run_orchestrator saves the final planning state to Redis after a successful run."""
+    """The on_complete hook _run_orchestrator hands the orchestrator saves the planning state to Redis."""
     import json as _json
 
     from app.api.routes.trips import _run_orchestrator
@@ -525,8 +525,12 @@ async def test_run_orchestrator_saves_state_to_redis():
 
     result = {"destination": "Goa", "flights": [{"price_inr": 5000}], "itinerary_id": uuid.uuid4()}
 
+    async def run(_agent, _db, hooks):
+        await hooks["on_complete"](result)  # the orchestrator calls this just before planning_complete
+        return result
+
     with patch("app.api.routes.trips.AsyncSessionLocal", MagicMock(return_value=AsyncMock())):
-        await _run_orchestrator(trip_id, mock_redis, AsyncMock(return_value=result))
+        await _run_orchestrator(trip_id, mock_redis, run)
 
     saved = _json.loads(saved_state[f"trip:{trip_id}:planning_state"])
     assert saved["destination"] == "Goa"
@@ -771,3 +775,25 @@ async def test_intent_override_replaces_destination_and_keeps_trip_length():
     assert kept["destination"] == "Goa" and kept["start_date"] == "2026-12-10"  # fill-only by default
     assert replaced["destination"] == "Mumbai"
     assert (replaced["start_date"], replaced["end_date"]) == ("2027-01-05", "2027-01-10")  # still 5 nights
+
+
+@pytest.mark.asyncio
+async def test_state_is_saved_before_planning_complete_is_published():
+    """A client may refine the moment it sees planning_complete — the state must already be there."""
+    from src.ai.orchestrator.orchestrator import merge_node
+
+    order = []
+
+    async def on_complete(state):
+        assert "on_complete" not in state and "publish_fn" not in state  # runtime helpers are never saved
+        order.append("saved")
+
+    async def publish(event):
+        order.append(event["event"])
+
+    await merge_node({"itinerary_id": uuid.uuid4(), "on_complete": on_complete, "publish_fn": publish})
+    assert order == ["saved", "planning_complete"]
+
+    order.clear()
+    await merge_node({"itinerary_id": None, "on_complete": on_complete, "publish_fn": publish})
+    assert order == ["planning_complete"]  # nothing to refine without an itinerary

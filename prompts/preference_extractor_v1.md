@@ -1,6 +1,9 @@
 # PreferenceExtractor System Prompt — v1
 
-> Phase 16 — Claude Haiku 4.5 (`claude-haiku-4-5-20251001`), `temperature=0`, `max_tokens=300`
+> Phase 16 — Groq `GROQ_MODEL` (default `openai/gpt-oss-120b`), `temperature=0`, `max_tokens=2048`
+> Originally Claude Haiku 4.5; moved to Groq so the app needs no Anthropic key (DECISIONS #67).
+> Live run 2026-10-02: "We are vegetarian, we live in Pune and prefer IndiGo" + a 5-star trip → `luxury`, `["vegetarian"]`, `["6E"]`, `Pune`. ✅
+> `max_tokens` was 300 (sized for Claude): the Groq model reasons before answering and returned an empty reply on a full-size trip, silently falling back to the heuristic. Raised to 2048.
 > Code: `src/ai/agents/preference_extractor.py` (`_SYSTEM_PROMPT`)
 
 ## v1 (Phase 16 — baseline)

@@ -1,10 +1,8 @@
 """
 Phase 3 — all 5 MCP tools wired to real external APIs.
 
-Providers: Duffel (flights), Amadeus (hotels), OpenTripMap (attractions),
-OpenWeatherMap (weather). Amadeus closed its self-service portal on
-2026-07-17, so search_hotels returns API_NOT_CONFIGURED until a replacement
-hotel provider is wired in — the orchestrator plans without a hotel then.
+Providers: Duffel (flights), LiteAPI (hotels), OpenTripMap (attractions),
+OpenWeatherMap (weather), Nominatim / OpenStreetMap (geocoding, no key).
 
 Rules:
 - Missing API key  → ToolError(code="API_NOT_CONFIGURED")  — server never crashes
@@ -22,8 +20,6 @@ import re
 from datetime import date, datetime, timedelta
 
 import httpx
-from amadeus import Client as AmadeusClient
-from amadeus import ResponseError as AmadeusError
 
 from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync
 from src.ai.mcp_server.config import mcp_settings
@@ -43,20 +39,32 @@ from src.ai.mcp_server.models import (
 
 logger = logging.getLogger(__name__)
 
+# httpx logs every request URL at INFO, and OpenTripMap / OpenWeatherMap take
+# their API key in the query string — keep those URLs out of the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 TTL_FLIGHTS = 300  # 5 min
 TTL_HOTELS = 900  # 15 min
 TTL_ATTRACTIONS = 21_600  # 6 hr
 TTL_WEATHER = 3_600  # 1 hr
+ATTRACTION_RADIUS_M = 30_000  # wide enough to reach the coast from a region's centre ("Goa")
+TTL_GEOCODE = 2_592_000  # 30 days — places don't move, and Nominatim asks clients to cache
+
+COUNTRY_CODE = "IN"  # the planner covers trips within India (INR budgets, Indian airports)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 DUFFEL_API_URL = "https://api.duffel.com"
+LITEAPI_URL = "https://api.liteapi.travel/v3.0"
 MAX_FLIGHT_RESULTS = 5
+MAX_HOTEL_RESULTS = 5
+HOTEL_SEARCH_RADIUS_M = 25_000
 
 # Duffel quotes offers in the account's billing currency and has no currency
 # parameter, so prices are converted with these approximate rates. Offers in
-# any other currency are skipped rather than mispriced.
+# any other currency are skipped rather than mispriced. (LiteAPI is asked for
+# INR directly; the table only matters if it answers in something else.)
 _FX_TO_INR: dict[str, float] = {"INR": 1.0, "USD": 84.0, "EUR": 91.0, "GBP": 107.0}
 
 # Mapping of common Indian city names → IATA city codes
@@ -77,6 +85,7 @@ _CITY_IATA: dict[str, str] = {
     "ahmedabad": "AMD",
     "agra": "AGR",
     "varanasi": "VNS",
+    "ayodhya": "AYJ",
     "amritsar": "ATQ",
     "guwahati": "GAU",
     "leh": "IXL",
@@ -136,6 +145,12 @@ _INTEREST_TO_OTM_KIND: dict[str, str] = {
     "wellness": "spas",
     "sightseeing": "interesting_places",
     "culture": "cultural,museums",
+    "museum": "museums",
+    "temple": "religion",
+    "religion": "religion",
+    "architecture": "architecture",
+    "wildlife": "natural,national_parks",
+    "relaxation": "beaches,natural",
 }
 
 # Monthly climate fallback for dates beyond OWM's 5-day window.
@@ -215,6 +230,30 @@ _CLIMATE: dict[str, dict[int, tuple[float, float, str]]] = {
 _CLIMATE_DEFAULT: dict[int, tuple[float, float, str]] = {m: (32, 25, "Partly Cloudy") for m in range(1, 13)}
 
 
+def _geocode(destination: str) -> tuple[float, float] | None:
+    """(lat, lon) of a place via Nominatim, or None if it is unknown. Raises httpx errors.
+
+    Nominatim ranks by prominence, so "Manali" is the hill station, not the
+    Chennai suburb a population-ranked geocoder returns.
+    """
+    cache_key = make_cache_key("geocode", {"q": destination.strip().lower()})
+    cached = get_cached_sync(cache_key)
+    if cached is not None:
+        return tuple(cached) if cached else None
+
+    resp = httpx.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": destination, "countrycodes": COUNTRY_CODE.lower(), "format": "json", "limit": 1},
+        headers={"User-Agent": "tripplanner-ai (github.com/shauryaman28/tripplanner-ai)"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    matches = resp.json()
+    coords = (float(matches[0]["lat"]), float(matches[0]["lon"])) if matches else None
+    set_cached_sync(cache_key, list(coords) if coords else [], TTL_GEOCODE)
+    return coords
+
+
 def _city_to_iata(city: str) -> str | None:
     return _CITY_IATA.get(city.strip().lower())
 
@@ -233,6 +272,15 @@ def _parse_iso_duration(duration: str) -> int:
     """Parse 'PT2H15M' / 'P1DT2H' → total minutes."""
     days, hours, mins = (re.search(rf"(\d+){unit}", duration) for unit in "DHM")
     return sum(int(m.group(1)) * factor for m, factor in ((days, 1440), (hours, 60), (mins, 1)) if m)
+
+
+def _interest_to_otm_kinds(interest: str) -> str:
+    """OpenTripMap kinds for one interest; plurals match too ("beaches" → beach)."""
+    key = interest.strip().lower()
+    for candidate in (key, key.removesuffix("es"), key.removesuffix("s")):
+        if candidate in _INTEREST_TO_OTM_KIND:
+            return _INTEREST_TO_OTM_KIND[candidate]
+    return "interesting_places"
 
 
 def _otm_kind_to_category(kinds: str) -> str:
@@ -382,30 +430,43 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
 # ── Tool: search_hotels ────────────────────────────────────────────────────
 
 
+def _to_hotel(info: dict, room_types: list[dict], nights: int, destination: str) -> Hotel | None:
+    """Map one LiteAPI hotel + its offers to a Hotel priced at its cheapest offer per night."""
+    offers = [rt["offerRetailRate"] for rt in room_types if rt.get("offerRetailRate")]
+    priced = [(o["amount"] * _FX_TO_INR[o["currency"]], o) for o in offers if o.get("currency") in _FX_TO_INR]
+    if not priced:
+        return None
+    total_inr = min(amount for amount, _ in priced)  # LiteAPI prices the whole stay, all rooms
+    return Hotel(
+        name=info.get("name") or "Unknown Hotel",
+        stars=int(info.get("stars") or 0),
+        price_per_night_inr=round(total_inr / nights, 2),
+        rating=float(info.get("rating") or 0.0),
+        address=", ".join(filter(None, [info.get("address"), info.get("city_name")])) or destination,
+        lat=info.get("latitude"),
+        lng=info.get("longitude"),
+    )
+
+
 def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
-    """Search hotels via Amadeus Hotel Search. Caches results for 15 min."""
+    """Search hotels via LiteAPI, cheapest first, capped at `budget_per_night`. Caches results for 15 min.
+
+    `budget_per_night` and `price_per_night_inr` are for the whole party: guests
+    are put two to a room and the nightly price covers every room.
+    """
     # --- validation ---
     try:
-        if date.fromisoformat(input.check_out) <= date.fromisoformat(input.check_in):
-            return ToolError(error="check_out must be after check_in.", code="INVALID_DATES")
+        nights = (date.fromisoformat(input.check_out) - date.fromisoformat(input.check_in)).days
     except ValueError:
         return ToolError(error="Dates must be ISO 8601 (YYYY-MM-DD).", code="INVALID_DATES")
+    if nights <= 0:
+        return ToolError(error="check_out must be after check_in.", code="INVALID_DATES")
 
     # --- API key check ---
-    if not mcp_settings.AMADEUS_CLIENT_ID or not mcp_settings.AMADEUS_CLIENT_SECRET:
+    if not mcp_settings.LITEAPI_API_KEY:
         return ToolError(
-            error="Hotel search not configured (Amadeus self-service keys stopped working on 2026-07-17).",
+            error="LiteAPI not configured. Set LITEAPI_API_KEY in .env.",
             code="API_NOT_CONFIGURED",
-        )
-
-    city_code = _city_to_iata(input.destination)
-    if not city_code:
-        return ToolError(
-            error=(
-                f"Unsupported destination: '{input.destination}'. "
-                "Add it to _CITY_IATA in tools.py or pass the IATA city code directly."
-            ),
-            code="UNKNOWN_DESTINATION",
         )
 
     # --- cache ---
@@ -414,75 +475,62 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
     if cached is not None:
         return [Hotel(**h) for h in cached]
 
-    # --- real API call (two-step: list hotels, then get offers) ---
+    # --- real API call ---
+    rooms, odd_guest = divmod(input.guests, 2)
+    request = {
+        "checkin": input.check_in,
+        "checkout": input.check_out,
+        "currency": "INR",
+        "guestNationality": COUNTRY_CODE,
+        "occupancies": [{"adults": 2}] * rooms + [{"adults": 1}] * odd_guest,
+        "includeHotelData": True,
+        "limit": 30,
+    }
+
+    def search(location: dict) -> list[Hotel]:
+        resp = httpx.post(
+            f"{LITEAPI_URL}/hotels/rates",
+            headers={"X-API-Key": mcp_settings.LITEAPI_API_KEY, "Accept": "application/json"},
+            json={**request, **location},
+            timeout=45,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        info_by_id = {h["id"]: h for h in body.get("hotels") or []}
+        return [
+            hotel
+            for item in body.get("data") or []
+            if item["hotelId"] in info_by_id
+            and (
+                hotel := _to_hotel(info_by_id[item["hotelId"]], item.get("roomTypes") or [], nights, input.destination)
+            )
+        ]
+
     try:
-        amadeus = AmadeusClient(
-            client_id=mcp_settings.AMADEUS_CLIENT_ID,
-            client_secret=mcp_settings.AMADEUS_CLIENT_SECRET,
+        # LiteAPI's own city match is exact for cities. A region ("Kerala") matches
+        # no city, so fall back to a radius around its geocoded centre.
+        found = search({"cityName": input.destination.strip(), "countryCode": COUNTRY_CODE})
+        if not found and (coords := _geocode(input.destination)):
+            found = search({"latitude": coords[0], "longitude": coords[1], "radius": HOTEL_SEARCH_RADIUS_M})
+
+        hotels = sorted(
+            (h for h in found if h.price_per_night_inr <= input.budget_per_night), key=lambda h: h.price_per_night_inr
         )
-
-        # Step 1 — get hotel IDs for the city
-        hotels_resp = amadeus.reference_data.locations.hotels.by_city.get(
-            cityCode=city_code,
-            radius=20,
-            radiusUnit="KM",
-        )
-        hotel_ids = [h["hotelId"] for h in (hotels_resp.data or [])[:20]]
-        if not hotel_ids:
-            return ToolError(error=f"No hotels found in {input.destination}.", code="NO_RESULTS")
-
-        # Step 2 — get offers for those hotels
-        offers_resp = amadeus.shopping.hotel_offers_search.get(
-            hotelIds=",".join(hotel_ids),
-            checkInDate=input.check_in,
-            checkOutDate=input.check_out,
-            adults=input.guests,
-            currency="INR",
-            bestRateOnly=True,
-        )
-
-        hotels: list[Hotel] = []
-        for item in offers_resp.data or []:
-            h_data = item.get("hotel", {})
-            offers = item.get("offers", [])
-            if not offers:
-                continue
-            price_dict = offers[0].get("price", {})
-            price = float(price_dict.get("base") or price_dict.get("total") or 0)
-            if price > input.budget_per_night:
-                continue
-            addr_parts = h_data.get("address", {})
-            address = ", ".join(
-                filter(
-                    None,
-                    [
-                        (addr_parts.get("lines") or [""])[0],
-                        addr_parts.get("cityName", input.destination),
-                    ],
-                )
-            )
-            hotels.append(
-                Hotel(
-                    name=h_data.get("name", "Unknown Hotel"),
-                    stars=int(h_data.get("rating") or 3),
-                    price_per_night_inr=price,
-                    rating=float(h_data.get("rating") or 3.0),
-                    address=address or input.destination,
-                )
-            )
-
         if not hotels:
+            cheapest = min((h.price_per_night_inr for h in found), default=None)
+            hint = f" The cheapest available is ₹{cheapest:,.0f}/night." if cheapest else ""
             return ToolError(
-                error=f"No hotels within ₹{input.budget_per_night}/night in {input.destination}.",
+                error=f"No hotels within ₹{input.budget_per_night:,.0f}/night in {input.destination}.{hint}",
                 code="NO_RESULTS",
             )
 
+        hotels = hotels[:MAX_HOTEL_RESULTS]
         set_cached_sync(cache_key, [h.model_dump() for h in hotels], TTL_HOTELS)
         return hotels
 
-    except AmadeusError as exc:
-        logger.error("Amadeus hotel search error: %s", exc)
-        return ToolError(error=f"Amadeus error: {exc.description}", code="AMADEUS_ERROR")
+    except httpx.HTTPStatusError as exc:
+        logger.error("LiteAPI hotel search error: HTTP %s", exc.response.status_code)
+        return ToolError(error=f"LiteAPI error: HTTP {exc.response.status_code}", code="LITEAPI_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in search_hotels")
         return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
@@ -509,60 +557,58 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
 
     try:
         # Step 1 — geocode destination name to lat/lon
-        geo_resp = httpx.get(
-            "https://api.opentripmap.com/0.1/en/places/geoname",
-            params={"name": input.destination, "apikey": mcp_settings.OPENTRIPMAP_API_KEY},
-            timeout=10,
-        )
-        geo_resp.raise_for_status()
-        geo = geo_resp.json()
-        if "lat" not in geo or "lon" not in geo:
+        coords = _geocode(input.destination)
+        if coords is None:
             return ToolError(error=f"Could not geocode destination: {input.destination}", code="NOT_FOUND")
+        lat, lon = coords
 
-        # Step 2 — map interests to OTM kinds
-        kinds = (
-            ",".join({_INTEREST_TO_OTM_KIND.get(i.strip().lower(), "interesting_places") for i in input.interests})
-            if input.interests
-            else "interesting_places"
-        )
+        # Step 2 — one search per interest. Results come back nearest-first, so a
+        # single combined query would fill up with whatever is closest to the
+        # centre and crowd out the other interests.
+        searches = list(dict.fromkeys(_interest_to_otm_kinds(i) for i in input.interests)) or ["interesting_places"]
+        per_search = -(-input.limit // len(searches))  # ceil
 
-        radius_resp = httpx.get(
-            "https://api.opentripmap.com/0.1/en/places/radius",
-            params={
-                "radius": 15000,
-                "lon": geo["lon"],
-                "lat": geo["lat"],
-                "kinds": kinds,
-                "limit": input.limit,
-                "rate": 2,
-                "format": "json",
-                "apikey": mcp_settings.OPENTRIPMAP_API_KEY,
-            },
-            timeout=10,
-        )
-        radius_resp.raise_for_status()
-        places = radius_resp.json()
+        attractions: dict[str, Attraction] = {}  # by name — the same place can match two interests
+        for kinds in searches:
+            radius_resp = httpx.get(
+                "https://api.opentripmap.com/0.1/en/places/radius",
+                params={
+                    "radius": ATTRACTION_RADIUS_M,
+                    "lon": lon,
+                    "lat": lat,
+                    "kinds": kinds,
+                    "limit": per_search,
+                    "rate": 2,
+                    "format": "json",
+                    "apikey": mcp_settings.OPENTRIPMAP_API_KEY,
+                },
+                timeout=10,
+            )
+            radius_resp.raise_for_status()
+            for place in radius_resp.json():
+                name = (place.get("name") or "").strip()
+                if not name:  # the builder can only schedule places it can name
+                    continue
+                category = _otm_kind_to_category(place.get("kinds", ""))
+                attractions.setdefault(
+                    name,
+                    Attraction(
+                        name=name,
+                        category=category,
+                        rating=float(place.get("rate") or 3.0),
+                        description=f"A popular {category} attraction in {input.destination}.",
+                        lat=place.get("point", {}).get("lat"),
+                        lng=place.get("point", {}).get("lon"),
+                    ),
+                )
 
-        if not places:
+        if not attractions:
             return ToolError(
                 error=f"No attractions found for {input.interests} in {input.destination}.",
                 code="NO_RESULTS",
             )
 
-        attractions: list[Attraction] = []
-        for place in places[: input.limit]:
-            category = _otm_kind_to_category(place.get("kinds", ""))
-            attractions.append(
-                Attraction(
-                    name=place.get("name") or "Unnamed attraction",
-                    category=category,
-                    rating=float(place.get("rate") or 3.0),
-                    description=f"A popular {category} attraction in {input.destination}.",
-                    lat=place.get("point", {}).get("lat"),
-                    lng=place.get("point", {}).get("lon"),
-                )
-            )
-
+        attractions = list(attractions.values())[: input.limit]
         set_cached_sync(cache_key, [a.model_dump() for a in attractions], TTL_ATTRACTIONS)
         return attractions
 
