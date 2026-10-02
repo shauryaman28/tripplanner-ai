@@ -47,15 +47,15 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
 MAX_EVALUATOR_RETRIES = 3
 BUDGET_TOLERANCE_PCT = 0.05  # 5%
 
-# Phrases the ItineraryBuilder is documented to write when source data is
-# missing (see builder.py _ALLOWED_FALLBACK_PHRASES and itinerary_builder_v1.md).
-# These must NOT be flagged as hallucinations — they are intentional fallbacks.
-_ALLOWED_FALLBACK_PHRASES: frozenset[str] = frozenset({"Explore the area"})
+# Free time is the one activity the builder may write that is not in the
+# attraction list — it must not be flagged as a hallucination or a duplicate.
+_ALLOWED_FALLBACK_PHRASES: frozenset[str] = frozenset({FREE_TIME})
 
 
 # ── Models ───────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ def _iter_slots(draft: dict):
     """
     for day in draft.get("days", []):
         day_num = day.get("day")
-        for slot_name in ("morning", "afternoon", "evening"):
+        for slot_name in SLOTS:
             slot = day.get(slot_name)
             if slot and slot.get("activity"):
                 yield day_num, slot_name, slot
@@ -146,7 +146,7 @@ def expected_total_cost(draft: dict, flights: list[dict], hotels: list[dict]) ->
     for day in draft.get("days", []):
         hotel = day.get("hotel") or {}
         total += hotel_prices.get(hotel.get("name")) or hotel.get("cost_per_night") or 0.0
-        total += sum((day.get(slot) or {}).get("cost") or 0.0 for slot in ("morning", "afternoon", "evening"))
+        total += sum((day.get(slot) or {}).get("cost") or 0.0 for slot in SLOTS)
     return total
 
 
@@ -174,7 +174,7 @@ def check_duplicate_activities(draft: dict) -> EvaluatorFailure | None:
     for day in draft.get("days", []):
         seen: set[str] = set()
         dupes: set[str] = set()
-        for slot_name in ("morning", "afternoon", "evening"):
+        for slot_name in SLOTS:
             slot = day.get(slot_name)
             if slot and slot.get("activity"):
                 name = slot["activity"]
@@ -195,8 +195,7 @@ def check_duplicate_activities(draft: dict) -> EvaluatorFailure | None:
 def check_hallucinated_activities(draft: dict, attractions: list[dict]) -> EvaluatorFailure | None:
     # Build the set of names the builder is allowed to reference:
     #   (a) names actually returned by get_attractions
-    #   (b) documented fallback phrases the builder writes when attractions
-    #       are empty for a slot (e.g. "Explore the area" from builder.py)
+    #   (b) the builder's free-time slot
     known_names = {a.get("name") for a in attractions if a.get("name")} | _ALLOWED_FALLBACK_PHRASES
     hallucinated = []
     for _day_num, _slot_name, slot in _iter_slots(draft):

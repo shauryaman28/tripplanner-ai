@@ -31,7 +31,7 @@ docs/
 |---|---|---|
 | `intent_parsing_node` | First LLM decision in every run — invisible without a row | `input={raw_input}`, `output={extracted_fields, pass_through}` |
 | `persist_node` | Write decision (itinerary_id + status=completed) — the success marker | `input={total_cost, days_count}`, `output={itinerary_id, trip_status}` |
-| `escalate_node` | Terminal decision on budget conflict path | `input={flight_cost, remaining_budget}`, `output={reason, options_offered, trip_status}` |
+| `escalate_node` | Terminal decision on budget conflict path | `input={flight_cost, remaining_budget}`, `output={reason, options, trip_status}` |
 | `builder_failed_node` | Terminal decision on retry-exhausted path | `input={evaluator_retry_count, builder_error_code}`, `output={builder_error, trip_status}` |
 
 ### Already-instrumented nodes (confirmed correct)

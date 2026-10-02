@@ -24,6 +24,7 @@ import httpx
 from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync
 from src.ai.mcp_server.config import mcp_settings
 from src.ai.mcp_server.models import (
+    Airport,
     Attraction,
     AttractionInput,
     BudgetEstimate,
@@ -113,25 +114,42 @@ _CITY_IATA: dict[str, str] = {
     "surat": "STV",
 }
 
-# OpenTripMap kind → our category system
+# OpenTripMap kind → our category. A place carries several kinds — a wildlife
+# sanctuary comes back as "cultural,museums,gardens_and_parks,natural,nature_reserves,zoos"
+# — and the first entry here that it has wins, so the specific kinds come
+# before the broad ones. Anything unmatched is "sightseeing".
 _OTM_KIND_MAP: dict[str, str] = {
-    "museums": "history",
+    "beaches": "beach",
+    "nature_reserves": "nature",
+    "national_parks": "nature",
+    "zoos": "nature",
+    "waterfalls": "nature",
+    "caves": "nature",
+    "mountain_peaks": "nature",
+    "fortifications": "history",
+    "castles": "history",
+    "palaces": "history",
+    "archaeology": "history",
+    "monuments_and_memorials": "history",
     "historic": "history",
-    "religion": "history",
-    "architecture": "sightseeing",
-    "cultural": "history",
+    "historic_architecture": "history",
+    "religion": "spiritual",
+    "museums": "museum",
     "foods": "food",
     "restaurants": "food",
     "cafes": "food",
     "nightclubs": "nightlife",
-    "natural": "nature",
-    "national_parks": "nature",
-    "beaches": "beach",
-    "amusements": "adventure",
-    "sport": "sports",
     "adult": "nightlife",
+    "cinemas": "culture",
+    "theatres_and_entertainments": "culture",
     "shops": "shopping",
     "spas": "wellness",
+    "amusements": "adventure",
+    "sport": "sports",
+    "gardens_and_parks": "nature",
+    "natural": "nature",
+    "architecture": "sightseeing",
+    "cultural": "culture",
 }
 
 _INTEREST_TO_OTM_KIND: dict[str, str] = {
@@ -148,6 +166,7 @@ _INTEREST_TO_OTM_KIND: dict[str, str] = {
     "museum": "museums",
     "temple": "religion",
     "religion": "religion",
+    "spiritual": "religion",
     "architecture": "architecture",
     "wildlife": "natural,national_parks",
     "relaxation": "beaches,natural",
@@ -284,11 +303,8 @@ def _interest_to_otm_kinds(interest: str) -> str:
 
 
 def _otm_kind_to_category(kinds: str) -> str:
-    for k in kinds.split(","):
-        cat = _OTM_KIND_MAP.get(k.strip())
-        if cat:
-            return cat
-    return "sightseeing"
+    place_kinds = {k.strip() for k in kinds.split(",")}
+    return next((category for kind, category in _OTM_KIND_MAP.items() if kind in place_kinds), "sightseeing")
 
 
 def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayForecast]:
@@ -323,6 +339,14 @@ def _offer_to_flight(offer: dict, budget: float) -> Flight | None:
     outbound = offer["slices"][0]
     first, last = outbound["segments"][0], outbound["segments"][-1]
     carrier = first["marketing_carrier"]["iata_code"]
+
+    def airport(place: dict | None) -> Airport | None:
+        if not place or not place.get("iata_code"):
+            return None
+        return Airport(
+            code=place["iata_code"], name=place.get("name"), lat=place.get("latitude"), lng=place.get("longitude")
+        )
+
     return Flight(
         airline=carrier,
         flight_number=f"{carrier}-{first['marketing_carrier_flight_number']}",
@@ -331,6 +355,8 @@ def _offer_to_flight(offer: dict, budget: float) -> Flight | None:
         duration_mins=_parse_iso_duration(outbound.get("duration") or ""),
         price_inr=price,
         stops=len(outbound["segments"]) - 1,
+        origin=airport(first.get("origin")),
+        destination=airport(last.get("destination")),
     )
 
 
@@ -550,7 +576,9 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
             code="API_NOT_CONFIGURED",
         )
 
-    cache_key = make_cache_key("attractions", input.model_dump())
+    # "v2": Phase 18 changed what `category` and `rating` mean. Entries cached before it would
+    # otherwise be served for another 6 hours as if they were current; under a new key they just expire.
+    cache_key = make_cache_key("attractions:v2", input.model_dump())
     cached = get_cached_sync(cache_key)
     if cached is not None:
         return [Attraction(**a) for a in cached]
@@ -587,7 +615,10 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
             radius_resp.raise_for_status()
             for place in radius_resp.json():
                 name = (place.get("name") or "").strip()
-                if not name:  # the builder can only schedule places it can name
+                point = place.get("point") or {}
+                # The builder can only schedule places it can name, and the map (Phase 18)
+                # can only pin places with coordinates — every attraction returned has both.
+                if not name or point.get("lat") is None or point.get("lon") is None:
                     continue
                 category = _otm_kind_to_category(place.get("kinds", ""))
                 attractions.setdefault(
@@ -595,10 +626,12 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
                     Attraction(
                         name=name,
                         category=category,
-                        rating=float(place.get("rate") or 3.0),
+                        # OpenTripMap's popularity rate: 1–3, or 5–7 for the same scale on a
+                        # heritage site. 0 = unrated — never a made-up score.
+                        rating=float(place.get("rate") or 0),
                         description=f"A popular {category} attraction in {input.destination}.",
-                        lat=place.get("point", {}).get("lat"),
-                        lng=place.get("point", {}).get("lon"),
+                        lat=point["lat"],
+                        lng=point["lon"],
                     ),
                 )
 

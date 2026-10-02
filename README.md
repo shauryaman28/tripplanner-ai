@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 17 / 50 — Frontend: Chat Interface & SSE Streaming**
+**Status: Phase 18 / 50 — Map View**
 
 ---
 
@@ -82,22 +82,23 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 288 tests
+# Unit + contract tests (no Docker, no network) — 341 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 14 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 15 tests, incl. the full
 # plan → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser E2E (Playwright). Starts a stub backend (real app, DB, Redis and
-# graph; external APIs faked) and the Next.js dev server by itself.
+# Browser E2E (Playwright) — 4 tests. Starts its own stack: a stub backend
+# (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
+# `tripplanner_db_e2e` database, and a second Next.js dev server on :3100.
 cd src/frontend
 npx playwright install chromium   # once
-npx playwright test
+npx playwright test               # venv not active? PYTHON=../../.venv/bin/python npx playwright test
 ```
-Already have the real backend running on :8000? Playwright reuses it, and the
-same spec then runs against your real API keys.
+The E2E stack uses its own ports, database and build directory, so it can run
+while your dev servers (:8000 / :3000) are up and never touches dev data.
 
 ---
 
@@ -106,24 +107,26 @@ same spec then runs against your real API keys.
 ```
 tripplanner-ai/
 ├── src/
-│   ├── frontend/                        ← Phase 17: Next.js 14 App Router
+│   ├── frontend/                        ← Phases 17–18: Next.js 14 App Router
 │   │   ├── package.json
 │   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
-│   │   ├── tailwind.config.ts           ← brand palette: indigo + saffron
+│   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
 │   │   ├── tsconfig.json
-│   │   ├── playwright.config.ts         ← starts stub backend + dev server
-│   │   ├── e2e/planning.spec.ts         ← Playwright smoke test (Phase 17)
+│   │   ├── playwright.config.ts         ← starts the E2E stack (stub backend :8100, dev server :3100)
+│   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, budget conflict
 │   │   └── src/
 │   │       ├── app/
-│   │       │   ├── globals.css          ← design tokens & custom keyframes
-│   │       │   ├── layout.tsx
+│   │       │   ├── globals.css          ← component classes (.btn, .card, .pin…) and Leaflet overrides
+│   │       │   ├── layout.tsx           ← fonts (Inter + Fraunces)
 │   │       │   ├── page.tsx             ← redirects → /trips
-│   │       │   ├── login/page.tsx       ← auth login/register
+│   │       │   ├── login/page.tsx       ← sign in / create account
 │   │       │   └── trips/
-│   │       │       ├── page.tsx         ← trip listing & inline creation
-│   │       │       └── [id]/page.tsx    ← live chat, SSE, itinerary view
-│   │       ├── components/              ← AgentProgressPanel, ChatInput, DayCard, ItineraryView
-│   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), types.ts
+│   │       │       ├── page.tsx         ← trip cards & new-trip form
+│   │       │       └── [id]/page.tsx    ← the plan, the assistant, live progress
+│   │       ├── components/              ← ItineraryView, CostSummary, DayCard, ItineraryMap (Phase 18),
+│   │       │                              AgentProgressPanel, MessageThread, ChatInput, AppHeader, Brand, ui
+│   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), map.ts (pins, routes,
+│   │                                      day colours), places.ts, format.ts, types.ts
 │   ├── backend/
 │   │   ├── Dockerfile
 │   │   └── app/
@@ -172,15 +175,16 @@ tripplanner-ai/
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (281 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (334 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 7 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 14 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 15 tests)
+│   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–17) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–18) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -213,11 +217,12 @@ tripplanner-ai/
 | 16 | User Preferences & Personalisation | ✅ Done | 56 unit tests |
 | 17 | Frontend: Chat Interface & SSE Streaming | ✅ Done | 6 status unit + 3 Playwright E2E |
 | 1–17 | End-to-end audit ([docs/phase1-17_audit.md](docs/phase1-17_audit.md)) | ✅ Done | 26 regression unit + 5 pipeline/schema integration |
-| 18–20 | Frontend: Map & Polishing | ⏳ | |
+| 18 | Map View (Leaflet) + frontend redesign ([docs/phase18_build_log.md](docs/phase18_build_log.md)) | ✅ Done | 33 unit + 4 Playwright E2E |
+| 19–20 | PDF export & frontend polish | ⏳ | |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 288 unit + contract, 14 integration, 3 browser E2E — all passing.** Zero network calls in CI.
+**Total: 341 unit + contract, 15 integration, 4 browser E2E — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -254,7 +259,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Next.js 14, Tailwind CSS (Leaflet map: Phase 18) |
+| Frontend | Next.js 14, Tailwind CSS, Leaflet (react-leaflet), lucide-react icons |
 | Backend | FastAPI, Uvicorn, Python 3.11 |
 | Auth | JWT (python-jose + passlib/bcrypt) |
 | SSE | sse-starlette + Redis pub/sub |

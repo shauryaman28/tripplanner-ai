@@ -1,30 +1,102 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { listTrips, createTrip, getToken } from "@/lib/api";
+import { ArrowRight, CalendarDays, Minus, Plus, Users, Wallet, X } from "lucide-react";
+import { useEffect, useState } from "react";
+
+import AppHeader from "@/components/AppHeader";
+import { LogoMark } from "@/components/Brand";
+import { Spinner, TripStatusBadge } from "@/components/ui";
+import { createTrip, getToken, listTrips } from "@/lib/api";
+import { formatDateRange, formatINR, nightsBetween, plural } from "@/lib/format";
 import type { Trip } from "@/lib/types";
 
-function TripStatusBadge({ status }: { status: Trip["status"] }) {
-  const styles: Record<Trip["status"], string> = {
-    pending:   "bg-gray-100 text-gray-600",
-    planning:  "bg-yellow-50 text-yellow-700",
-    completed: "bg-green-50 text-green-700",
-    failed:    "bg-red-50 text-red-600",
-  };
+// What the attractions search understands best — one tap adds it to the list.
+const INTEREST_IDEAS = ["beach", "history", "food", "nature", "culture", "adventure", "shopping", "nightlife", "wellness"];
+
+// A cover per trip, picked from the destination's name so it never changes between visits.
+const COVERS = [
+  "from-[#f6b73c] to-[#f2703f]",
+  "from-[#56b4e9] to-[#2a78d6]",
+  "from-[#1baf7a] to-[#117733]",
+  "from-[#f2703f] to-[#e0457b]",
+  "from-[#e0457b] to-[#882255]",
+  "from-[#4a3aa7] to-[#2a78d6]",
+];
+
+function coverFor(destination: string): string {
+  const hash = destination.toLowerCase().split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  return COVERS[hash % COVERS.length];
+}
+
+const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+
+function dayAfter(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d + 1).toLocaleDateString("en-CA");
+}
+
+function parseInterests(text: string): string[] {
+  return text.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function TripCard({ trip }: { trip: Trip }) {
+  const nights = nightsBetween(trip.start_date, trip.end_date);
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status]}`}>
-      {status}
-    </span>
+    <Link
+      href={`/trips/${trip.id}`}
+      className="card focus-ring group flex h-full flex-col overflow-hidden transition duration-200 hover:-translate-y-0.5 hover:shadow-lift"
+    >
+      <div className={`relative h-24 bg-gradient-to-br ${coverFor(trip.destination)}`}>
+        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 96" preserveAspectRatio="none" fill="none" aria-hidden>
+          <g stroke="#ffffff" strokeOpacity="0.28">
+            <path d="M-20 30c80-40 150 30 230-5s130-45 210-5" />
+            <path d="M-20 60c80-40 150 30 230-5s130-45 210-5" />
+            <path d="M-20 90c80-40 150 30 230-5s130-45 210-5" />
+          </g>
+        </svg>
+        <div className="absolute right-3 top-3 rounded-full bg-white/95 shadow-sm">
+          <TripStatusBadge status={trip.status} />
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
+        <h2 className="line-clamp-2 font-display text-xl font-medium leading-snug text-ink-900">{trip.destination}</h2>
+
+        <ul className="mt-3 space-y-1.5 text-sm text-ink-600">
+          <li className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
+            {formatDateRange(trip.start_date, trip.end_date)} · {plural(nights, "night")}
+          </li>
+          <li className="flex items-center gap-2">
+            <Users className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
+            {plural(trip.group_size, "traveller")}
+          </li>
+          <li className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
+            {formatINR(trip.budget)} budget
+          </li>
+        </ul>
+
+        {trip.interests && trip.interests.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {trip.interests.slice(0, 4).map((interest) => (
+              <span key={interest} className="chip">
+                {interest}
+              </span>
+            ))}
+            {trip.interests.length > 4 && <span className="chip">+{trip.interests.length - 4}</span>}
+          </div>
+        )}
+
+        <p className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-ink-900">
+          {trip.status === "completed" ? "View itinerary" : "Open trip"}
+          <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
+        </p>
+      </div>
+    </Link>
   );
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(amount);
 }
 
 export default function TripsPage() {
@@ -33,205 +105,291 @@ export default function TripsPage() {
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
 
-  // New trip form state
+  // New trip form
   const [destination, setDestination] = useState("");
-  const [startDate, setStartDate]     = useState("");
-  const [endDate, setEndDate]         = useState("");
-  const [budget, setBudget]           = useState("");
-  const [groupSize, setGroupSize]     = useState("1");
-  const [interests, setInterests]     = useState("");
-  const [creating, setCreating]       = useState(false);
-  const [formError, setFormError]     = useState<string | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [budget, setBudget] = useState("");
+  const [groupSize, setGroupSize] = useState(2);
+  const [interests, setInterests] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!getToken()) { router.replace("/login"); return; }
+    if (!getToken()) {
+      router.replace("/login");
+      return;
+    }
     listTrips()
       .then(setTrips)
       .catch(() => router.replace("/login"))
       .finally(() => setLoading(false));
   }, [router]);
 
+  const chosen = parseInterests(interests);
+  const nights = startDate && endDate ? nightsBetween(startDate, endDate) : 0;
+
+  function toggleInterest(idea: string) {
+    const next = chosen.includes(idea) ? chosen.filter((i) => i !== idea) : [...chosen, idea];
+    setInterests(next.join(", "));
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    if (endDate <= startDate) {
+      setFormError("The end date must be after the start date.");
+      return;
+    }
     setCreating(true);
     try {
       const trip = await createTrip({
-        destination,
+        destination: destination.trim(),
         start_date: startDate,
         end_date: endDate,
         budget: parseFloat(budget),
-        group_size: parseInt(groupSize, 10),
-        interests: interests ? interests.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+        group_size: groupSize,
+        interests: chosen.length ? chosen : undefined,
       });
       router.push(`/trips/${trip.id}`);
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to create trip");
+      setFormError(err instanceof Error ? err.message : "Could not create the trip.");
       setCreating(false);
     }
   }
 
-  if (loading) {
-    return (
-      <main className="flex min-h-dvh items-center justify-center">
-        <span className="text-sm text-muted">Loading…</span>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-display text-2xl font-bold text-gray-900">My trips</h1>
-        <button onClick={() => setShowNew(true)} className="btn-primary">
-          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-          </svg>
-          Plan a trip
-        </button>
-      </div>
+    <div className="min-h-dvh">
+      <AppHeader />
 
-      {/* New trip form */}
-      {showNew && (
-        <div className="card mb-6 p-5 animate-slide-up">
-          <h2 className="mb-4 font-display text-lg font-semibold text-gray-900">New trip</h2>
-          <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label htmlFor="destination" className="mb-1 block text-xs font-medium text-gray-600">
-                Destination <span className="text-muted font-normal">(city or region — describe the trip in the chat next)</span>
-              </label>
-              <input
-                id="destination"
-                required
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="Goa, Jaipur, Kerala…"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="start-date" className="mb-1 block text-xs font-medium text-gray-600">Start date</label>
-              <input
-                id="start-date"
-                required type="date"
-                min={new Date().toISOString().slice(0, 10)}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="end-date" className="mb-1 block text-xs font-medium text-gray-600">End date</label>
-              <input
-                id="end-date"
-                required type="date"
-                min={startDate || undefined}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="budget" className="mb-1 block text-xs font-medium text-gray-600">Budget (INR)</label>
-              <input
-                id="budget"
-                required type="number" min="1000"
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                placeholder="50000"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
-              />
-            </div>
-            <div>
-              <label htmlFor="group-size" className="mb-1 block text-xs font-medium text-gray-600">Group size</label>
-              <input
-                id="group-size"
-                type="number" min="1" max="9"
-                value={groupSize}
-                onChange={(e) => setGroupSize(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="interests" className="mb-1 block text-xs font-medium text-gray-600">
-                Interests <span className="text-muted font-normal">(comma-separated)</span>
-              </label>
-              <input
-                id="interests"
-                value={interests}
-                onChange={(e) => setInterests(e.target.value)}
-                placeholder="beach, history, food"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus-ring outline-none"
-              />
-            </div>
+      <main className="mx-auto max-w-7xl px-4 pb-16 pt-10 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-4xl font-medium tracking-tight text-ink-900 sm:text-5xl">Your trips</h1>
+            <p className="mt-2 text-ink-600">
+              {loading
+                ? "Loading your trips…"
+                : trips.length > 0
+                ? `${plural(trips.length, "trip")} — pick one up, or start something new.`
+                : "Nothing planned yet. Where would you like to go?"}
+            </p>
+          </div>
+          {!showNew && (
+            <button onClick={() => setShowNew(true)} className="btn-primary">
+              <Plus className="h-4 w-4" aria-hidden />
+              Plan a trip
+            </button>
+          )}
+        </div>
 
-            {formError && (
-              <p role="alert" className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-                {formError}
-              </p>
-            )}
-
-            <div className="sm:col-span-2 flex gap-3">
-              <button type="submit" disabled={creating} className="btn-primary">
-                {creating ? "Creating…" : "Create & plan"}
-              </button>
-              <button type="button" onClick={() => setShowNew(false)} className="btn-ghost">
-                Cancel
+        {/* New trip */}
+        {showNew && (
+          <section aria-label="New trip" className="card mt-8 animate-rise p-5 shadow-lift sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-medium tracking-tight text-ink-900">New trip</h2>
+                <p className="mt-1 text-sm text-ink-600">The basics go here. You describe what you want from it in the chat, next.</p>
+              </div>
+              <button onClick={() => setShowNew(false)} className="btn-ghost -mr-2 -mt-1 px-2 py-2" aria-label="Close">
+                <X className="h-4 w-4" aria-hidden />
               </button>
             </div>
-          </form>
-        </div>
-      )}
 
-      {/* Trips list */}
-      {trips.length === 0 && !showNew ? (
-        <div className="card flex flex-col items-center gap-3 py-16 text-center">
-          <svg className="h-10 w-10 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
-          <p className="font-medium text-gray-500">No trips yet</p>
-          <p className="text-sm text-muted">Create your first trip to get started.</p>
-          <button onClick={() => setShowNew(true)} className="btn-primary mt-2">Plan a trip</button>
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {trips.map((trip) => (
-            <li key={trip.id}>
-              <button
-                onClick={() => router.push(`/trips/${trip.id}`)}
-                className="card w-full p-4 text-left hover:shadow-md transition-shadow active:scale-[0.99]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-display font-semibold text-gray-900 truncate">{trip.destination}</p>
-                    <p className="mt-0.5 text-sm text-muted">
-                      {formatDate(trip.start_date)} — {formatDate(trip.end_date)}
-                      {trip.group_size > 1 && ` · ${trip.group_size} people`}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <TripStatusBadge status={trip.status} />
-                    <span className="text-sm font-medium text-gray-700">{formatCurrency(trip.budget)}</span>
-                  </div>
+            <form onSubmit={handleCreate} className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label htmlFor="destination" className="label">
+                  Destination
+                </label>
+                <input
+                  id="destination"
+                  required
+                  maxLength={200}
+                  autoFocus
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
+                  placeholder="Goa, Jaipur, Kerala…"
+                  className="input py-3 text-base"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="start-date" className="label">
+                  Start date
+                </label>
+                <input
+                  id="start-date"
+                  required
+                  type="date"
+                  min={today()}
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label htmlFor="end-date" className="label">
+                  End date {nights > 0 && <span className="font-normal text-ink-500">· {plural(nights, "night")}</span>}
+                </label>
+                <input
+                  id="end-date"
+                  required
+                  type="date"
+                  min={startDate ? dayAfter(startDate) : today()}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="budget" className="label">
+                  Budget <span className="font-normal text-ink-500">· whole trip, everyone</span>
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-ink-500" aria-hidden>
+                    ₹
+                  </span>
+                  <input
+                    id="budget"
+                    required
+                    type="number"
+                    inputMode="numeric"
+                    min="1000"
+                    step="any"
+                    value={budget}
+                    onChange={(e) => setBudget(e.target.value)}
+                    placeholder="50000"
+                    className="input pl-8"
+                  />
                 </div>
-                {trip.interests && trip.interests.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {trip.interests.slice(0, 4).map((i) => (
-                      <span key={i} className="rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700">
-                        {i}
-                      </span>
-                    ))}
-                    {trip.interests.length > 4 && (
-                      <span className="text-xs text-muted">+{trip.interests.length - 4}</span>
-                    )}
-                  </div>
-                )}
+              </div>
+
+              <div>
+                <label htmlFor="group-size" className="label">
+                  Travellers
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGroupSize((n) => Math.max(1, n - 1))}
+                    disabled={groupSize <= 1}
+                    aria-label="One fewer"
+                    className="btn-secondary h-[42px] w-[42px] shrink-0 p-0"
+                  >
+                    <Minus className="h-4 w-4" aria-hidden />
+                  </button>
+                  <input
+                    id="group-size"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    max="9"
+                    required
+                    value={groupSize}
+                    onChange={(e) => setGroupSize(Math.min(9, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                    className="input text-center"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setGroupSize((n) => Math.min(9, n + 1))}
+                    disabled={groupSize >= 9}
+                    aria-label="One more"
+                    className="btn-secondary h-[42px] w-[42px] shrink-0 p-0"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label htmlFor="interests" className="label">
+                  Interests <span className="font-normal text-ink-500">· optional, comma-separated</span>
+                </label>
+                <input
+                  id="interests"
+                  value={interests}
+                  onChange={(e) => setInterests(e.target.value)}
+                  placeholder="beach, history, food"
+                  className="input"
+                />
+                <div className="mt-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggestions">
+                  {INTEREST_IDEAS.map((idea) => {
+                    const on = chosen.includes(idea);
+                    return (
+                      <button
+                        key={idea}
+                        type="button"
+                        onClick={() => toggleInterest(idea)}
+                        aria-pressed={on}
+                        className={`focus-ring rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                          on ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:bg-ink-50"
+                        }`}
+                      >
+                        {idea}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {formError && (
+                <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm text-bad-ink sm:col-span-2 lg:col-span-4">
+                  {formError}
+                </p>
+              )}
+
+              <div className="flex gap-3 sm:col-span-2 lg:col-span-4">
+                <button type="submit" disabled={creating} className="btn-primary px-5">
+                  {creating ? (
+                    <>
+                      <Spinner /> Creating…
+                    </>
+                  ) : (
+                    <>
+                      Create &amp; plan
+                      <ArrowRight className="h-4 w-4" aria-hidden />
+                    </>
+                  )}
+                </button>
+                <button type="button" onClick={() => setShowNew(false)} className="btn-ghost">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {/* Trips */}
+        {loading ? (
+          <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="skeleton h-72" />
+            ))}
+          </div>
+        ) : trips.length === 0 ? (
+          !showNew && (
+            <div className="card mt-10 flex flex-col items-center px-6 py-20 text-center">
+              <LogoMark size={56} />
+              <h2 className="mt-6 font-display text-2xl font-medium tracking-tight text-ink-900">No trips yet</h2>
+              <p className="mt-2 max-w-sm text-sm text-ink-600">
+                Give it a destination, dates and a budget. It finds the flights, a place to stay and things to do.
+              </p>
+              <button onClick={() => setShowNew(true)} className="btn-primary mt-7">
+                <Plus className="h-4 w-4" aria-hidden />
+                Plan a trip
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+            </div>
+          )
+        ) : (
+          <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {trips.map((trip) => (
+              <li key={trip.id}>
+                <TripCard trip={trip} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </main>
+    </div>
   );
 }

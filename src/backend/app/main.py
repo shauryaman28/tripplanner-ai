@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.db.redis import close_redis, init_redis
 from app.db.session import AsyncSessionLocal
 from app.models.embedding import Embedding
+from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
 from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
 from src.ai.mcp_client.client import close_session
@@ -44,7 +45,8 @@ async def _recover_after_restart() -> None:
     Planning runs and embedding jobs are in-process tasks, so none survives a
     restart:
       • a trip still "planning" was interrupted → mark it failed (Phase 13), so
-        it can be planned again instead of answering 409 forever;
+        it can be planned again instead of answering 409 forever — or completed
+        if it has an itinerary: an interrupted refinement leaves that plan standing;
       • the in-flight embedding counter is stale → reset it;
       • embeddings that fell back to "pending_retry" → generate them again (Phase 14).
 
@@ -53,7 +55,10 @@ async def _recover_after_restart() -> None:
     """
     try:
         async with AsyncSessionLocal() as db:
-            await db.execute(update(Trip).where(Trip.status == TripStatus.PLANNING).values(status=TripStatus.FAILED))
+            interrupted = Trip.status == TripStatus.PLANNING
+            has_itinerary = select(Itinerary.id).where(Itinerary.trip_id == Trip.id).exists()
+            await db.execute(update(Trip).where(interrupted, has_itinerary).values(status=TripStatus.COMPLETED))
+            await db.execute(update(Trip).where(interrupted).values(status=TripStatus.FAILED))
             await db.commit()
             pending = (
                 (
@@ -97,7 +102,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.17.0",
+    version="0.18.0",
     lifespan=lifespan,
 )
 

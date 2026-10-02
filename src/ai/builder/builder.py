@@ -1,10 +1,17 @@
 """
-Phase 12 Dev A — ItineraryBuilder: Groq (Llama 3.3) + Structured Synthesis.
+Phase 12 Dev A — ItineraryBuilder: Groq (`GROQ_MODEL`) + Structured Synthesis.
+
+The model writes the day-by-day plan; everything checkable is checked or
+filled in by code afterwards (shape, data scope, budget math, coordinates).
+
 Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
 Phase 16: saved traveller preferences (trip_meta["preferences"]) are added to
           the user prompt as context; see prompts/itinerary_builder_v4.md.
 v5:       a refinement request (trip_meta["request"]) is added the same way, and
           the prompt covers missing flight / hotel data; see itinerary_builder_v5.md.
+Phase 18: coordinates, category and rating are attached to every slot from the
+          source data (_attach_source_data), and free time is said once per day
+          (_normalise_free_time); see itinerary_builder_v6.md.
 """
 
 from __future__ import annotations
@@ -13,19 +20,25 @@ import json
 import logging
 import uuid
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
 logger = logging.getLogger(__name__)
 
 BUDGET_MATH_TOLERANCE_INR = 500.0
-_ALLOWED_FALLBACK_PHRASES = {"Explore the area"}
+_ALLOWED_FALLBACK_PHRASES = {FREE_TIME}
 
 
 # ── Draft schema ─────────────────────────────────────────────────────────
+
+
+def _none_is_zero(value: object) -> object:
+    """Models write `"cost": null` for "free" — that is 0, not a schema error."""
+    return 0.0 if value is None else value
 
 
 class ActivitySlot(BaseModel):
@@ -33,11 +46,22 @@ class ActivitySlot(BaseModel):
     cost: float = 0.0
     lat: float | None = None
     lng: float | None = None
+    category: str | None = None  # copied from the attraction — shown in the map popup (Phase 18)
+    rating: float | None = None
+
+    _cost = field_validator("cost", mode="before")(_none_is_zero)
 
 
 class HotelSlot(BaseModel):
     name: str
     cost_per_night: float = 0.0
+    stars: int | None = None
+    rating: float | None = None
+    address: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+    _cost = field_validator("cost_per_night", mode="before")(_none_is_zero)
 
 
 class DaySchedule(BaseModel):
@@ -93,6 +117,8 @@ CRITICAL DATA SCOPE RULE:
 - Use each attraction at most once in the whole itinerary, and spread them evenly
   over the days rather than front-loading. A slot with nothing left to do is null;
   a day with no attraction at all gets exactly one "Explore the area" slot (cost 0).
+- Copy each activity's "lat" and "lng" from the attractions list unchanged; they are
+  null only for "Explore the area".
 - If the hotels list is empty, set "hotel" to null on every day — do not invent one.
 - Otherwise use ONE hotel for the whole trip. The last day is the departure day:
   set its "hotel" to null (N days means N-1 hotel nights).
@@ -168,46 +194,88 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
     return content_to_text(response.content)
 
 
+def _normalise_free_time(draft: dict) -> None:
+    """Say free time once per day, not once per spare slot.
+
+    The prompt asks for exactly this, but live output still filled every empty
+    slot with "Explore the area" — three identical rows on a departure day. A
+    day with a real activity keeps only those; a day with none keeps a single
+    free-time slot.
+    """
+    free = {"activity": FREE_TIME, "cost": 0.0, "lat": None, "lng": None, "category": None, "rating": None}
+    for day in draft["days"]:
+        has_real_activity = False
+        for slot_name in SLOTS:
+            slot = day.get(slot_name)
+            if slot and slot["activity"] in _ALLOWED_FALLBACK_PHRASES:
+                day[slot_name] = None
+            elif slot:
+                has_real_activity = True
+        if not has_real_activity:
+            day[SLOTS[0]] = dict(free)
+
+
 def _validate_data_scope(draft: dict, hotels: list[dict], attractions: list[dict]) -> list[str]:
     known_activities = {a.get("name") for a in attractions if a.get("name")}
     known_hotels = {h.get("name") for h in hotels if h.get("name")}
     violations: list[str] = []
 
-    for day in draft.get("days", []):
-        for slot_name in ("morning", "afternoon", "evening"):
+    for day in draft["days"]:
+        for slot_name in SLOTS:
             slot = day.get(slot_name)
-            if not slot or not slot.get("activity"):
+            if not slot:
                 continue
             name = slot["activity"]
             if name not in known_activities and name not in _ALLOWED_FALLBACK_PHRASES:
-                violations.append(f"day {day.get('day')} {slot_name}: unknown activity '{name}'")
+                violations.append(f"day {day['day']} {slot_name}: unknown activity '{name}'")
 
         hotel = day.get("hotel")
-        if hotel and hotel.get("name") and hotel["name"] not in known_hotels:
-            violations.append(f"day {day.get('day')} hotel: unknown hotel '{hotel['name']}'")
+        if hotel and hotel["name"] not in known_hotels:
+            violations.append(f"day {day['day']} hotel: unknown hotel '{hotel['name']}'")
 
     return violations
 
 
-def _cheapest_flight_cost(flights: list[dict]) -> float:
-    if not flights:
-        return 0.0
-    return min(f.get("price_inr", 0.0) for f in flights)
+def _cheapest_flight(flights: list[dict]) -> dict | None:
+    """The flight the plan assumes: the budget check and the cost math both use the cheapest."""
+    return min(flights, key=lambda f: f.get("price_inr") or 0.0) if flights else None
 
 
 def _validate_budget_math(draft: dict, flights: list[dict]) -> bool:
-    computed = _cheapest_flight_cost(flights)
-    for day in draft.get("days", []):
-        for slot_name in ("morning", "afternoon", "evening"):
-            slot = day.get(slot_name)
-            if slot:
-                computed += slot.get("cost", 0) or 0
-        hotel = day.get("hotel")
-        if hotel:
-            computed += hotel.get("cost_per_night", 0) or 0
+    computed = (_cheapest_flight(flights) or {}).get("price_inr") or 0.0
+    for day in draft["days"]:
+        computed += sum(day[slot_name]["cost"] for slot_name in SLOTS if day.get(slot_name))
+        if day.get("hotel"):
+            computed += day["hotel"]["cost_per_night"]
 
-    declared = draft.get("total_cost", 0.0)
-    return abs(computed - declared) <= BUDGET_MATH_TOLERANCE_INR
+    return abs(computed - draft["total_cost"]) <= BUDGET_MATH_TOLERANCE_INR
+
+
+def _attach_source_data(draft: dict, flights: list[dict], hotels: list[dict], attractions: list[dict]) -> None:
+    """Fill each slot, hotel and the outbound flight from the search results (Phase 18).
+
+    Names have already passed the data-scope check, so coordinates, category
+    and rating are looked up by name rather than trusted from the model — an
+    LLM copies numbers imperfectly, and a wrong coordinate is a wrong pin.
+    """
+    attraction_by_name = {a.get("name"): a for a in attractions}
+    hotel_by_name = {h.get("name"): h for h in hotels}
+
+    for day in draft["days"]:
+        for slot_name in SLOTS:
+            slot = day.get(slot_name)
+            if slot:  # free time is no place: it must not keep coordinates the model invented
+                source = attraction_by_name.get(slot["activity"]) or {}
+                slot.update({k: source.get(k) for k in ("lat", "lng", "category", "rating")})
+
+        hotel = day.get("hotel")
+        if hotel and (source := hotel_by_name.get(hotel["name"])):
+            hotel.update({k: source.get(k) for k in ("stars", "rating", "address", "lat", "lng")})
+
+        day["flight"] = None  # the model does not pick flights; the one flight shown is set below
+
+    if draft["days"]:
+        draft["days"][0]["flight"] = _cheapest_flight(flights)  # shown on the arrival day
 
 
 async def build_itinerary(
@@ -234,20 +302,27 @@ async def build_itinerary(
     if not isinstance(parsed, dict):
         return BuilderError(error="Builder reply was not a JSON object.", code="JSON_PARSE_ERROR")
 
-    violations = _validate_data_scope(parsed, hotels, attractions)
+    # Shape first: every check below can then rely on it instead of guarding against
+    # a slot that is a string or a day that is a list.
+    try:
+        draft = ItineraryDraft(**parsed).model_dump()
+    except (ValidationError, TypeError) as exc:
+        return BuilderError(error=f"Draft failed schema validation: {exc}", code="SCHEMA_INVALID")
+
+    _normalise_free_time(draft)
+
+    violations = _validate_data_scope(draft, hotels, attractions)
     if violations:
         return BuilderError(error="; ".join(violations), code="DATA_SCOPE_VIOLATION")
 
-    if not _validate_budget_math(parsed, flights):
+    if not _validate_budget_math(draft, flights):
         return BuilderError(
             error=(f"Sum of day costs does not match declared total_cost within ₹{BUDGET_MATH_TOLERANCE_INR:.0f}."),
             code="BUDGET_MATH_INCONSISTENT",
         )
 
-    try:
-        return ItineraryDraft(**parsed)
-    except ValidationError as exc:
-        return BuilderError(error=f"Draft failed schema validation: {exc}", code="SCHEMA_INVALID")
+    _attach_source_data(draft, flights, hotels, attractions)
+    return ItineraryDraft(**draft)
 
 
 class ItineraryBuilder:

@@ -46,6 +46,7 @@ from src.ai.agents.hotel_agent import HotelAgent
 from src.ai.agents.preference_extractor import PreferenceExtractor
 from src.ai.agents.refinement_classifier import RefinementType
 from src.ai.builder.builder import ItineraryBuilder
+from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import GEMINI_MODEL, parse_json_object
 from src.ai.utils.embeddings import generate_embeddings
 from src.ai.utils.preferences import (
@@ -259,9 +260,12 @@ def _nights(state: OrchestratorState) -> int:
 
 
 async def _run_agent(
-    state: OrchestratorState, agent: Any, name: str, input_state: dict, result_key: str, noun: str
+    state: OrchestratorState, agent: Any, name: str, input_state: dict, result_key: str, noun: str, note: str = ""
 ) -> tuple[list[dict], dict | None]:
-    """Run one sub-agent and publish its SSE status. Returns (items, error) — never raises."""
+    """Run one sub-agent and publish its SSE status. Returns (items, error) — never raises.
+
+    `noun` (plural) and `note` word the summary: "Found 3 flights (re-plan attempt 1)".
+    """
     try:
         result = await agent.run(
             input_state, db=state.get("db"), trip_id=state.get("trip_id"), turn=state.get("turn", 1)
@@ -274,12 +278,13 @@ async def _run_agent(
         logger.exception("%s crashed", name)
         items, error = [], {"error": str(exc), "code": "AGENT_EXCEPTION"}
 
+    found = f"Found {len(items)} {noun if len(items) != 1 else noun.removesuffix('s')}{note}"
     await _publish(
         state,
         {
             "agent": name,
             "status": "failed" if error else "completed",
-            "summary": error.get("error", "Failed") if error else f"Found {len(items)} {noun}",
+            "summary": error.get("error", "Failed") if error else found,
         },
     )
     return ([], error) if error else (items, None)
@@ -303,7 +308,8 @@ async def _search_flights(state: OrchestratorState, attempt: int = 0) -> dict:
             "max_stops": min(MAX_FLIGHT_STOPS, 1 + attempt),
         },
         "flights",
-        f"flights (re-plan attempt {attempt})" if attempt else "flights",
+        "flights",
+        note=f" (re-plan attempt {attempt})" if attempt else "",
     )
     return {"flights": flights, "flight_error": error, "flight_status": "failed" if error else "completed"}
 
@@ -514,6 +520,7 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
     """Budget conflict: fail the trip and hand the user the options (POST /trips/{id}/replan)."""
     bd = state.get("budget_decision") or {}
     options = state.get("budget_conflict_options") or []
+    reason = bd.get("reason") or "Flights exceed the available budget."
 
     async with timed_run() as timer:
         await _set_trip_status(state, TripStatus.FAILED)
@@ -526,11 +533,11 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
             "remaining_budget": bd.get("remaining_budget", 0),
             "total_budget": bd.get("total_budget", 0),
         },
-        output={"reason": bd.get("reason", ""), "options_offered": len(options), "trip_status": "failed"},
+        # the options are stored, not just counted: GET /status hands them back after a page reload
+        output={"reason": reason, "options": options, "trip_status": "failed"},
         duration_ms=timer.duration_ms,
     )
 
-    reason = bd.get("reason", "Flights exceed available budget.")
     await _publish(
         state,
         {
@@ -618,6 +625,18 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
     return new_state
 
 
+def _unmapped_activities(draft: dict) -> list[str]:
+    """Activities the map cannot pin (Phase 18). Free-time slots are no place and don't count."""
+    return [
+        f"day {day.get('day')} {slot_name}: {slot['activity']}"
+        for day in draft.get("days", [])
+        for slot_name in SLOTS
+        if (slot := day.get(slot_name))
+        and slot.get("activity") != FREE_TIME
+        and (slot.get("lat") is None or slot.get("lng") is None)
+    ]
+
+
 def _sync_trip(trip: Any, state: OrchestratorState) -> None:
     """Keep the trip row in step with what was actually planned (a refinement may move dates or destination)."""
     for field in ("destination", "budget", "group_size"):
@@ -643,6 +662,11 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     if db is None or trip_id is None:
         return {**state, "itinerary_id": None}
 
+    # Phase 18: a missing coordinate is worth knowing about, never worth failing a trip for.
+    unmapped = _unmapped_activities(draft)
+    if unmapped:
+        logger.warning("Itinerary for trip %s has activities without coordinates: %s", trip_id, unmapped)
+
     async with timed_run() as timer:
         itinerary = Itinerary(trip_id=trip_id, structured_data=draft, total_cost=draft.get("total_cost"))
         trip = await db.get(Trip, trip_id)
@@ -662,7 +686,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
             "days_count": len(draft.get("days", [])),
             "currency": draft.get("currency", "INR"),
         },
-        output={"itinerary_id": str(itinerary.id), "trip_status": "completed"},
+        output={"itinerary_id": str(itinerary.id), "trip_status": "completed", "unmapped_activities": unmapped},
         duration_ms=timer.duration_ms,
     )
 

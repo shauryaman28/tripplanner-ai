@@ -2,8 +2,8 @@
  * Typed API client for the TripPlanner FastAPI backend.
  *
  * All routes are prefixed with /api which Next.js rewrites to the backend.
- * The token is stored in memory (module-level singleton) — for a production
- * app you would use a cookie or a state-management library.
+ * The token lives in localStorage — simplest thing that survives a reload;
+ * a production app would use an httpOnly cookie.
  */
 
 import type {
@@ -42,7 +42,13 @@ export function clearToken(): void {
   _token = null;
   if (typeof window !== "undefined") {
     localStorage.removeItem("tp_token");
+    localStorage.removeItem("tp_email");
   }
+}
+
+/** The signed-in user's email, remembered at login for the header (the API has no "who am I" route). */
+export function getEmail(): string | null {
+  return typeof window !== "undefined" ? localStorage.getItem("tp_email") : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,9 +114,12 @@ export async function login(email: string, password: string): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
-  if (!res.ok) throw new ApiError(res.status, "Invalid credentials");
+  if (!res.ok) {
+    throw new ApiError(res.status, res.status === 401 ? "That email and password don't match." : "Could not sign in. Please try again.");
+  }
   const data: TokenResponse = await res.json();
   setToken(data.access_token);
+  localStorage.setItem("tp_email", email);
   return data.access_token;
 }
 

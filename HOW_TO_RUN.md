@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–17
+# How to Run & Verify — Phases 1–18
 
 ## What changed vs the original codebase?
 
@@ -16,6 +16,7 @@
 | 8–12 | `orchestrator.py`, `builder.py`, `evaluator.py`, `budget_decision.py` | `hotel_agent.py`, `activities_agent.py`, tests |
 | 13–16 | `agent_runs`, `orchestrator.py`, `models.py`, `tools.py` | `preference_extractor.py`, `user_preferences.py`, migrations 002 & 003, unit tests |
 | 17 | `trips.py` (+ `GET /trips/{id}/status`) | Next.js 14 frontend in `src/frontend/`, `tests/unit/test_phase17_backend.py`, `src/frontend/e2e/planning.spec.ts` |
+| 18 | `tools.py`, `models.py`, `builder.py`, `orchestrator.py`, `trips.py` (`budget_conflict` in `/status`), `main.py`, every frontend page and component — see `docs/phase18_build_log.md` | `src/ai/itinerary.py`, `ItineraryMap.tsx`, `CostSummary.tsx`, `AppHeader.tsx`, `Brand.tsx`, `ui.tsx`, `lib/map.ts`, `lib/places.ts`, `lib/format.ts`, `tests/database.py`, `tests/unit/test_phase18_map.py` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -299,7 +300,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **288 passed**, no network, no Docker.
+Expected: **341 passed**, no network, no Docker.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -307,7 +308,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **14 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **15 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → refine → add-day,
 budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -419,10 +420,11 @@ curl -s -X POST "http://localhost:8000/trips/$TRIP_ID/clarify" \
 ## Step 15 — Verify Phases 8–16: the full pipeline over HTTP
 
 No API keys needed — run the stub backend instead of Step 5 (stop the real one first).
-It is the real app, database, Redis and graph; only the external APIs are faked:
+It is the real app, Redis and graph; only the external APIs are faked. It uses its own
+`tripplanner_db_e2e` database, emptied on every start, so your dev data is untouched:
 
 ```bash
-python -m tests.e2e.stub_backend      # from the project root, serves :8000
+PORT=8000 python -m tests.e2e.stub_backend      # from the project root (default port: 8100)
 ```
 
 Then, with `$TOKEN` from Step 7 (register/login again if you restarted on a fresh DB):
@@ -465,21 +467,35 @@ npm install
 npm run dev            # http://localhost:3000
 ```
 
-Register → **Plan a trip** → fill the form → on the trip page type a request. The progress panel
-turns live as agents finish, the day cards appear on `planning_complete`, and the input switches to
-"Refine your trip…". Reload the page: the itinerary is still there.
+Register → **Plan a trip** → fill the form → on the trip page describe the trip (or tap a
+suggestion). The assistant panel shows the three searches finishing live; on `planning_complete`
+the cost card, the day cards and the map appear and the input switches to "Ask for a change…".
+Things to try:
 
-Automated (starts the stub backend and the dev server itself if they are not already running):
+- Click a pin → popup. Click a day in the map legend → only that day. Click a stop's **Map**
+  button in a day card → the map scrolls into view with that pin open.
+- Ask for a change ("Switch to a nicer hotel") → the plan dims while it updates; only that search
+  runs again.
+- Create a trip with a budget the flights eat up (e.g. ₹12,000) → "Over budget" with three options.
+  Reload — the options are still there.
+- Narrow the window to phone width → the plan comes first, with an "Ask for a change" button.
+- Reload the page: the itinerary is still there.
+
+Optional: `NEXT_PUBLIC_MAP_TILE_URL` / `NEXT_PUBLIC_MAP_ATTRIBUTION` in `src/frontend/.env.local`
+switch the map to another tile provider (default: OpenStreetMap).
+
+Automated — Playwright starts its own stack (stub backend on :8100 with the `tripplanner_db_e2e`
+database, Next.js on :3100), so it can run while the dev servers are up:
 
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 3 passed
+npx playwright test                 # 4 passed
 ```
 
 Playwright runs `python -m tests.e2e.stub_backend`, so the venv must be active (or set
-`PYTHON=/path/to/.venv/bin/python`). To run the same spec against real API keys, start the real
-backend on :8000 first — Playwright reuses whatever is already listening.
+`PYTHON=/path/to/.venv/bin/python`). Needs Docker Postgres + Redis. The spec asserts the stub's
+data, so it is not meant to run against real API keys — use the manual steps above for that.
 
 ---
 
@@ -512,11 +528,12 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **7 (Clarify API)** | `POST /plan` on a trip with no interests and no `raw_input` → `{"status": "clarification_needed", "question": ...}`. `POST /clarify` with `{"answer": "history and beaches"}` → `planning_started`. Send state with `{"date": None}` through retry → `not state.get(field)` correctly refills it (the old `field not in state` bug would loop forever). |
 | **8** | Run HotelAgent with no `budget_per_night` → it asks a question instead of searching. Inside the orchestrator the same situation is logged as a failed search (`MISSING_INPUT`), never as a silent empty success. |
 | **9** | Remove `DUFFEL_ACCESS_TOKEN` (or `LITEAPI_API_KEY`) → that badge fails on the stream, the other agents still run, the trip completes without that data. Missing interests → `["sightseeing"]`. |
-| **10** | Budget ₹40,000, flights ₹28,000 → `escalate`: `budget_conflict` arrives before `planning_failed`. `POST /replan {"choice":"cheaper_flights"}` searches with a 65% cap and one more stop. `reduce_days` on a 2-day trip → `422`. |
+| **10** | Budget ₹40,000, flights ₹28,000 → `escalate`: `budget_conflict` arrives before `planning_failed`. `POST /replan {"choice":"cheaper_flights"}` searches with a 65% cap and one more stop. `reduce_days` on a 2-day trip → `422`. After the conflict, `GET /trips/{id}/status` carries `budget_conflict` with the same reason and options, so a reloaded page can still offer them. |
 | **11** | Make the builder quote a hotel at the wrong price → `budget_mismatch` (the total is recomputed from the hotel search results). A plan far *below* the user's budget passes. Retries stop at 3 and the trip fails with the evaluator's reasons. |
 | **12** | Force `db.commit` to raise inside `persist_node` → neither the itinerary row nor the status change is written. |
-| **13** | Raise inside the graph → trip is `failed`, `planning_failed` is published, nothing stays `planning`. Kill the server mid-run and restart → the stuck trip is marked `failed` at startup. |
+| **13** | Raise inside the graph → trip is `failed`, `planning_failed` is published, nothing stays `planning`. Kill the server mid-run and restart → the stuck trip is marked `failed` at startup (`completed` if it was a refinement — the earlier itinerary still stands). |
 | **14** | Unset `GOOGLE_API_KEY` → `planning_complete` is not delayed, the trip is `completed`, one `pending_retry` row exists, `GET /admin/embedding-health` says `degraded`; restart → it is retried. |
 | **15** | Refine twice → turns 2 and 3, each on the previous turn's state. A refinement that fails leaves the trip `completed` with the earlier itinerary. `POST /refine` before any successful plan → `409`. |
 | **16** | `PUT /users/preferences` with `"preferred_airlines": ["IndiGo"]` → `422` (IATA codes only). The extractor never overwrites a preference you set. |
-| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 3 passed. |
+| **18 (Map)** | Open a planned trip → the map under the day cards shows numbered pins coloured by day, a line joining each day's stops, a gold hotel pin and airport markers; click a pin for its details. Null a slot's `lat` in the itinerary JSON → that pin disappears, the place is listed under the map and its day card says "No map location" — the map still renders. `GET /trips/{id}/runs` → the `persist` row's `unmapped_activities` lists it. |
+| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 4 passed. |

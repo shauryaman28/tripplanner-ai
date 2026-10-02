@@ -28,6 +28,8 @@ import httpx
 from sqlmodel import select
 from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential_jitter
 
+from src.ai.itinerary import FREE_TIME, SLOTS
+
 try:
     from app.core.config import settings
 except ImportError:
@@ -52,7 +54,7 @@ def build_full_text(structured_data: dict) -> str:
     parts: list[str] = []
     for day in structured_data.get("days", []):
         date_str = day.get("date", "")
-        for slot_name in ("morning", "afternoon", "evening"):
+        for slot_name in SLOTS:
             slot = day.get(slot_name)
             if slot and slot.get("activity"):
                 parts.append(f"{date_str} {slot_name}: {slot['activity']}")
@@ -80,11 +82,11 @@ def build_summary_text(
     activity_names: list[str] = []
     seen: set[str] = set()
     for day in structured_data.get("days", []):
-        for slot_name in ("morning", "afternoon", "evening"):
+        for slot_name in SLOTS:
             slot = day.get(slot_name)
             if slot and slot.get("activity"):
                 name = slot["activity"]
-                if name not in seen and name != "Explore the area":
+                if name not in seen and name != FREE_TIME:
                     activity_names.append(name)
                     seen.add(name)
 
