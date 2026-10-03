@@ -220,6 +220,27 @@ test("the itinerary downloads as a PDF: loading state, the file, and a toast whe
   await page.getByRole("button", { name: "Dismiss" }).click();
   await expect(notice).toHaveCount(0);
 
+  // ── 2b. A destination written in Devanagari names the file in Devanagari (Phase 20): the header's
+  // `filename*` wins over its ASCII `filename`. ──
+  const devanagari = encodeURIComponent(`trip-गोवा-${YEAR}-12-10.pdf`);
+  await page.route(
+    exportRoute,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/pdf",
+        headers: {
+          "Content-Disposition": `attachment; filename="trip-${YEAR}-12-10.pdf"; filename*=UTF-8''${devanagari}`,
+          "X-Itinerary-Map": "included",
+        },
+        body: "%PDF-1.4\n%%EOF\n",
+      }),
+    { times: 1 },
+  );
+  const named = page.waitForEvent("download");
+  await button.click();
+  expect((await named).suggestedFilename()).toBe(`trip-गोवा-${YEAR}-12-10.pdf`);
+
   // ── 3. The export fails: a toast says so, nothing is downloaded, and the button works again. ──
   await page.route(
     exportRoute,

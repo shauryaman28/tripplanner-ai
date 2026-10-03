@@ -4,17 +4,26 @@ Phase 7B: initial implementation — {role, content} history entries.
 Phase 15: history entries gain a `turn` field for multi-turn refinement.
           get_current_turn() derives the turn number from history.
 
+Phase 20: the run in flight is noted while it runs, so a page loaded in the
+          middle of it can be told what it is.
+
 Keys (24 h TTL):
   trip:{id}:conv_history     list of {role, content, turn}
   trip:{id}:planning_state   the last SUCCESSFUL orchestrator state — what
                              POST /refine carries forward
+  trip:{id}:current_run      {turn, refinement_type?, retry?, choice?} — set when a
+                             run starts, deleted when it ends (1 h TTL)
 """
 
 import json
+import logging
 
 import redis.asyncio as aioredis
 
+logger = logging.getLogger(__name__)
+
 _TTL = 86_400  # 24 h — same as JWT expiry
+_RUN_TTL = 3_600  # a run takes seconds and deletes its own note; this is for a process that died first
 
 
 # ── Key helpers ───────────────────────────────────────────────────────────
@@ -26,6 +35,10 @@ def _hist_key(trip_id: str) -> str:
 
 def _state_key(trip_id: str) -> str:
     return f"trip:{trip_id}:planning_state"
+
+
+def _run_key(trip_id: str) -> str:
+    return f"trip:{trip_id}:current_run"
 
 
 # ── History ───────────────────────────────────────────────────────────────
@@ -80,3 +93,26 @@ async def get_trip_state(r: aioredis.Redis, trip_id: str) -> dict | None:
 
 async def save_trip_state(r: aioredis.Redis, trip_id: str, state: dict) -> None:
     await r.set(_state_key(trip_id), json.dumps(state, default=str), ex=_TTL)
+
+
+# ── The run in flight ─────────────────────────────────────────────────────
+
+
+async def save_current_run(r: aioredis.Redis, trip_id: str, run: dict) -> None:
+    await r.set(_run_key(trip_id), json.dumps(run, default=str), ex=_RUN_TTL)
+
+
+async def clear_current_run(r: aioredis.Redis, trip_id: str) -> None:
+    await r.delete(_run_key(trip_id))
+
+
+async def get_current_run(r: aioredis.Redis | None, trip_id: str) -> dict | None:
+    """What the run in flight is, or None. It only describes the run — a missing or unreadable note is not an error."""
+    if r is None:
+        return None
+    try:
+        run = json.loads(await r.get(_run_key(trip_id)) or "null")
+    except Exception:
+        logger.debug("Could not read the current run of trip %s", trip_id, exc_info=True)
+        return None
+    return run if isinstance(run, dict) else None

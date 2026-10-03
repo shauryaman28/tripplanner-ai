@@ -14,7 +14,6 @@ import io
 import math
 import threading
 from datetime import date
-from xml.sax.saxutils import escape
 
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.enums import TA_RIGHT
@@ -36,7 +35,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.pdf import theme
+from app.pdf import scripts, theme
 from app.pdf.flowables import (
     DAY_BAR,
     HAIRLINE,
@@ -127,32 +126,13 @@ KEY = _style("key", theme.REGULAR, 8.5, 11.5, theme.INK_600)
 
 
 def _p(text: str, style: ParagraphStyle) -> Paragraph:
-    """Text from a plan is data, never markup."""
-    return Paragraph(escape(text), style)
-
-
-def _can_draw(font: str, text: str) -> bool:
-    glyphs = pdfmetrics.getFont(font).face.charToGlyph
-    return all(ord(character) in glyphs for character in text)
-
-
-def _heading(text: str, style: ParagraphStyle) -> Paragraph:
-    """Fraunces is Latin only and has no arrows; a heading it cannot draw in full is set in Inter."""
-    if not _can_draw(style.fontName, text):
-        style = ParagraphStyle(f"{style.name}-sans", parent=style, fontName=theme.SEMIBOLD)
-    return _p(text, style)
-
-
-def _strong(text: str) -> str:
-    return f'<font name="{theme.MEDIUM}" color="{theme.INK_900}">{escape(text)}</font>'
+    """Text from a plan is data, never markup. A word in another script is set in a font for it (scripts.py)."""
+    xml, shaped = scripts.markup(text, style.fontName)
+    return scripts.paragraph(xml, style, shaped)
 
 
 def _amount(value: float, note: str = "") -> list[Paragraph]:
     return [_p(format_inr(value), AMOUNT), *([_p(note, AMOUNT_NOTE)] if note else [])]
-
-
-def _shorten(text: str, limit: int) -> str:
-    return text if len(text) <= limit else f"{text[: limit - 1].rstrip()}…"
 
 
 # A card or a table row cannot run on to the next page, so one absurdly long name in an itinerary
@@ -208,7 +188,7 @@ def _at_a_glance(plan: TripPlan) -> Table:
 
     stays = stay_totals(plan)
     if stays:
-        stay = "; ".join(f"{_shorten(entry.name, 80)} · {plural(entry.nights, 'night')}" for entry in stays)
+        stay = "; ".join(f"{scripts.shorten(entry.name, 80)} · {plural(entry.nights, 'night')}" for entry in stays)
     else:
         stay = "Not included in this plan"
 
@@ -216,7 +196,7 @@ def _at_a_glance(plan: TripPlan) -> Table:
     outline = f"{plural(len(plan.days), 'day')} · {plural(places, 'place')} to see"
 
     rows = [
-        [_p(label, EYEBROW), _p(_shorten(words, DETAIL_LIMIT), BODY)]
+        [_p(label, EYEBROW), _p(scripts.shorten(words, DETAIL_LIMIT), BODY)]
         for label, words in (("Flight", travel), ("Stay", stay), ("Plan", outline))
     ]
     return Table(
@@ -249,12 +229,12 @@ def _cover(plan: TripPlan) -> list[Flowable]:
         Spacer(1, 34 * mm),
         _p("Trip itinerary", COVER_EYEBROW),
         Spacer(1, 4),
-        _heading(_shorten(plan.destination, 200), _cover_title_style(plan.destination)),
+        _p(scripts.shorten(plan.destination, 200), _cover_title_style(plan.destination)),
         Spacer(1, 8),
         _p(facts, COVER_FACTS),
     ]
     if plan.interests:
-        story += [Spacer(1, 10), Chips(tuple(_shorten(interest, 40) for interest in plan.interests[:MAX_CHIPS]))]
+        story += [Spacer(1, 10), Chips(tuple(scripts.shorten(interest, 40) for interest in plan.interests[:MAX_CHIPS]))]
     return [*story, Spacer(1, 16 * mm), _cost_card(plan), Spacer(1, 9 * mm), _at_a_glance(plan)]
 
 
@@ -265,9 +245,12 @@ _MARK_COLUMN, _AMOUNT_COLUMN = 12 + PIN, 92
 
 def _flight_row(flight: Flight) -> list:
     route, facts = flight_route(flight), flight_facts(flight)
-    body = [_p("Flight", EYEBROW), _p(_shorten(route or (facts[0] if facts else "Flight"), NAME_LIMIT), ROW_TITLE)]
+    body = [
+        _p("Flight", EYEBROW),
+        _p(scripts.shorten(route or (facts[0] if facts else "Flight"), NAME_LIMIT), ROW_TITLE),
+    ]
     if facts:
-        body.append(_p(_shorten(" · ".join(facts), DETAIL_LIMIT), META))
+        body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
     price = _amount(flight.price, "return") if flight.price is not None else ""
     return [PinMark(theme.AIRPORT_STYLE, icon="plane"), body, price]
 
@@ -282,22 +265,22 @@ def _stop_row(day: int, stop: Stop) -> list:
         return ["", words, ""]
 
     mark = PinMark(theme.day_style(day), label=str(stop.order)) if stop.order else PinMark(theme.UNMAPPED_STYLE)
-    body = [_p(SLOT_LABELS[stop.slot], EYEBROW), _p(_shorten(stop.name, NAME_LIMIT), ROW_TITLE)]
+    body = [_p(SLOT_LABELS[stop.slot], EYEBROW), _p(scripts.shorten(stop.name, NAME_LIMIT), ROW_TITLE)]
     if facts := stop_facts(stop):
-        body.append(_p(_shorten(" · ".join(facts), DETAIL_LIMIT), META))
+        body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
     return [mark, body, _amount(stop.cost, "entry fees") if stop.cost > 0 else ""]
 
 
 def _stay_row(stay: Stay) -> list:
-    body = [_p("Stay", EYEBROW), _p(_shorten(stay.name, NAME_LIMIT), ROW_TITLE)]
+    body = [_p("Stay", EYEBROW), _p(scripts.shorten(stay.name, NAME_LIMIT), ROW_TITLE)]
     if facts := stay_facts(stay):
-        body.append(_p(_shorten(" · ".join(facts), DETAIL_LIMIT), META))
+        body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
     return [PinMark(theme.HOTEL_STYLE, icon="bed"), body, _amount(stay.cost_per_night, "per night")]
 
 
 def _day_card(day: Day) -> Card:
     """One day: its colour down the side, then the flight, each stop and the stay — the page's day card."""
-    title = [_p(f"Day {day.number}", EYEBROW), _heading(format_weekday(day.date) or f"Day {day.number}", DAY_TITLE)]
+    title = [_p(f"Day {day.number}", EYEBROW), _p(format_weekday(day.date) or f"Day {day.number}", DAY_TITLE)]
     rows = [[title, "", _amount(day.cost, "stay + activities") if day.cost > 0 else ""]]
     if day.flight:
         rows.append(_flight_row(day.flight))
@@ -336,7 +319,7 @@ def _days(plan: TripPlan, with_map: bool) -> list[Flowable]:
         if with_map
         else "Morning, afternoon and evening, with the flight and where you stay."
     )
-    story: list[Flowable] = [Bookmark("Day by day"), _heading("Day by day", H2), _p(lead, LEAD), Spacer(1, 12)]
+    story: list[Flowable] = [Bookmark("Day by day"), _p("Day by day", H2), _p(lead, LEAD), Spacer(1, 12)]
     for day in plan.days:
         story += [_day_card(day), Spacer(1, 9)]
     return story
@@ -384,15 +367,22 @@ def _ledger(plan: TripPlan) -> Table:
         parts = (flight_route(flight) if flight else "", "return", plural(plan.travellers, "traveller"))
         flight_words = " · ".join(part for part in parts if part)
 
-    stays = stay_totals(plan)
-    stay_words = "<br/>".join(
-        escape(f"{_shorten(entry.name, 80)} · {plural(entry.nights, 'night')} × {format_inr(entry.cost_per_night)}")
-        for entry in stays
+    lines = [
+        scripts.markup(
+            f"{scripts.shorten(entry.name, 80)} · {plural(entry.nights, 'night')} × {format_inr(entry.cost_per_night)}",
+            BODY.fontName,
+        )
+        for entry in stay_totals(plan)
+    ]
+    stay_words = (
+        scripts.paragraph("<br/>".join(xml for xml, _ in lines), BODY, any(shaped for _, shaped in lines))
+        if lines
+        else _p("Not included", BODY)
     )
 
     rows: list[list] = [
         [_p("Flights", BODY_STRONG), _p(flight_words, BODY), _p(format_inr(costs.flights), FIGURE)],
-        [_p("Stay", BODY_STRONG), Paragraph(stay_words or "Not included", BODY), _p(format_inr(costs.stay), FIGURE)],
+        [_p("Stay", BODY_STRONG), stay_words, _p(format_inr(costs.stay), FIGURE)],
         [
             _p("Activities", BODY_STRONG),
             _p("Entry fees" if costs.activities > 0 else "No entry fees listed", BODY),
@@ -473,7 +463,7 @@ def _daily_costs(plan: TripPlan) -> Table:
 def _costs(plan: TripPlan) -> list[Flowable]:
     return [
         Bookmark("Cost breakdown"),
-        _heading("Cost breakdown", H2),
+        _p("Cost breakdown", H2),
         _p("What the estimated total is made of.", LEAD),
         Spacer(1, 12),
         _cost_tiles(plan),
@@ -491,20 +481,25 @@ def _costs(plan: TripPlan) -> list[Flowable]:
 # ── Map ────────────────────────────────────────────────────────────────────
 
 
+def _key_words(name: str, what: str) -> Paragraph:
+    """A place's name, in strong type, and what it is to the trip: "Fort Aguada — Day 1, morning"."""
+    xml, shaped = scripts.markup(scripts.shorten(name, 80), theme.MEDIUM)
+    return scripts.paragraph(f'<font name="{theme.MEDIUM}" color="{theme.INK_900}">{xml}</font> — {what}', KEY, shaped)
+
+
 def _map_key(features: MapFeatures) -> Table | None:
     """Which place each pin is: the numbers on the picture, spelled out."""
     entries: list[tuple[PinMark, Paragraph]] = []
     for pin in features.activities:
-        words = f"{_strong(_shorten(pin.name, 80))} — Day {pin.day}, {SLOT_LABELS[pin.slot].lower()}"
-        entries.append((PinMark(theme.day_style(pin.day), label=str(pin.order), size=12), Paragraph(words, KEY)))
+        words = _key_words(pin.name, f"Day {pin.day}, {SLOT_LABELS[pin.slot].lower()}")
+        entries.append((PinMark(theme.day_style(pin.day), label=str(pin.order), size=12), words))
     for hotel in features.hotels:
-        mark = PinMark(theme.HOTEL_STYLE, icon="bed", size=12)
-        entries.append((mark, Paragraph(f"{_strong(_shorten(hotel.name, 80))} — where you stay", KEY)))
+        entries.append((PinMark(theme.HOTEL_STYLE, icon="bed", size=12), _key_words(hotel.name, "where you stay")))
     for airport in features.airports:
         if airport.role == "destination":  # the departure airport is off the picture
-            name = _shorten(f"{airport.code} · {airport.name}" if airport.name else airport.code, 80)
+            name = f"{airport.code} · {airport.name}" if airport.name else airport.code
             mark = PinMark(theme.AIRPORT_STYLE, icon="plane", size=12)
-            entries.append((mark, Paragraph(f"{_strong(name)} — where you land", KEY)))
+            entries.append((mark, _key_words(name, "where you land")))
     if not entries:
         return None
 
@@ -539,7 +534,7 @@ def _map(features: MapFeatures, image: bytes) -> list[Flowable]:
 
     story: list[Flowable] = [
         Bookmark("On the map"),
-        _heading("On the map", H2),
+        _p("On the map", H2),
         _p(f"{plural(len(features.activities), 'stop')}, numbered in visiting order within each day.", LEAD),
         Spacer(1, 12),
         MapPicture(image, CONTENT_WIDTH),
@@ -580,8 +575,7 @@ def _draw_body_page(canv: Canvas, page: int, pages: int | None, running_title: s
     canv.saveState()
     top = PAGE_HEIGHT - 14 * mm
     canv.setFillColor(INK_500)
-    canv.setFont(theme.REGULAR, 7.5)
-    canv.drawString(MARGIN, top, running_title)
+    scripts.draw_text(canv, MARGIN, top, running_title, theme.REGULAR, 7.5)
     wordmark = pdfmetrics.stringWidth("TripPlanner", theme.DISPLAY, 9.5)
     canv.setFillColor(INK_900)
     canv.setFont(theme.DISPLAY, 9.5)
@@ -601,9 +595,9 @@ def _draw_body_page(canv: Canvas, page: int, pages: int | None, running_title: s
 def _render(plan: TripPlan, map_image: bytes | None, prepared_on: date, pages: int | None) -> tuple[bytes, int]:
     """Lay the document out once. Returns the PDF and how many pages it came to."""
     date_range = format_date_range(plan.start_date, plan.end_date)
-    running_title = f"{_shorten(plan.destination, 60)} · {date_range}"
-    if not _can_draw(theme.REGULAR, running_title):
-        running_title = date_range
+    running_title = f"{scripts.shorten(plan.destination, 60)} · {date_range}"
+    if not scripts.drawable(running_title, theme.REGULAR):
+        running_title = date_range  # in a script there is no font for (Chinese…) it would print as boxes
 
     out = io.BytesIO()
     document = BaseDocTemplate(

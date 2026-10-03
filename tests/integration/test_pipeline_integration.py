@@ -1,4 +1,4 @@
-"""End-to-end backend test — Phases 5–19 through the public HTTP API.
+"""End-to-end backend test — Phases 5–20 through the public HTTP API.
 
 Real Postgres (Alembic schema), real Redis, the real LangGraph orchestrator,
 real background tasks. Only the external network seams are stubbed: the MCP
@@ -77,9 +77,9 @@ async def _login(client: AsyncClient) -> None:
     client.headers["Authorization"] = f"Bearer {token['access_token']}"
 
 
-async def _create_trip(client: AsyncClient, budget: float = 50_000) -> str:
+async def _create_trip(client: AsyncClient, budget: float = 50_000, destination: str = "Goa") -> str:
     body = {
-        "destination": "Goa",
+        "destination": destination,
         "start_date": str(START),
         "end_date": str(END),
         "budget": budget,
@@ -166,9 +166,21 @@ async def test_plan_then_refine_end_to_end(db_session):
         # ── Phase 17: status endpoint + SSE event order ──
         status = (await client.get(f"/trips/{trip_id}/status")).json()
         assert status["status"] == "completed" and status["progress"]["agents_done"] == 3
+        assert status["progress"]["errors"] == {} and status["run"] is None
         seen = [e.get("event") or e["agent"] for e in events]
         assert seen[:2] == ["planning_started", "flight_agent"]
-        assert set(seen[2:4]) == {"hotel_agent", "activities_agent"} and seen[4] == "planning_complete"
+        assert set(seen[2:4]) == {"hotel_agent", "activities_agent"} and seen[-1] == "planning_complete"
+
+        # ── Phase 20: between the searches and "complete", the itinerary arrives as it is written ──
+        tokens = events[4:-1]
+        assert tokens and all(e["event"] == "builder_token" and e["agent"] == "itinerary_builder" for e in tokens)
+        assert [e["seq"] for e in tokens] == list(range(len(tokens)))
+        written = json.loads("".join(e["token"] for e in tokens))
+        saved = first["structured_data"]["days"]
+        assert [d["morning"]["activity"] for d in written["days"]] == [d["morning"]["activity"] for d in saved]
+        assert written["total_cost"] == first["total_cost"]
+        # what was streamed is the model's text; what was saved went through the checks (coordinates attached)
+        assert written["days"][0]["morning"]["lat"] is None and saved[0]["morning"]["lat"] == 15.492
 
         # ── Phase 14: two 1536-dim embeddings, written in the background ──
         async def embedded():
@@ -231,6 +243,8 @@ async def test_plan_then_refine_end_to_end(db_session):
         assert versions[0]["total_cost"] == 8_200 + 2 * 6_000
         assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "completed"
         assert [e.get("turn") for e in events if e.get("event") == "planning_complete"] == [1, 2]
+        # the refinement's build is a stream of its own: it starts again from seq 0
+        assert [e["seq"] for e in events if e.get("event") == "builder_token"].count(0) == 2
 
         # Phase 19: the export is of the latest version — the new hotel, the new total
         refined = " ".join(_pdf_pages((await client.get(f"/trips/{trip_id}/export/pdf")).content))
@@ -276,6 +290,29 @@ async def test_pdf_export_is_private_and_survives_a_dead_tile_server(db_session)
         assert exported.status_code == 200 and exported.headers["x-itinerary-map"] == "unavailable"
         pages = _pdf_pages(exported.content)
         assert len(pages) == 3 and "Cost breakdown" in pages[2] and "On the map" not in " ".join(pages)
+
+
+@pytest.mark.asyncio
+async def test_a_trip_typed_in_devanagari_exports_in_devanagari(db_session):
+    """Phase 20: the destination is drawn in its own script, and names the file in it."""
+    async with _stack(flight_tool=lambda *_: [flight(8_200.0)]) as (client, _, __):
+        await _login(client)
+        trip_id = await _create_trip(client, destination="गोवा")
+        assert (await client.post(f"/trips/{trip_id}/plan")).status_code == 202
+        await _run_finished(client, trip_id, orchestrator_rows=1)
+
+        exported = await client.get(f"/trips/{trip_id}/export/pdf")
+        assert exported.status_code == 200
+        assert exported.headers["content-disposition"] == (
+            f'attachment; filename="trip-{START}.pdf"; '
+            f"filename*=UTF-8''trip-%E0%A4%97%E0%A5%8B%E0%A4%B5%E0%A4%BE-{START}.pdf"
+        )
+        reader = PdfReader(io.BytesIO(exported.content))
+        fonts = {
+            str(ref.get_object()["/BaseFont"]).split("+")[-1] for ref in reader.pages[0]["/Resources"]["/Font"].values()
+        }
+        assert "NotoSansDevanagari-Medium" in fonts  # the cover's title
+        assert all(page.startswith("गोवा · ") for page in _pdf_pages(exported.content)[1:])  # the running head
 
 
 @pytest.mark.asyncio
@@ -351,6 +388,112 @@ async def test_plan_survives_missing_flight_and_hotel_providers(db_session):
             "hotel_agent": "failed",
             "activities_agent": "completed",
         }
+
+
+@pytest.mark.asyncio
+async def test_a_failed_search_can_be_retried_and_the_plan_keeps_the_rest(db_session):
+    """Phase 20: the flight provider is down → a plan without flights → retry → the same plan, with them."""
+    from src.ai.mcp_server.models import ToolError
+
+    down = ToolError(error="The flight search is not answering (HTTP 503).", code="PROVIDER_ERROR")
+    answers = [down, down, [flight(8_200.0)]]  # the first run, a retry that fails again, a retry that works
+
+    async with _stack(flight_tool=lambda *_: answers.pop(0)) as (client, events, tools):
+        await _login(client)
+        trip_id = await _create_trip(client)
+        await client.post(f"/trips/{trip_id}/plan")
+        await _run_finished(client, trip_id, orchestrator_rows=1)
+
+        first = (await client.get(f"/trips/{trip_id}/itinerary")).json()
+        assert first["total_cost"] == 2 * 4_500 and first["structured_data"]["days"][0]["flight"] is None
+        status = (await client.get(f"/trips/{trip_id}/status")).json()
+        assert status["status"] == "completed" and status["progress"]["agents"]["flight_agent"] == "failed"
+        assert status["progress"]["errors"] == {"flight_agent": down.error}  # which search failed, and why
+
+        # ── a retry that fails again: nothing is rebuilt, the plan stands, the reason is said ──
+        resp = await client.post(f"/trips/{trip_id}/retry", json={"agent": "flight_agent"})
+        assert resp.status_code == 200 and resp.json()["status"] == "retry_started" and resp.json()["turn"] == 2
+        assert (await client.post(f"/trips/{trip_id}/retry", json={"agent": "flight_agent"})).status_code == 409
+        await _run_finished(client, trip_id, orchestrator_rows=2)
+
+        turn_2 = [(r["agent_name"], r["status"]) for r in (await client.get(f"/trips/{trip_id}/runs?turn=2")).json()]
+        assert turn_2 == [("flight_agent", "failed"), ("orchestrator", "failed")]
+        assert events[-1] == {
+            "event": "planning_failed",
+            "agent": "flight_agent",
+            "status": "failed",
+            "error": down.error,
+        }
+        assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "completed"
+        assert len((await client.get(f"/trips/{trip_id}/itineraries")).json()) == 1
+        assert (await client.get(f"/trips/{trip_id}/status")).json()["run"] is None
+
+        # ── a retry that works: only the flight search runs again, and the plan gains the flight ──
+        hotel_calls, activity_calls = tools["hotel"].await_count, tools["activities"].await_count
+        resp = await client.post(f"/trips/{trip_id}/retry", json={"agent": "flight_agent"})
+        assert resp.json()["turn"] == 3 and resp.json()["refinement_type"] == "targeted_flights"
+        await _run_finished(client, trip_id, orchestrator_rows=3)
+
+        turn_3 = [r["agent_name"] for r in (await client.get(f"/trips/{trip_id}/runs?turn=3")).json()]
+        assert turn_3 == [
+            "flight_agent",
+            "budget_decision",
+            "itinerary_builder",
+            "evaluator",
+            "persist",
+            "orchestrator",
+        ]
+        assert (tools["hotel"].await_count, tools["activities"].await_count) == (hotel_calls, activity_calls)
+
+        retried = (await client.get(f"/trips/{trip_id}/itinerary")).json()
+        assert retried["id"] != first["id"] and retried["total_cost"] == 8_200 + 2 * 4_500
+        before, after = first["structured_data"]["days"], retried["structured_data"]["days"]
+        assert after[0]["flight"]["price_inr"] == 8_200
+        for slot in ("morning", "afternoon", "evening", "hotel"):  # everything else is where it was
+            assert [d[slot] for d in after] == [d[slot] for d in before]
+        status = (await client.get(f"/trips/{trip_id}/status")).json()
+        assert status["progress"]["errors"] == {} and status["progress"]["agents_done"] == 3
+        started = [e for e in events if e.get("event") == "planning_started"]
+        assert [(e["turn"], e.get("retry")) for e in started] == [(1, None), (2, "flight_agent"), (3, "flight_agent")]
+
+
+@pytest.mark.asyncio
+async def test_a_trip_that_failed_can_be_retried_whole(db_session):
+    """Phase 20: every provider down → the trip fails → retry plans it again, from the same request."""
+    from src.ai.mcp_server.models import ToolError
+
+    down = ToolError(error="The provider is not answering (HTTP 503).", code="PROVIDER_ERROR")
+    up = {"flights": False, "hotels": False}
+
+    async with _stack(
+        flight_tool=lambda *_: [flight(8_200.0)] if up["flights"] else down,
+        hotel_tool=lambda *_: BEACH_HOTELS if up["hotels"] else down,
+    ) as (client, events, tools):
+        attractions = tools["activities"].return_value
+        tools["activities"].return_value = down
+        await _login(client)
+        trip_id = await _create_trip(client)
+        await client.post(f"/trips/{trip_id}/plan", json={"raw_input": "forts and quiet beaches"})
+        await _run_finished(client, trip_id, orchestrator_rows=1)
+
+        status = (await client.get(f"/trips/{trip_id}/status")).json()
+        assert status["status"] == "failed" and set(status["progress"]["errors"]) == set(status["progress"]["agents"])
+        assert "nothing to build a plan from" in status["failure_reason"]
+
+        up.update(flights=True, hotels=True)
+        tools["activities"].return_value = attractions
+        # a search is named, but there is no plan to add it to: the whole trip is planned again
+        resp = await client.post(f"/trips/{trip_id}/retry", json={"agent": "hotel_agent"})
+        assert resp.status_code == 200 and resp.json() == {"status": "planning_started", "trip_id": trip_id}
+        runs = await _run_finished(client, trip_id, orchestrator_rows=2)
+
+        assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "completed"
+        assert (await client.get(f"/trips/{trip_id}/itinerary")).json()["total_cost"] == 8_200 + 2 * 6_000
+        # it was planned from what the traveller had written, not from nothing
+        parsing = [r for r in runs if r["agent_name"] == "intent_parsing"]
+        assert [r["input"]["raw_input"] for r in parsing] == ["forts and quiet beaches"] * 2
+        status = (await client.get(f"/trips/{trip_id}/status")).json()
+        assert status["failure_reason"] is None and status["progress"]["errors"] == {}
 
 
 @pytest.mark.asyncio

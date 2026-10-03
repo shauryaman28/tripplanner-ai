@@ -3,17 +3,24 @@
 import { BedDouble, Footprints, Landmark, Moon, PlaneLanding, Sun, Sunrise, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { flightPart, stayPart, stopPart, type PlanSection } from "@/lib/changes";
 import { formatClock, formatDuration, formatINR, formatWeekday } from "@/lib/format";
 import { HOTEL_STYLE, SLOT_LABELS, dayStops, dayStyle, hotelPinId, type DayStop, type PinStyle, type SlotName } from "@/lib/map";
 import { categoryMeta, describeRating } from "@/lib/places";
 import type { DaySchedule } from "@/lib/types";
-import { Pin } from "./ui";
+import { Pin, UpdatedTag, UpdatingTag, partClass } from "./ui";
 
 interface Props {
   day: DaySchedule;
   /** Scroll to the map and open this pin. */
   onShowOnMap: (pinId: string) => void;
+  /** The section a run is working on right now: its rows show it, the others stay as they are. */
+  updating?: PlanSection | null;
+  /** The parts that came back different from the last change (lib/changes.ts) — marked for a few seconds. */
+  changed?: ReadonlySet<string>;
 }
+
+const NOTHING_CHANGED: ReadonlySet<string> = new Set();
 
 const SLOT_ICONS: Record<SlotName, LucideIcon> = { morning: Sunrise, afternoon: Sun, evening: Moon };
 
@@ -24,6 +31,9 @@ function Row({
   title,
   aside,
   children,
+  part,
+  updating = false,
+  changed = false,
 }: {
   icon: LucideIcon;
   tone: string;
@@ -31,18 +41,30 @@ function Row({
   title: ReactNode;
   aside?: ReactNode;
   children?: ReactNode;
+  /** What this row is, for a change request: "flight", "stay:2", "stop:1-morning". */
+  part?: string;
+  /** A run is working on this row's section. */
+  updating?: boolean;
+  /** This row came back different from the last change. */
+  changed?: boolean;
 }) {
   return (
-    <li className="flex gap-3.5 py-3.5">
-      <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tone}`}>
-        <Icon className="h-[18px] w-[18px]" aria-hidden />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="eyebrow">{eyebrow}</p>
-        <p className="mt-0.5 text-[15px] font-medium leading-snug text-ink-900">{title}</p>
-        {children}
+    <li data-part={part} data-updating={updating || undefined} data-changed={changed || undefined} className="py-1.5">
+      {/* the row sits in a box of its own, a little wider than its content: room for the "changed" tint */}
+      <div className={`-mx-2 flex gap-3.5 rounded-xl px-2 py-2 ${partClass(updating, changed)}`}>
+        <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tone}`}>
+          <Icon className="h-[18px] w-[18px]" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="eyebrow flex flex-wrap items-center gap-x-2 gap-y-1">
+            {eyebrow}
+            {changed && <UpdatedTag />}
+          </p>
+          <p className="mt-0.5 text-[15px] font-medium leading-snug text-ink-900">{title}</p>
+          {children}
+        </div>
+        {updating ? <UpdatingTag /> : aside}
       </div>
-      {aside}
     </li>
   );
 }
@@ -73,13 +95,32 @@ function Popularity({ level }: { level: number }) {
   );
 }
 
-function ActivityRow({ day, stop, onShowOnMap }: { day: number; stop: DayStop; onShowOnMap: Props["onShowOnMap"] }) {
+function ActivityRow({
+  day,
+  stop,
+  onShowOnMap,
+  updating,
+  changed,
+}: {
+  day: number;
+  stop: DayStop;
+  onShowOnMap: Props["onShowOnMap"];
+  updating: boolean;
+  changed: boolean;
+}) {
   const { activity, slot } = stop;
 
   // Free time only ever stands alone (see dayStops): it is the whole day, not a slot.
   if (stop.freeTime) {
     return (
-      <Row icon={Footprints} tone="bg-ink-50 text-ink-400" eyebrow="All day" title={<span className="text-ink-600">Free time</span>}>
+      <Row
+        icon={Footprints}
+        tone="bg-ink-50 text-ink-400"
+        eyebrow="All day"
+        title={<span className="text-ink-600">Free time</span>}
+        part={stopPart(day, slot)}
+        updating={updating}
+      >
         <p className="mt-0.5 text-xs text-ink-500">Nothing booked — explore the area at your own pace.</p>
       </Row>
     );
@@ -94,6 +135,9 @@ function ActivityRow({ day, stop, onShowOnMap }: { day: number; stop: DayStop; o
       tone="bg-ink-100 text-ink-600"
       eyebrow={SLOT_LABELS[slot]}
       title={activity.activity}
+      part={stopPart(day, slot)}
+      updating={updating}
+      changed={changed}
       aside={
         stop.order !== null && (
           <MapButton pinStyle={dayStyle(day)} label={stop.order} name={activity.activity} onClick={() => onShowOnMap(stop.id)} />
@@ -126,7 +170,7 @@ function ActivityRow({ day, stop, onShowOnMap }: { day: number; stop: DayStop; o
   );
 }
 
-export default function DayCard({ day, onShowOnMap }: Props) {
+export default function DayCard({ day, onShowOnMap, updating = null, changed = NOTHING_CHANGED }: Props) {
   const stops = dayStops(day);
   const { hotel, flight } = day;
   const dayCost = stops.reduce((sum, stop) => sum + (stop.activity.cost ?? 0), 0) + (hotel?.cost_per_night ?? 0);
@@ -172,6 +216,9 @@ export default function DayCard({ day, onShowOnMap }: Props) {
               tone="bg-ink-100 text-ink-700"
               eyebrow="Flight"
               title={route || flightFacts[0]}
+              part={flightPart}
+              updating={updating === "flights"}
+              changed={changed.has(flightPart)}
               aside={
                 flight.price_inr != null && (
                   <p className="shrink-0 self-center text-right">
@@ -186,7 +233,14 @@ export default function DayCard({ day, onShowOnMap }: Props) {
           )}
 
           {stops.map((stop) => (
-            <ActivityRow key={stop.id} day={day.day} stop={stop} onShowOnMap={onShowOnMap} />
+            <ActivityRow
+              key={stop.id}
+              day={day.day}
+              stop={stop}
+              onShowOnMap={onShowOnMap}
+              updating={updating === "activities"}
+              changed={changed.has(stopPart(day.day, stop.slot))}
+            />
           ))}
 
           {hotel && (
@@ -195,6 +249,9 @@ export default function DayCard({ day, onShowOnMap }: Props) {
               tone="bg-saffron/25 text-ink-800"
               eyebrow="Stay"
               title={hotel.name}
+              part={stayPart(day.day)}
+              updating={updating === "stay"}
+              changed={changed.has(stayPart(day.day))}
               aside={
                 <div className="flex shrink-0 items-center gap-3 self-center">
                   <p className="hidden text-right sm:block">

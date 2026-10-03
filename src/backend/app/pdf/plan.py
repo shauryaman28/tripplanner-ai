@@ -22,6 +22,7 @@ from datetime import date
 
 from app.pdf.formatting import (
     category_label,
+    clip,
     describe_rating,
     format_clock,
     format_duration,
@@ -431,10 +432,19 @@ def map_features(plan: TripPlan) -> MapFeatures:
 # ── The file name ──────────────────────────────────────────────────────────
 
 
-def export_filename(destination: str, start_date: date) -> str:
-    """ "Goa", 2027-12-10 → "trip-goa-2027-12-10.pdf". ASCII only, so it is safe in a header on any client."""
-    ascii_name = unicodedata.normalize("NFKD", destination or "").encode("ascii", "ignore").decode()
-    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")[:60].strip("-")
+def export_filename(destination: str, start_date: date, *, ascii_only: bool = False) -> str:
+    """ "Goa", 2027-12-10 → "trip-goa-2027-12-10.pdf"; "गोवा" → "trip-गोवा-2027-12-10.pdf".
+
+    Letters and digits of any script are kept and everything else becomes a
+    hyphen, so nothing in the name can end a header's quoted string or name a
+    folder. `ascii_only` keeps ASCII alone, accents dropped — for the plain
+    `filename=` of a header, which an old client reads as Latin-1.
+    """
+    name = unicodedata.normalize("NFC", destination or "").lower()
+    if ascii_only:
+        name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    kept = "".join(c if unicodedata.category(c)[0] in "LMN" or c in "\u200c\u200d" else "-" for c in name)
+    slug = clip(re.sub(r"-+", "-", kept).strip("-"), 60).strip("-")
     return "-".join(part for part in ("trip", slug, start_date.isoformat()) if part) + ".pdf"
 
 

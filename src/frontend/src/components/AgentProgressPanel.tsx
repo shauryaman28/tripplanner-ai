@@ -1,8 +1,18 @@
 "use client";
 
-import { BedDouble, Check, CircleCheck, MapPin, Plane, X, type LucideIcon } from "lucide-react";
+import { BedDouble, Check, CircleCheck, MapPin, NotebookPen, Plane, RotateCw, X, type LucideIcon } from "lucide-react";
 
-import { AGENT_DISPLAY, deriveAgentStates, latestAgentEvents, type AgentState, type RunScope, type SSEStatus } from "@/lib/sse";
+import {
+  AGENT_DISPLAY,
+  SEARCH_WORDS,
+  agentFailures,
+  deriveAgentStates,
+  lastingFailures,
+  latestAgentEvents,
+  type AgentState,
+  type RunScope,
+  type SSEStatus,
+} from "@/lib/sse";
 import type { AgentStatus, SSEAgentUpdateEvent } from "@/lib/types";
 import { Spinner } from "./ui";
 
@@ -15,6 +25,17 @@ interface Props {
   polled: Record<string, AgentStatus>;
   /** Which searches the latest run repeats — a refinement leaves the others as they were. */
   scope: RunScope;
+  /** Why searches failed, from GET /status: what a page loaded later knows about it. */
+  polledErrors?: Record<string, string>;
+  /** Whether running each failed search again could help, from GET /status. */
+  polledRetryable?: Record<string, boolean>;
+  /**
+   * The fourth step, while a run is in flight: undefined until the builder starts writing, then
+   * where it has got to ("Day 2 · Afternoon — Baga Beach"), or null before its first day.
+   */
+  writing?: string | null;
+  /** Offer "Retry" beside a search that failed (Phase 20). */
+  onRetry?: (agent: string) => void;
 }
 
 const AGENT_ICONS: Record<string, LucideIcon> = {
@@ -71,11 +92,32 @@ function ConnectionBadge({ status }: { status: SSEStatus }) {
   );
 }
 
-/** The three searches behind a plan, updated live from the SSE stream. */
-export default function AgentProgressPanel({ events, sseStatus, active, polled, scope }: Props) {
+function StepIcon({ icon: Icon, quiet }: { icon: LucideIcon; quiet: boolean }) {
+  return (
+    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors ${quiet ? "bg-ink-50 text-ink-400" : "bg-ink-100 text-ink-700"}`}>
+      <Icon className="h-4 w-4" aria-hidden />
+    </span>
+  );
+}
+
+/** The steps behind a plan — three searches, then the writing — updated live from the SSE stream. */
+export default function AgentProgressPanel({
+  events,
+  sseStatus,
+  active,
+  polled,
+  scope,
+  polledErrors = {},
+  polledRetryable = {},
+  writing,
+  onRetry,
+}: Props) {
   const agentStates = deriveAgentStates(events, polled, active, scope);
-  // what each agent last said ("Found 5 flights", or why it failed)
+  // what each agent last said ("Found 5 flights"), and why the failed ones failed
   const latest = latestAgentEvents(events, scope);
+  const failures = agentFailures(events, agentStates, polledErrors, scope);
+  // no Retry where it would fail the same way: the reason says what would help instead
+  const lasting = lastingFailures(events, agentStates, polledRetryable, scope);
 
   // Events span every run on this page: the run is complete if nothing has started since.
   const lifecycle = events.filter((e) => e.event === "planning_started" || e.event === "planning_complete");
@@ -91,27 +133,49 @@ export default function AgentProgressPanel({ events, sseStatus, active, polled, 
       <ul className="mt-2.5 space-y-1">
         {Object.keys(AGENT_DISPLAY).map((key) => {
           const state: AgentState = agentStates[key];
-          const summary = latest[key]?.summary;
-          const Icon = AGENT_ICONS[key] ?? MapPin;
+          const failed = state === "failed";
+          const summary = failed ? failures[key] || IDLE_TEXT.failed : latest[key]?.summary ?? IDLE_TEXT[state];
           return (
-            <li key={key} className="flex items-center gap-3 py-1">
-              <span
-                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors ${
-                  state === "pending" ? "bg-ink-50 text-ink-400" : "bg-ink-100 text-ink-700"
-                }`}
-              >
-                <Icon className="h-4 w-4" aria-hidden />
-              </span>
+            <li key={key} data-agent={key} data-state={state} className="flex items-start gap-3 py-1">
+              <StepIcon icon={AGENT_ICONS[key] ?? MapPin} quiet={state === "pending"} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium leading-tight text-ink-900">{AGENT_DISPLAY[key]}</p>
-                <p className="truncate text-xs text-ink-500" title={summary}>
-                  {summary ?? IDLE_TEXT[state]}
+                {/* why a search failed is worth reading in full; anything else fits on a line */}
+                <p className={`text-xs ${failed ? "break-words text-bad-ink" : "truncate text-ink-500"}`} title={failed ? undefined : summary}>
+                  {summary}
                 </p>
+                {failed && onRetry && !active && !lasting.has(key) && (
+                  <button
+                    onClick={() => onRetry(key)}
+                    aria-label={`Retry the ${SEARCH_WORDS[key]} search`}
+                    className="btn-secondary mt-1.5 gap-1.5 rounded-lg px-2.5 py-1 text-xs"
+                  >
+                    <RotateCw className="h-3 w-3" aria-hidden />
+                    Retry
+                  </button>
+                )}
               </div>
-              <StateMark state={state} />
+              <span className="mt-1.5">
+                <StateMark state={state} />
+              </span>
             </li>
           );
         })}
+
+        {active && (
+          <li data-agent="itinerary_builder" data-state={writing === undefined ? "pending" : "running"} className="flex items-start gap-3 py-1">
+            <StepIcon icon={NotebookPen} quiet={writing === undefined} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium leading-tight text-ink-900">Itinerary</p>
+              <p className="truncate text-xs text-ink-500">
+                {writing === undefined ? "Written once the searches are in" : writing ? `Writing · ${writing}` : "Writing…"}
+              </p>
+            </div>
+            <span className="mt-1.5">
+              <StateMark state={writing === undefined ? "pending" : "running"} />
+            </span>
+          </li>
+        )}
       </ul>
 
       {isComplete && (

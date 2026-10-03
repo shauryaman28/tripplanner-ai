@@ -10,6 +10,10 @@
  * known agent status rather than a blank screen — roadmap requirement.
  * Redis pub/sub has no replay, so an event published while the stream was
  * down is gone; the trip page polls GET /status as the safety net.
+ *
+ * Phase 20: `builder_token` events carry the itinerary while it is written.
+ * There can be dozens a second, so they never enter `events`; they are joined
+ * into `draft`, which the page reads as text.
  */
 
 "use client";
@@ -24,9 +28,19 @@ const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
 
 export type SSEStatus = "idle" | "connecting" | "connected" | "reconnecting" | "closed";
 
+/** The itinerary being written in the run in flight, as far as it has arrived. */
+export interface BuilderDraft {
+  /** The model's reply so far — JSON that is not finished (lib/draft.ts reads it). */
+  text: string;
+  /** 1 for the run's first build; more when a draft failed its checks and is being written again. */
+  attempt: number;
+}
+
 export interface UseSSEResult {
   events: SSEAgentUpdateEvent[];
   status: SSEStatus;
+  /** Null until the builder starts writing, and when its stream cannot be followed (see below). */
+  draft: BuilderDraft | null;
   /** Forget the events of the previous run (the connection stays open). */
   reset: () => void;
 }
@@ -34,11 +48,33 @@ export interface UseSSEResult {
 export function useSSE(tripId: string | null, enabled: boolean = true): UseSSEResult {
   const [events, setEvents] = useState<SSEAgentUpdateEvent[]>([]);
   const [status, setStatus] = useState<SSEStatus>("idle");
+  const [draft, setDraft] = useState<BuilderDraft | null>(null);
 
   const esRef      = useRef<EventSource | null>(null);
   const attempt    = useRef(0);
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef  = useRef(false);   // set true when the caller calls close()
+
+  // The token stream of the build in flight. Tokens are numbered from 0 within one build and only
+  // make sense read from the start: after a gap (a dropped connection, a page opened mid-build)
+  // the rest is ignored until the next build begins.
+  const stream = useRef({ text: "", next: 0, builds: 0, readable: false });
+  const frame  = useRef<number | null>(null);
+
+  // Several tokens can arrive within one frame; the page is told once per frame.
+  const showDraft = useCallback(() => {
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      const { text, builds, readable } = stream.current;
+      setDraft(readable ? { text, attempt: builds } : null);
+    });
+  }, []);
+
+  const forgetDraft = useCallback(() => {
+    stream.current = { text: "", next: 0, builds: 0, readable: false };
+    showDraft();
+  }, [showDraft]);
 
   const connect = useCallback(() => {
     if (!tripId || closedRef.current) return;
@@ -58,12 +94,28 @@ export function useSSE(tripId: string | null, enabled: boolean = true): UseSSERe
     });
 
     es.addEventListener("agent_update", (e: MessageEvent) => {
+      let payload: SSEAgentUpdateEvent;
       try {
-        const payload: SSEAgentUpdateEvent = JSON.parse(e.data);
-        setEvents((prev) => [...prev, payload]);
+        payload = JSON.parse(e.data);
       } catch {
-        // malformed JSON from server — ignore
+        return; // malformed JSON from server — ignore
       }
+
+      if (payload.event === "builder_token") {
+        const s = stream.current;
+        if (payload.seq === 0) Object.assign(s, { text: "", next: 0, builds: s.builds + 1, readable: true });
+        if (s.readable && payload.seq === s.next) {
+          s.text += payload.token ?? "";
+          s.next += 1;
+        } else {
+          s.readable = false;
+        }
+        showDraft();
+        return;
+      }
+
+      if (payload.event === "planning_started") forgetDraft(); // a new run: whatever was being written is history
+      setEvents((prev) => [...prev, payload]);
     });
 
     es.onerror = () => {
@@ -77,7 +129,7 @@ export function useSSE(tripId: string | null, enabled: boolean = true): UseSSERe
 
       timerRef.current = setTimeout(connect, delay);
     };
-  }, [tripId]);
+  }, [tripId, showDraft, forgetDraft]);
 
   // Open the connection when enabled & tripId changes
   useEffect(() => {
@@ -92,13 +144,18 @@ export function useSSE(tripId: string | null, enabled: boolean = true): UseSSERe
       esRef.current?.close();
       esRef.current = null;
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
       setStatus("closed");
     };
   }, [tripId, enabled, connect]);
 
-  const reset = useCallback(() => setEvents([]), []);
+  const reset = useCallback(() => {
+    setEvents([]);
+    forgetDraft();
+  }, [forgetDraft]);
 
-  return { events, status, reset };
+  return { events, status, draft, reset };
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +166,13 @@ export const AGENT_DISPLAY: Record<string, string> = {
   flight_agent:     "Flights",
   hotel_agent:      "Stay",
   activities_agent: "Things to do",
+};
+
+/** How each search is named in a sentence: "the flight search". */
+export const SEARCH_WORDS: Record<string, string> = {
+  flight_agent:     "flight",
+  hotel_agent:      "hotel",
+  activities_agent: "activities",
 };
 
 export type AgentState = "pending" | "running" | "completed" | "failed";
@@ -152,4 +216,46 @@ export function deriveAgentStates(
     states[agent] = scope.carried[agent] ?? (result as AgentState | undefined) ?? (active ? "running" : "pending");
   }
   return states;
+}
+
+/**
+ * Why each failed search failed, for the searches that are showing as failed. The live event says
+ * it while the page is open; `polledErrors` (GET /status) says it after a reload. A search that
+ * failed without giving a reason is listed with an empty one.
+ */
+export function agentFailures(
+  events: SSEAgentUpdateEvent[],
+  states: Record<string, AgentState>,
+  polledErrors: Record<string, string> = {},
+  scope: RunScope = WHOLE_RUN,
+): Record<string, string> {
+  const latest = latestAgentEvents(events, scope);
+  const failures: Record<string, string> = {};
+  for (const agent of Object.keys(AGENT_DISPLAY)) {
+    if (states[agent] !== "failed") continue;
+    failures[agent] = (latest[agent]?.status === "failed" ? latest[agent].summary : undefined) ?? polledErrors[agent] ?? "";
+  }
+  return failures;
+}
+
+/**
+ * The failed searches a Retry cannot mend: the same search would fail the same way (a destination
+ * no airport is known by, nothing within budget). The backend says which — src/ai/utils/failures.py —
+ * in the live event while the page is open, in `polledRetryable` (GET /status) after a reload. A
+ * failure it says nothing about may be retried.
+ */
+export function lastingFailures(
+  events: SSEAgentUpdateEvent[],
+  states: Record<string, AgentState>,
+  polledRetryable: Record<string, boolean> = {},
+  scope: RunScope = WHOLE_RUN,
+): Set<string> {
+  const latest = latestAgentEvents(events, scope);
+  const lasting = new Set<string>();
+  for (const agent of Object.keys(AGENT_DISPLAY)) {
+    if (states[agent] !== "failed") continue;
+    const live = latest[agent]?.status === "failed" ? latest[agent].retryable : undefined;
+    if ((live ?? polledRetryable[agent]) === false) lasting.add(agent);
+  }
+  return lasting;
 }

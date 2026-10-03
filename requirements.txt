@@ -42,5 +42,6 @@ httpx>=0.27.0
 tenacity>=8.0.0    # exponential back-off around the Gemini embedding call
 
 # ── PDF export (Phase 19) ─────────────────────────────────────
-reportlab>=5.0,<6  # pure Python — WeasyPrint needs Pango/GObject installed on the machine (DECISIONS #100)
+reportlab[shaping]>=5.0,<6  # pure Python — WeasyPrint needs Pango/GObject installed on the machine (DECISIONS #100);
+                            # [shaping] adds uharfbuzz, which joins the letters of Indian scripts (Phase 20)
 pillow>=10.0       # draws the static map from OpenStreetMap tiles; also ReportLab's image backend

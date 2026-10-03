@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { ArrowDown } from "lucide-react";
 import { useRef, useState } from "react";
 
+import type { PlanSection } from "@/lib/changes";
 import { nightsBetween } from "@/lib/format";
 import type { Itinerary, Trip } from "@/lib/types";
 import CostSummary from "./CostSummary";
@@ -17,15 +18,26 @@ const ItineraryMap = dynamic(() => import("./ItineraryMap"), {
   loading: () => <div className="skeleton h-[520px]" aria-hidden />,
 });
 
+/**
+ * What a run in flight is doing to the plan on screen (Phase 20). A targeted change works on one
+ * section — only that one shows it, the rest stays as it is. "all": the whole trip is being
+ * planned again. "pending": a change was asked for and it is not known yet what it touches.
+ */
+export type Updating = PlanSection | "all" | "pending" | null;
+
 interface Props {
   itinerary: Itinerary;
   /** For the budget the total is measured against. */
   trip: Trip | null;
-  /** A refinement is running: the current plan stays on screen, dimmed, until the new one replaces it. */
-  updating?: boolean;
+  /** The current plan stays on screen while a change is made; this says which part of it is being changed. */
+  updating?: Updating;
+  /** The parts that came back different from the last change — marked "Updated" for a few seconds. */
+  changed?: ReadonlySet<string>;
 }
 
-export default function ItineraryView({ itinerary, trip, updating = false }: Props) {
+const NOTHING_CHANGED: ReadonlySet<string> = new Set();
+
+export default function ItineraryView({ itinerary, trip, updating = null, changed = NOTHING_CHANGED }: Props) {
   const data = itinerary.structured_data;
   const mapRef = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState<MapFocus | null>(null);
@@ -51,11 +63,15 @@ export default function ItineraryView({ itinerary, trip, updating = false }: Pro
     mapRef.current?.scrollIntoView({ block: "center" }); // smooth unless the user asked for less motion (globals.css)
   }
 
+  // one section of the plan, or none: "all" dims the whole plan instead, "pending" touches nothing yet
+  const section = updating === "all" || updating === "pending" ? null : updating;
+
   return (
     <section
       aria-label="Your itinerary"
-      aria-busy={updating}
-      className={`space-y-6 transition-opacity duration-300 ${updating ? "opacity-60" : ""}`}
+      aria-busy={updating !== null}
+      data-updating={updating ?? undefined}
+      className={`space-y-6 transition-opacity duration-300 ${updating === "all" ? "opacity-60" : ""}`}
     >
       <CostSummary
         total={data.total_cost}
@@ -65,6 +81,8 @@ export default function ItineraryView({ itinerary, trip, updating = false }: Pro
         activities={activities}
         nights={data.days.filter((d) => d.hotel).length || (trip ? nightsBetween(trip.start_date, trip.end_date) : 0)}
         travellers={trip?.group_size ?? null}
+        updating={section}
+        changed={changed}
       />
 
       {/* on a narrow screen the two actions drop under the heading instead of squeezing it */}
@@ -75,7 +93,7 @@ export default function ItineraryView({ itinerary, trip, updating = false }: Pro
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {/* PDF export (Phase 19) */}
-          <DownloadPdfButton tripId={itinerary.trip_id} disabled={updating} />
+          <DownloadPdfButton tripId={itinerary.trip_id} disabled={updating !== null} />
           <a href="#trip-map" className="btn-ghost shrink-0 px-3 py-2">
             <ArrowDown className="h-4 w-4" aria-hidden />
             Map
@@ -86,13 +104,13 @@ export default function ItineraryView({ itinerary, trip, updating = false }: Pro
       <ol className="space-y-4">
         {data.days.map((day) => (
           <li key={day.day}>
-            <DayCard day={day} onShowOnMap={showOnMap} />
+            <DayCard day={day} onShowOnMap={showOnMap} updating={section} changed={changed} />
           </li>
         ))}
       </ol>
 
-      {/* Map (Phase 18) */}
-      <div ref={mapRef} id="trip-map">
+      {/* Map (Phase 18). It draws the stops, so it waits with them. */}
+      <div ref={mapRef} id="trip-map" className={`transition-opacity duration-300 ${section === "activities" ? "opacity-60" : ""}`}>
         <ItineraryMap days={data.days} focus={focus} />
       </div>
     </section>

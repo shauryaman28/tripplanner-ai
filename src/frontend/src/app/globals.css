@@ -88,6 +88,57 @@
   }
 }
 
+/* ── A change request, on the plan (Phase 20) ──────────────────────────────
+   Only the part being changed moves, and what came back different is tinted
+   green for a moment. Both come with words (ui.tsx: "Updating…", "Updated"),
+   so neither depends on the motion or on the colour. */
+.is-updating {
+  animation: updating 1.4s ease-in-out infinite;
+}
+@keyframes updating {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.flash-changed {
+  animation: flash-changed 2.6s ease-out both;
+}
+@keyframes flash-changed {
+  0% { background-color: #c9ecc9; }
+  35% { background-color: #ecf8ec; }
+  100% { background-color: transparent; }
+}
+
+/* The itinerary while it is being written (LiveDraft): where the next word will appear. */
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: currentColor;
+  animation: caret 1s steps(2, jump-none) infinite;
+}
+@keyframes caret {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Less motion asked for: the animations above are switched off (see the top of this file), so
+   each state is said by a still picture instead of a moving one. */
+@media (prefers-reduced-motion: reduce) {
+  .is-updating {
+    animation: none;
+    opacity: 0.6;
+  }
+  .flash-changed {
+    animation: none;
+    background-color: #ecf8ec;
+  }
+  .caret {
+    animation: none;
+  }
+}
+
 /* ── Map pins ──────────────────────────────────────────────────────────────
    One mark, used three ways: the Leaflet markers, the legend, and the stop
    badges on the day cards — so a pin on the map and its row in the list are

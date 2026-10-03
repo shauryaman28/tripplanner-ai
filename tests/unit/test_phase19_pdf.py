@@ -403,18 +403,25 @@ def test_row_wording():
 
 
 @pytest.mark.parametrize(
-    ("destination", "name"),
+    ("destination", "name", "ascii_name"),
     [
-        ("Goa", "trip-goa-2027-12-10.pdf"),
-        ("New Delhi & Agra!", "trip-new-delhi-agra-2027-12-10.pdf"),
-        ("São Tomé", "trip-sao-tome-2027-12-10.pdf"),
-        ("गोवा", "trip-2027-12-10.pdf"),  # nothing left in ASCII: the date alone still names the file
-        ('Goa"; rm -rf /', "trip-goa-rm-rf-2027-12-10.pdf"),  # nothing that could end the header's quoted string
-        ("a" * 200, f"trip-{'a' * 60}-2027-12-10.pdf"),
+        ("Goa", "trip-goa-2027-12-10.pdf", "trip-goa-2027-12-10.pdf"),
+        ("New Delhi & Agra!", "trip-new-delhi-agra-2027-12-10.pdf", "trip-new-delhi-agra-2027-12-10.pdf"),
+        ("São Tomé", "trip-são-tomé-2027-12-10.pdf", "trip-sao-tome-2027-12-10.pdf"),
+        # Phase 20: a name in another script is kept; with nothing left in ASCII, the date alone still names the file
+        ("गोवा", "trip-गोवा-2027-12-10.pdf", "trip-2027-12-10.pdf"),
+        ("Kedarnath (केदारनाथ)", "trip-kedarnath-केदारनाथ-2027-12-10.pdf", "trip-kedarnath-2027-12-10.pdf"),
+        # nothing that could end the header's quoted string, or name a folder
+        ('Goa"; rm -rf /', "trip-goa-rm-rf-2027-12-10.pdf", "trip-goa-rm-rf-2027-12-10.pdf"),
+        ("../../etc/passwd", "trip-etc-passwd-2027-12-10.pdf", "trip-etc-passwd-2027-12-10.pdf"),
+        ("a" * 200, f"trip-{'a' * 60}-2027-12-10.pdf", f"trip-{'a' * 60}-2027-12-10.pdf"),
+        # cut at 60 characters, but never between a letter and its vowel sign
+        ("क" * 60 + "ि", f"trip-{'क' * 59}-2027-12-10.pdf", "trip-2027-12-10.pdf"),
     ],
 )
-def test_export_filename(destination, name):
+def test_export_filename(destination, name, ascii_name):
     assert export_filename(destination, START) == name
+    assert export_filename(destination, START, ascii_only=True) == ascii_name
 
 
 @pytest.mark.parametrize("data", [None, {}, {"days": []}, {"days": "soon"}, {"days": [None, "x"]}, "not json", 42])
@@ -789,13 +796,16 @@ def test_text_from_a_plan_is_never_markup():
         assert words in everything, words
 
 
-def test_a_destination_the_fonts_cannot_draw_still_exports():
-    """Devanagari is outside the bundled fonts: it prints as boxes, but the PDF is built and named."""
-    plan = _plan(destination="गोवा")
+def test_a_destination_no_font_can_draw_still_exports():
+    """Chinese is outside every bundled font: it prints as boxes, but the PDF is built and named.
+
+    (Phase 20 brought fonts for the scripts of India — tests/unit/test_phase20_scripts.py.)
+    """
+    plan = _plan(destination="北京")
     pages = _pages(build_pdf(plan, None))
     assert len(pages) == 3 and "₹17,200" in pages[0]
     assert pages[1].startswith("10 – 12 Dec 2027")  # the running head drops what it cannot draw
-    assert export_filename(plan.destination, plan.start_date) == "trip-2027-12-10.pdf"
+    assert export_filename(plan.destination, plan.start_date, ascii_only=True) == "trip-2027-12-10.pdf"
 
 
 def test_a_long_trip_runs_over_several_pages_and_every_day_is_there(map_picture):
