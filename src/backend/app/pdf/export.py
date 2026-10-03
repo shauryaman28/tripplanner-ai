@@ -32,7 +32,8 @@ MAP_NONE = "none"  # nothing in the plan has a location, or no tile server is co
 @dataclass(frozen=True)
 class ExportedPdf:
     content: bytes
-    filename: str
+    filename: str  # in the destination's own script: "trip-गोवा-2027-12-10.pdf"
+    ascii_filename: str  # the same in ASCII alone, for a client that cannot take the other: "trip-2027-12-10.pdf"
     map_status: str
 
 
@@ -71,5 +72,8 @@ async def export_itinerary(plan: TripPlan, *, cache: Any | None = None, trip_id:
 
     content = await asyncio.to_thread(build_pdf, plan, image)
     return ExportedPdf(
-        content=content, filename=export_filename(plan.destination, plan.start_date), map_status=map_status
+        content=content,
+        filename=export_filename(plan.destination, plan.start_date),
+        ascii_filename=export_filename(plan.destination, plan.start_date, ascii_only=True),
+        map_status=map_status,
     )

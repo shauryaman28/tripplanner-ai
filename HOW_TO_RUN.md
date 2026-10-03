@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–19
+# How to Run & Verify — Phases 1–20
 
 ## What changed vs the original codebase?
 
@@ -18,6 +18,7 @@
 | 17 | `trips.py` (+ `GET /trips/{id}/status`) | Next.js 14 frontend in `src/frontend/`, `tests/unit/test_phase17_backend.py`, `src/frontend/e2e/planning.spec.ts` |
 | 18 | `tools.py`, `models.py`, `builder.py`, `orchestrator.py`, `trips.py` (`budget_conflict` in `/status`), `main.py`, every frontend page and component — see `docs/phase18_build_log.md` | `src/ai/itinerary.py`, `ItineraryMap.tsx`, `CostSummary.tsx`, `AppHeader.tsx`, `Brand.tsx`, `ui.tsx`, `lib/map.ts`, `lib/places.ts`, `lib/format.ts`, `tests/database.py`, `tests/unit/test_phase18_map.py` |
 | 19 | `trips.py` (`GET /trips/{id}/export/pdf`), `deps.py`, `config.py` (`MAP_TILE_URL`), `main.py` (CORS exposes the download's headers), `requirements.txt` (`reportlab`, `pillow`), `ItineraryView.tsx`, `lib/api.ts`, `playwright.config.ts`, `tests/fakes.py` — see `docs/phase19_build_log.md` | `src/backend/app/pdf/` (`export.py`, `plan.py`, `static_map.py`, `document.py`, `flowables.py`, `formatting.py`, `theme.py`, `fonts/`), `DownloadPdfButton.tsx`, `Toast.tsx`, `lib/download.ts`, `tests/unit/test_phase19_pdf.py` |
+| 20 | `builder.py` (streams), `orchestrator.py` (`builder_token`, `retry_search`), `conversation.py`, `trips.py` (`POST /trips/{id}/retry`; `/status` gains `errors`, `retryable`, `run`; `filename*`), `requirements.txt` (`reportlab[shaping]`), `document.py`, `flowables.py`, `build_fonts.py`, the trip page and its components, `tests/e2e/stub_backend.py` — see `docs/phase20_build_log.md` | `src/ai/utils/failures.py`, `src/backend/app/pdf/scripts.py`, `pdf/fonts/noto/`, `LiveDraft.tsx`, `ProgressSheet.tsx`, `TripStages.tsx`, `lib/draft.ts`, `lib/useWideScreen.ts`, `tests/unit/test_phase20_streaming.py`, `tests/unit/test_phase20_scripts.py`, `e2e/draft.spec.ts`, `e2e/polish.spec.ts` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -298,7 +299,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–19 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–20 check
 
 Run from the **project root**:
 
@@ -306,7 +307,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **457 passed**, no network, no Docker. The Phase 19 tests build real PDFs and read them back.
+Expected: **580 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -314,7 +315,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **17 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **20 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -498,7 +499,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 13 passed
+npx playwright test                 # 34 passed
 ```
 
 Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
@@ -549,6 +550,58 @@ the PDF's map at another provider (same template as the frontend's `NEXT_PUBLIC_
 
 ---
 
+## Step 18 — Verify Phase 20: frontend polish
+
+With the backend and the frontend running (Steps 5 and 16):
+
+**The itinerary, as it is written.** Plan a trip and watch the assistant's column: after the three
+searches a fourth step, "Itinerary — Writing", says where the writing has got to, and the plan
+area shows the days and places filling in under "Writing your itinerary…" — then the checked day
+cards replace it. On the stream (Step 9's `curl -N`) the writing is a run of events like
+
+```
+data: {"event": "builder_token", "agent": "itinerary_builder", "token": "{\n \"days\": [\n  {…", "seq": 0}
+data: {"event": "builder_token", "agent": "itinerary_builder", "token": "…", "seq": 1}
+```
+
+about 20 a second, from `seq` 0, all before `planning_complete`.
+
+**A change.** Under the plan the composer reads "Refine this trip:". Ask "Switch to a nicer hotel":
+only the stay rows and the stay tile pulse "Updating…", and when the plan comes back what changed
+is tinted green and labelled "Updated" for a few seconds. The flights and the stops never move.
+
+**A search that failed.** Remove `LITEAPI_API_KEY` from `.env`, restart the backend and plan a trip:
+the plan comes without a stay, and the panel says "This search is not set up on this server" — with
+no Retry beside it, because a second try would fail the same way. A search that failed for a reason
+that can pass (the provider was down or slow) has a **Retry**, which runs that one search again and
+keeps the rest of the plan. Put the key back, restart, and run the retry from the API:
+
+```bash
+curl -s -X POST "http://localhost:8000/trips/$TRIP_ID/retry" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"agent": "hotel_agent"}'
+# {"status":"retry_started", ..., "refinement_type":"targeted_hotel","agent":"hotel_agent"}
+curl -s "http://localhost:8000/trips/$TRIP_ID/status" -H "Authorization: Bearer $TOKEN"
+# progress.errors / progress.retryable say why each failed search failed, and whether to offer a retry
+```
+
+**On a phone.** In the browser's device toolbar pick a 375 px screen: nothing scrolls sideways; while
+a plan is being made its progress is a bar at the foot of the screen that opens to the full panel.
+
+**The PDF in another script.** Create a trip to "गोवा" (or "वाराणसी"), plan it and download the PDF:
+the cover and the head of every page say "गोवा" in Devanagari, and the file is saved as
+`trip-गोवा-<date>.pdf`:
+
+```bash
+curl -s -D - -o trip.pdf "http://localhost:8000/trips/$TRIP_ID/export/pdf" \
+  -H "Authorization: Bearer $TOKEN" | grep -i content-disposition
+# content-disposition: attachment; filename="trip-<date>.pdf"; filename*=UTF-8''trip-%E0%A4%97%E0%A5%8B%E0%A4%B5%E0%A4%BE-<date>.pdf
+```
+
+The flight search fails for such a destination — airports are looked up by English name (Phase 36
+will resolve a city in any language) — and the page says to write it in English to include flights.
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -588,4 +641,5 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **Scope** | Create a trip to "London" and plan it → it fails within seconds: "London is in United Kingdom. This planner covers trips within India for now." Nothing is saved, and the reason is still there after a reload (`GET /status` → `failure_reason`). Try to create a 30-night trip → refused ("at most 14 nights"). Empty `GOOGLE_API_KEY` (or exhaust Gemini's 20 requests a day) → planning and refinements still work: the log says "Gemini unavailable … asking Groq". |
 | **18 (Map)** | Open a planned trip → the map under the day cards shows numbered pins coloured by day, a line joining each day's stops, a gold hotel pin and airport markers; click a pin for its details. Null a slot's `lat` in the itinerary JSON → that pin disappears, the place is listed under the map and its day card says "No map location" — the map still renders. `GET /trips/{id}/runs` → the `persist` row's `unmapped_activities` lists it. |
 | **19 (PDF)** | Start the backend with `MAP_TILE_URL=https://tiles.unreachable.invalid/{z}/{x}/{y}.png` and export a trip → still `200` and a PDF, one page shorter; `x-itinerary-map: unavailable`; the log says "the map was left out — the tile server could not be reached"; in the browser a note says the PDF came without the map. Set `MAP_TILE_URL=` (empty) → no map and no warning (`none`). Stop Redis → the export still works, it just fetches the tiles every time. In the browser's dev tools, block the request to `/export/pdf` → the toast "PDF generation failed — try again", and the button works again. |
-| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 13 passed. |
+| **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 34 passed. |
+| **20 (Polish)** | Reload the page while the itinerary is being written → no draft (a page that joins late waits for the next build's `seq` 0), and the checked plan still arrives. A streamed reply that fails its checks is never saved — `test_a_streamed_reply_that_is_not_valid_is_never_saved` makes every reply invalid. Delete the trip's saved state (`docker exec tripplanner_redis redis-cli DEL trip:$TRIP_ID:planning_state`) and `POST /retry {"agent": "hotel_agent"}` → `409` "This plan is too old to retry a single search". Retry a search while a run is in flight → `409`. At 375 px open the progress sheet → "Ask for a change" hides until it is closed. Uninstall `uharfbuzz` (`pip uninstall uharfbuzz`) and export a Devanagari trip → the letters print unjoined, and `pytest tests/unit/test_phase20_scripts.py` fails on "HarfBuzz is installed". |

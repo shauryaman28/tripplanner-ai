@@ -12,15 +12,14 @@ import io
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Flowable
 
-from app.pdf import theme
+from app.pdf import scripts, theme
 from app.pdf.plan import BudgetNote
 
-for _name in theme.FONTS:
-    pdfmetrics.registerFont(TTFont(_name, str(theme.font_path(_name))))
+for _name in theme.FONTS:  # the script fonts are registered when a word needs one
+    scripts.register(_name)
 
 RADIUS = 8  # a card's corners
 HAIRLINE = 0.6
@@ -246,7 +245,7 @@ class Chips(Flowable):
     def wrap(self, width: float, _height: float) -> tuple[float, float]:
         self.placed, x, line = [], 0.0, 0
         for label in self.labels:
-            chip = min(pdfmetrics.stringWidth(label, self.FONT, self.SIZE) + 2 * self.PAD_X, width)
+            chip = min(scripts.text_width(label, self.FONT, self.SIZE) + 2 * self.PAD_X, width)
             if x and x + chip > width:
                 x, line = 0.0, line + 1
             self.placed.append((x, line, chip, label))
@@ -261,12 +260,12 @@ class Chips(Flowable):
             canv.setFillColor(INK_100)
             canv.roundRect(x, y, width, self.HEIGHT, self.HEIGHT / 2, stroke=0, fill=1)
             canv.setFillColor(INK_600)
-            canv.setFont(self.FONT, self.SIZE)
             canv.saveState()
             clip = canv.beginPath()
             clip.rect(x + self.PAD_X, y, width - 2 * self.PAD_X, self.HEIGHT)
             canv.clipPath(clip, stroke=0, fill=0)  # a label longer than the line is cut, not spilled
-            canv.drawString(x + self.PAD_X, y + (self.HEIGHT - self.SIZE * theme.CAP_HEIGHT) / 2, label)
+            baseline = y + (self.HEIGHT - self.SIZE * theme.CAP_HEIGHT) / 2
+            scripts.draw_text(canv, x + self.PAD_X, baseline, label, self.FONT, self.SIZE)
             canv.restoreState()
 
 

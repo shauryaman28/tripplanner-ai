@@ -146,8 +146,10 @@ Redis unreachable it downloads with the map. Screens checked at 1440 px and 375 
 
 ## Known limits
 
-- Text in a script other than Latin (a destination typed in Devanagari) prints as empty boxes; the
-  PDF is still built and named by the trip's date. The bundled fonts are Latin subsets.
+- ~~Text in a script other than Latin (a destination typed in Devanagari) prints as empty boxes; the
+  PDF is still built and named by the trip's date. The bundled fonts are Latin subsets.~~ Fixed in
+  Phase 20: the scripts of India are drawn in Noto and shaped by HarfBuzz, and the file is named
+  in the destination's own script (DECISIONS #121–#124, `docs/phase20_build_log.md`).
 - The PDF is A4 only, and it is not a tagged (screen-reader) PDF — ReportLab's open-source edition
   does not write tags. It does carry a title, a language and an outline.
 - OpenStreetMap's tile server is fine for development; a deployment with real traffic should set

@@ -1,4 +1,4 @@
-"""OrchestratorAgent — the planning graph (Phases 9–16).
+"""OrchestratorAgent — the planning graph (Phases 9–20).
 
     intent_parsing → apply_preferences → run_flight → budget_decision
         ├─ continue → hotel_activities → build_itinerary → evaluate
@@ -15,12 +15,16 @@ intent parsing (Phase 16) so every later call site inherits them.
 refine() (Phase 15) handles turn 2+. full_replan / add_day re-enter the graph
 with a clean slate; targeted refinements re-run only the implicated sub-agent,
 carry everything else forward, and go straight to build → evaluate → persist.
+
+While the builder writes, its reply is published piece by piece as
+`builder_token` events (Phase 20) — see _TokenStream.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 import uuid
 from datetime import date, timedelta
 from typing import Any
@@ -48,6 +52,7 @@ from src.ai.builder.builder import ItineraryBuilder
 from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import ask, parse_json_object
 from src.ai.utils.embeddings import generate_embeddings
+from src.ai.utils.failures import can_retry, failure_words
 from src.ai.utils.preferences import (
     build_preference_updates,
     get_trip_user_id,
@@ -278,14 +283,12 @@ async def _run_agent(
         items, error = [], {"error": str(exc), "code": "AGENT_EXCEPTION"}
 
     found = f"Found {len(items)} {noun if len(items) != 1 else noun.removesuffix('s')}{note}"
-    await _publish(
-        state,
-        {
-            "agent": name,
-            "status": "failed" if error else "completed",
-            "summary": error.get("error", "Failed") if error else found,
-        },
-    )
+    if error:
+        # In the traveller's words, and whether running it again could help (Phase 20: the page offers a Retry)
+        update = {"agent": name, "status": "failed", "summary": failure_words(error), "retryable": can_retry(error)}
+    else:
+        update = {"agent": name, "status": "completed", "summary": found}
+    await _publish(state, update)
     return ([], error) if error else (items, None)
 
 
@@ -552,6 +555,47 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
     return {**state, "hotel_status": "skipped", "activities_status": "skipped"}
 
 
+# The model writes several hundred tokens a second and every publish is a round trip to Redis,
+# so pieces written within this many seconds of each other travel in one event.
+TOKEN_FLUSH_SECONDS = 0.05
+
+
+class _TokenStream:
+    """Publishes the builder's reply while it is being written (Phase 20).
+
+    Events: {"event": "builder_token", "agent": "itinerary_builder", "token": <text>, "seq": <n>}.
+    `seq` counts the events of one build from 0. The text only makes sense read
+    from its start, so a client that joins late — or sees a gap — waits for the
+    next seq 0 (a retry of the build starts a new stream).
+
+    What is streamed is the model's unchecked reply. It is shown as a preview;
+    the itinerary that is saved is the one that passed the builder's and the
+    evaluator's checks afterwards.
+    """
+
+    def __init__(self, state: OrchestratorState) -> None:
+        self._state = state
+        self._pieces: list[str] = []
+        self._seq = 0
+        self._flushed_at = 0.0
+
+    async def push(self, piece: str) -> None:
+        self._pieces.append(piece)
+        if self._seq == 0 or time.monotonic() - self._flushed_at >= TOKEN_FLUSH_SECONDS:
+            await self.flush()  # the first piece goes out at once: it is what tells the page writing has begun
+
+    async def flush(self) -> None:
+        if not self._pieces:
+            return
+        token, self._pieces = "".join(self._pieces), []
+        await _publish(
+            self._state,
+            {"event": "builder_token", "agent": "itinerary_builder", "token": token, "seq": self._seq},
+        )
+        self._seq += 1
+        self._flushed_at = time.monotonic()
+
+
 async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
     trip_meta = {
         "destination": state.get("destination", ""),
@@ -567,6 +611,7 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         if state.get("previous_plan"):
             trip_meta["previous_plan"] = state["previous_plan"]
 
+    stream = _TokenStream(state) if state.get("publish_fn") is not None else None  # nobody listening → no streaming
     result = await ItineraryBuilder().run(
         trip_meta=trip_meta,
         flights=state.get("flights", []),
@@ -575,7 +620,10 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         db=state.get("db"),
         trip_id=state.get("trip_id"),
         turn=state.get("turn", 1),
+        on_token=stream.push if stream else None,
     )
+    if stream:
+        await stream.flush()
 
     return {**state, "draft_itinerary": result.get("draft"), "builder_error": result.get("error")}
 
@@ -925,6 +973,21 @@ def _plan_outline(plan: dict) -> list[dict] | None:
     ] or None
 
 
+# Which targeted pass repeats which search — POST /trips/{id}/retry names the agent (Phase 20).
+RETRY_REFINEMENTS: dict[str, RefinementType] = {
+    "flight_agent": "targeted_flights",
+    "hotel_agent": "targeted_hotel",
+    "activities_agent": "targeted_activities",
+}
+# What the builder is told on a retry, where a refinement carries the traveller's message.
+_RETRY_REQUESTS: dict[str, str] = {
+    "targeted_flights": "Flights have now been found: include the flight cost in the total. "
+    "Keep every activity and the hotel exactly as they are.",
+    "targeted_hotel": "A place to stay has now been found: add it to the plan. Keep every activity exactly as it is.",
+    "targeted_activities": "Things to do have now been found: add them to the days. Keep the hotel exactly as it is.",
+}
+
+
 def _result_summary(state: dict) -> dict:
     return {
         "flights_count": len(state.get("flights", [])),
@@ -1009,11 +1072,68 @@ class OrchestratorAgent:
                 fresh, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn, on_complete=on_complete
             )
 
+        return await self._rerun_search(
+            refinement_type,
+            prior_state,
+            refinement_message,
+            db=db,
+            trip_id=trip_id,
+            publish_fn=publish_fn,
+            turn=turn,
+            on_complete=on_complete,
+        )
+
+    async def retry_search(
+        self,
+        agent_name: str,
+        prior_state: dict,
+        db: AsyncSession | None = None,
+        trip_id: uuid.UUID | None = None,
+        publish_fn=None,
+        turn: int = 2,
+        on_complete=None,
+    ) -> dict:
+        """Phase 20 — run one search again for a plan that was built without it.
+
+        A plan is built from whatever was found, so a provider that was down
+        leaves a plan with no flights (or no hotel, or nothing to do). This is
+        the way back: the same targeted pass a refinement makes, with a fixed
+        request in place of the traveller's. The plan keeps everything it has
+        and gains what the search now finds. If the search fails again there is
+        nothing to rebuild from — the run ends and says why.
+        """
+        refinement_type = RETRY_REFINEMENTS[agent_name]
+        return await self._rerun_search(
+            refinement_type,
+            prior_state,
+            _RETRY_REQUESTS[refinement_type],
+            retry_of=agent_name,
+            db=db,
+            trip_id=trip_id,
+            publish_fn=publish_fn,
+            turn=turn,
+            on_complete=on_complete,
+        )
+
+    async def _rerun_search(
+        self,
+        refinement_type: RefinementType,
+        prior_state: dict,
+        request: str,
+        *,
+        retry_of: str | None = None,
+        db: AsyncSession | None = None,
+        trip_id: uuid.UUID | None = None,
+        publish_fn=None,
+        turn: int = 2,
+        on_complete=None,
+    ) -> dict:
+        """One search again, everything else carried forward, then build → evaluate → persist."""
         state: OrchestratorState = {
             **_RESULT_DEFAULTS,
             **prior_state,
             **_BUILD_RESET,
-            "refinement_request": refinement_message,
+            "refinement_request": request,
             "previous_plan": _plan_outline(prior_state.get("draft_itinerary") or {}),
             "turn": turn,
             "db": db,
@@ -1033,7 +1153,8 @@ class OrchestratorAgent:
             escalated = False
             if refinement_type == "targeted_flights":
                 updates = await _search_flights(state)
-                if updates["flights"]:  # a failed search keeps the previous flights
+                found, error = bool(updates["flights"]), updates["flight_error"]
+                if found:  # a failed search keeps the previous flights
                     # The flights already found stay in the running (the plan takes the cheapest), so a
                     # request for something cheaper can never come back dearer when prices have moved.
                     known = [f for f in state.get("flights") or [] if f not in updates["flights"]]
@@ -1043,26 +1164,35 @@ class OrchestratorAgent:
                     escalated = route_after_budget_decision(state) == "escalate"
             elif refinement_type == "targeted_hotel":
                 updates = await _search_hotels(state)
-                if updates["hotels"]:
+                found, error = bool(updates["hotels"]), updates["hotel_error"]
+                if found:
                     state.update(updates)
-            else:  # targeted_activities — the message usually names the new interests
-                try:
-                    new_interests = (await _extract_intent(refinement_message)).get("interests")
-                except Exception:
-                    new_interests = None
-                if new_interests:
-                    state["interests"] = new_interests
+            else:  # targeted_activities
+                if retry_of is None:  # the traveller's message usually names the new interests
+                    try:
+                        new_interests = (await _extract_intent(request)).get("interests")
+                    except Exception:
+                        new_interests = None
+                    if new_interests:
+                        state["interests"] = new_interests
                 updates = await _search_activities(state)
-                if updates["attractions"]:
+                found, error = bool(updates["attractions"]), updates["activities_error"]
+                if found:
                     # the new finds join the places already in the plan: "add a food stop" must not
                     # cost the traveller every stop that is not food
-                    found = {a.get("name") for a in updates["attractions"]}
+                    names = {a.get("name") for a in updates["attractions"]}
                     updates["attractions"] = updates["attractions"] + [
-                        a for a in state.get("attractions") or [] if a.get("name") not in found
+                        a for a in state.get("attractions") or [] if a.get("name") not in names
                     ]
                     state.update(updates)
 
-            if escalated:
+            if retry_of is not None and not found:
+                # The search failed again, so the plan would come out as it is: don't rebuild it, say why.
+                reason = failure_words(error) if error else "Nothing was found."
+                await _publish(
+                    state, {"event": "planning_failed", "agent": retry_of, "status": "failed", "error": reason}
+                )
+            elif escalated:
                 state = await escalate_node(state)
             else:
                 state = await evaluate_node(await build_itinerary_node(state))
@@ -1077,7 +1207,7 @@ class OrchestratorAgent:
         await _log(
             state,
             "orchestrator",
-            input={"refinement_type": refinement_type, "message": refinement_message},
+            input={"refinement_type": refinement_type, **({"retry": retry_of} if retry_of else {"message": request})},
             output=_result_summary(state),
             duration_ms=timer.duration_ms,
             status="completed" if state.get("itinerary_id") else "failed",

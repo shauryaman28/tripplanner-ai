@@ -7,6 +7,7 @@ integration tests and the Playwright stub backend (tests/e2e/stub_backend.py)
 both run on it.
 """
 
+import asyncio
 import io
 import json
 import re
@@ -145,13 +146,28 @@ async def fake_tile(_client, _url: str) -> bytes:
     return _TILE
 
 
-async def fake_builder_llm(_system: str, user_prompt: str) -> str:
+# How the stand-in model "writes" when its reply is streamed (Phase 20): this many characters at a
+# time. The pause between pieces is 0 in the tests; the Playwright stub backend sets it, so that a
+# browser has something to watch.
+STREAM_PIECE = 24
+stream_pause = 0.0
+
+
+async def stream_reply(reply: str, on_token) -> str:
+    """Hand a reply over piece by piece, the way the real model's stream arrives."""
+    for start in range(0, len(reply), STREAM_PIECE):
+        await on_token(reply[start : start + STREAM_PIECE])
+        await asyncio.sleep(stream_pause)
+    return reply
+
+
+async def fake_builder_llm(_system: str, user_prompt: str, on_token=None) -> str:
     """Stand-in for the Groq call: a valid draft, one entry per day of the trip, built only from the data in the prompt.
 
     Two attractions a day until they run out, then free days; the hotel on every
     day but the last. Like a real model it names places and leaves the
     coordinates wrong or missing — the builder attaches the real ones from the
-    source data.
+    source data. Asked to stream (`on_token`), it hands the reply over in pieces.
     """
     start, end = (
         date.fromisoformat(d)
@@ -184,7 +200,8 @@ async def fake_builder_llm(_system: str, user_prompt: str) -> str:
     total = min((f["price_inr"] for f in flights), default=0) + sum(
         d["hotel"]["cost_per_night"] for d in days if d["hotel"]
     )
-    return json.dumps({"days": days, "total_cost": total, "currency": "INR"})
+    reply = json.dumps({"days": days, "total_cost": total, "currency": "INR"}, indent=1)  # indented, as models write
+    return await stream_reply(reply, on_token) if on_token else reply
 
 
 @contextmanager

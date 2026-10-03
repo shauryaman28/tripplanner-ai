@@ -8,6 +8,7 @@ POST   /trips/{id}/plan          kick off planning (OrchestratorAgent), or ask a
 POST   /trips/{id}/clarify       answer a clarifying question / add detail, then plan
 POST   /trips/{id}/replan        re-plan after a budget conflict with the chosen adjustment
 POST   /trips/{id}/refine        multi-turn refinement — classify + targeted re-run (Phase 15)
+POST   /trips/{id}/retry         run a failed search again, or the whole plan (Phase 20)
 GET    /trips/{id}/stream        SSE — live agent progress via Redis pub/sub
 GET    /trips/{id}/status        polling fallback for the SSE stream (Phase 17)
 GET    /trips/{id}/itinerary     latest itinerary for the trip
@@ -18,8 +19,9 @@ GET    /trips/{id}/timeline      ordered event log: agent_runs + itineraries (Ph
 GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
 
 Planning runs as a background task (see _run_orchestrator): the HTTP call
-returns immediately and progress arrives over SSE. Only one run per trip at a
-time — starting another while one is in flight is a 409.
+returns immediately and progress arrives over SSE — the three searches, then
+the itinerary as it is written (`builder_token`, Phase 20). Only one run per
+trip at a time — starting another while one is in flight is a 409.
 """
 
 import json
@@ -28,6 +30,7 @@ import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import timedelta
 from typing import Any
+from urllib.parse import quote
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
@@ -45,19 +48,31 @@ from app.models.user import User
 from app.pdf import NothingToExport, build_plan, export_itinerary
 from app.schemas.agent_run import AgentRunRead
 from app.schemas.itinerary import ItineraryRead
-from app.schemas.trip import ClarifyRequest, PlanRequest, RefineRequest, ReplanRequest, TripCreate, TripRead
+from app.schemas.trip import (
+    ClarifyRequest,
+    PlanRequest,
+    RefineRequest,
+    ReplanRequest,
+    RetryRequest,
+    TripCreate,
+    TripRead,
+)
 from app.schemas.types import as_utc
 from src.ai.agents.budget_decision import viable_budget
 from src.ai.agents.refinement_classifier import classify_refinement
-from src.ai.orchestrator.orchestrator import TRIP_FIELDS, OrchestratorAgent
+from src.ai.orchestrator.orchestrator import RETRY_REFINEMENTS, TRIP_FIELDS, OrchestratorAgent
 from src.ai.utils.conversation import (
     append_history,
+    clear_current_run,
+    get_current_run,
     get_current_turn,
     get_history,
     get_trip_state,
+    save_current_run,
     save_trip_state,
     start_history,
 )
+from src.ai.utils.failures import can_retry, failure_words
 from src.ai.utils.tasks import spawn
 
 logger = logging.getLogger(__name__)
@@ -66,6 +81,9 @@ router = APIRouter(prefix="/trips", tags=["trips"])
 
 SUB_AGENTS = ("flight_agent", "hotel_agent", "activities_agent")
 INTERESTS_QUESTION = "What kinds of activities do you enjoy? (e.g. history, food, adventure, beach)"
+# The one search a targeted pass repeats, by the pass's type; the other two are carried forward.
+_REPEATED_SEARCH = {refinement: agent for agent, refinement in RETRY_REFINEMENTS.items()}
+_SEARCH_WORDS = {"flight_agent": "flight", "hotel_agent": "hotel", "activities_agent": "activities"}
 
 # run(agent, db, hooks) → final orchestrator state; hooks = {"publish_fn": ..., "on_complete": ...}
 OrchestratorCall = Callable[
@@ -113,40 +131,52 @@ async def _run_orchestrator(
         total = (state.get("draft_itinerary") or {}).get("total_cost") or 0
         await append_history(redis, str(trip_id), "assistant", f"Itinerary ready (₹{total:,.0f}).", turn)
 
-    async with AsyncSessionLocal() as db:
-        try:
-            result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
-        except Exception as exc:
-            logger.exception("Planning run crashed for trip %s", trip_id)
-            fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
+    try:
+        async with AsyncSessionLocal() as db:
             try:
-                await publish(
-                    {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": str(exc)}
-                )
-            except Exception:
-                logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
-        else:
-            if result.get("itinerary_id"):
-                return
-            fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed
+                result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
+            except Exception as exc:
+                logger.exception("Planning run crashed for trip %s", trip_id)
+                fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
+                try:
+                    await publish(
+                        {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": str(exc)}
+                    )
+                except Exception:
+                    logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
+            else:
+                if result.get("itinerary_id"):
+                    return
+                fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed
 
-        if fallback is not None:
-            await db.rollback()
-            trip = await db.get(Trip, trip_id)
-            if trip is not None:
-                trip.status = fallback
-                await db.commit()
+            if fallback is not None:
+                await db.rollback()
+                trip = await db.get(Trip, trip_id)
+                if trip is not None:
+                    trip.status = fallback
+                    await db.commit()
+    finally:
+        try:
+            await clear_current_run(redis, str(trip_id))
+        except Exception:
+            logger.warning("Could not clear the run note of trip %s", trip_id, exc_info=True)
 
 
 async def _start_run(
     trip: Trip, db: AsyncSession, redis: aioredis.Redis, run: OrchestratorCall, turn: int = 1, **event_extra: Any
 ) -> None:
-    """Mark the trip as planning, announce it on the SSE channel, launch the run."""
+    """Mark the trip as planning, announce it on the SSE channel, launch the run.
+
+    What the run is (its turn, and for a refinement or a retry which kind) is
+    also noted in Redis while it runs: GET /status hands it to a page that was
+    loaded after the `planning_started` event had gone by.
+    """
     has_itinerary = trip.status == TripStatus.COMPLETED
     trip.status = TripStatus.PLANNING
     db.add(trip)
     await db.commit()
 
+    await save_current_run(redis, str(trip.id), {"turn": turn, **event_extra})
     await redis.publish(
         _events_channel(trip.id),
         json.dumps(
@@ -251,18 +281,27 @@ async def plan_trip(
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
     _ensure_not_planning(trip)
 
-    state = _trip_state(trip)
-    if body.raw_input and body.raw_input.strip():
-        state["raw_input"] = body.raw_input.strip()
-    elif not trip.interests:
-        await start_history(redis, str(trip_id), f"Plan a trip to {trip.destination}.")
-        await append_history(redis, str(trip_id), "assistant", INTERESTS_QUESTION)
-        return JSONResponse(
-            status_code=200,
-            content={"status": "clarification_needed", "question": INTERESTS_QUESTION, "trip_id": str(trip_id)},
-        )
+    answer = await _plan_or_ask(trip, body.raw_input, db, redis)
+    return JSONResponse(status_code=200, content=answer) if answer["status"] == "clarification_needed" else answer
 
-    await start_history(redis, str(trip_id), state.get("raw_input") or f"Plan a trip to {trip.destination}.")
+
+def _default_request(trip: Trip) -> str:
+    """What the conversation history says the traveller asked for when they typed nothing."""
+    return f"Plan a trip to {trip.destination}."
+
+
+async def _plan_or_ask(trip: Trip, raw_input: str | None, db: AsyncSession, redis: aioredis.Redis) -> dict:
+    """Start a full planning run, or — with nothing to infer interests from — ask instead (see plan_trip)."""
+    trip_id = trip.id
+    state = _trip_state(trip)
+    if raw_input and raw_input.strip():
+        state["raw_input"] = raw_input.strip()
+    elif not trip.interests:
+        await start_history(redis, str(trip_id), _default_request(trip))
+        await append_history(redis, str(trip_id), "assistant", INTERESTS_QUESTION)
+        return {"status": "clarification_needed", "question": INTERESTS_QUESTION, "trip_id": str(trip_id)}
+
+    await start_history(redis, str(trip_id), state.get("raw_input") or _default_request(trip))
     await _start_run(trip, db, redis, lambda agent, bg_db, hooks: agent.run(state, db=bg_db, trip_id=trip_id, **hooks))
     return {"status": "planning_started", "trip_id": str(trip_id)}
 
@@ -405,6 +444,71 @@ async def refine_trip(
     }
 
 
+# ── POST /trips/{id}/retry ─────────────────────────────────────────────────
+
+
+@router.post("/{trip_id}/retry")
+async def retry_trip(
+    trip_id: uuid.UUID,
+    body: RetryRequest = Body(default_factory=RetryRequest),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis = Depends(get_redis_dep),
+) -> dict:
+    """Phase 20 — try again what failed. Nothing is typed, and no model decides what to do.
+
+    A trip with a plan, and `agent` named: that one search runs again and what
+    it finds is added to the plan; flights, stay and activities it did not
+    touch are kept (the same targeted pass as a refinement, see
+    OrchestratorAgent.retry_search). Needs the state of the last successful
+    run, like POST /refine → 409 without it.
+
+    Anything else — a trip whose run failed, or no `agent` — plans the whole
+    trip again from the trip's own fields and what the traveller last wrote.
+    Like POST /plan it may answer `clarification_needed` instead.
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+    _ensure_not_planning(trip)
+
+    if trip.status == TripStatus.COMPLETED and body.agent is not None:
+        prior_state = await get_trip_state(redis, str(trip_id))
+        if not prior_state:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This plan is too old to retry a single search. Describe the trip again to re-plan it.",
+            )
+        agent_name = body.agent
+        refinement_type = RETRY_REFINEMENTS[agent_name]
+        turn = max(await get_current_turn(redis, str(trip_id)), 1) + 1
+        await append_history(
+            redis, str(trip_id), role="user", content=f"Retry the {_SEARCH_WORDS[agent_name]} search.", turn=turn
+        )
+        await _start_run(
+            trip,
+            db,
+            redis,
+            lambda agent, bg_db, hooks: agent.retry_search(
+                agent_name, prior_state, db=bg_db, trip_id=trip_id, turn=turn, **hooks
+            ),
+            turn=turn,
+            refinement_type=refinement_type,
+            retry=agent_name,
+        )
+        return {
+            "status": "retry_started",
+            "trip_id": str(trip_id),
+            "turn": turn,
+            "refinement_type": refinement_type,
+            "agent": agent_name,
+        }
+
+    # What the traveller last wrote is the request to plan from; a history that only holds the
+    # stand-in sentence means they wrote nothing.
+    history = await get_history(redis, str(trip_id))
+    written = next((entry["content"] for entry in reversed(history) if entry.get("role") == "user"), None)
+    return await _plan_or_ask(trip, None if written == _default_request(trip) else written, db, redis)
+
+
 # ── GET /trips/{id}/stream ─────────────────────────────────────────────────
 
 
@@ -446,6 +550,7 @@ async def get_trip_status(
     trip_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: aioredis.Redis | None = Depends(get_redis_or_none),
 ) -> dict:
     """Current planning status + per-agent progress (SSE polling fallback).
 
@@ -456,8 +561,11 @@ async def get_trip_status(
             "progress": {
                 "agents_done": 0–3,
                 "agents_total": 3,
-                "agents": {"flight_agent": "pending" | "completed" | "failed", ...}
+                "agents": {"flight_agent": "pending" | "completed" | "failed", ...},
+                "errors": {"flight_agent": "why its search failed", ...},
+                "retryable": {"flight_agent": true, ...}
             },
+            "run": {"turn": 2, "refinement_type": "targeted_hotel", ...} | null,
             "budget_conflict": {"reason": "...", "options": [...]} | null,
             "failure_reason": "..." | null
         }
@@ -468,6 +576,13 @@ async def get_trip_status(
     last run ended in one, so its options survive a page reload (the SSE event
     that first carried them is gone by then). `failure_reason` does the same
     for a run that failed for any other reason the planner can name.
+
+    Phase 20: `errors` says why each failed search failed, in the traveller's
+    words, and `retryable` whether running it again could help — the page
+    offers a Retry beside those (src/ai/utils/failures.py). `run` describes
+    the run in flight (null otherwise); when
+    it repeats a single search, the other two keep the result they had, so a
+    page loaded in the middle of it shows them as done rather than waiting.
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
 
@@ -490,11 +605,25 @@ async def get_trip_status(
                 failure.get("detail", "") for failure in output.get("evaluator_failures") or []
             )
 
-    if trip.status == TripStatus.PLANNING:
-        runs = since_last_end
+    def latest_searches(rows: list[AgentRun]) -> dict[str, AgentRun]:
+        return {row.agent_name: row for row in rows if row.agent_name in SUB_AGENTS}  # the latest row wins
 
-    agents = dict.fromkeys(SUB_AGENTS, "pending")
-    agents.update({run.agent_name: run.status for run in runs if run.agent_name in SUB_AGENTS})  # latest wins
+    current_run = None
+    searches = latest_searches(runs)
+    if trip.status == TripStatus.PLANNING:
+        current_run = await get_current_run(redis, str(trip_id))
+        repeated = _REPEATED_SEARCH.get((current_run or {}).get("refinement_type"))
+        in_flight = latest_searches(since_last_end)
+        if repeated is None:
+            searches = in_flight  # a full run starts again from nothing
+        else:  # a targeted run repeats one search; the other two keep the result they had
+            searches.pop(repeated, None)
+            searches.update(in_flight)
+
+    agents = {name: searches[name].status if name in searches else "pending" for name in SUB_AGENTS}
+    failed = {name: (row.output or {}).get("error") or {} for name, row in searches.items() if row.status == "failed"}
+    errors = {name: failure_words(error) for name, error in failed.items() if error}
+    retryable = {name: can_retry(error) for name, error in failed.items()}
 
     return {
         "status": trip.status,
@@ -503,7 +632,10 @@ async def get_trip_status(
             "agents_done": sum(1 for s in agents.values() if s == "completed"),
             "agents_total": len(SUB_AGENTS),
             "agents": agents,
+            "errors": errors,
+            "retryable": retryable,
         },
+        "run": current_run,
         "budget_conflict": conflict,
         "failure_reason": failure_reason or None,
     }
@@ -558,6 +690,18 @@ async def list_itineraries(
 # ── GET /trips/{id}/export/pdf ─────────────────────────────────────────────
 
 
+def _attachment(filename: str, ascii_filename: str) -> str:
+    """Content-Disposition for a download whose name may be in any script.
+
+    `filename*` carries it percent-encoded as UTF-8 and wins wherever it is
+    understood; plain `filename` is the ASCII fallback for any other client.
+    """
+    header = f'attachment; filename="{ascii_filename}"'
+    if filename != ascii_filename:
+        header += f"; filename*=UTF-8''{quote(filename, safe='')}"
+    return header
+
+
 @router.get(
     "/{trip_id}/export/pdf",
     response_class=Response,
@@ -574,7 +718,9 @@ async def export_trip_pdf(
 ) -> Response:
     """Phase 19 — the latest itinerary as a PDF: cover, day by day, cost breakdown, map.
 
-    Answers with `Content-Disposition: attachment; filename="trip-<destination>-<start date>.pdf"`.
+    Answers with `Content-Disposition: attachment; filename="trip-<destination>-<start date>.pdf"` —
+    plus `filename*=UTF-8''…` (RFC 6266) when the destination is not written in ASCII, so that
+    "गोवा" names the file in Devanagari wherever the browser reads it (Phase 20).
     The map is drawn from map tiles; when they cannot be fetched the PDF is
     sent without it and `X-Itinerary-Map` says so:
 
@@ -609,7 +755,7 @@ async def export_trip_pdf(
         content=exported.content,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{exported.filename}"',
+            "Content-Disposition": _attachment(exported.filename, exported.ascii_filename),
             "X-Itinerary-Map": exported.map_status,
             "Cache-Control": "private, no-store",  # the next refinement changes it
         },

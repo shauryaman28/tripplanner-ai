@@ -81,3 +81,13 @@ class ReplanRequest(BaseModel):
     """
 
     choice: Literal["cheaper_flights", "reduce_days", "increase_budget"]
+
+
+class RetryRequest(BaseModel):
+    """Optional body for POST /trips/{id}/retry — Phase 20.
+
+    agent: the search to run again on a trip that has a plan (the plan keeps everything else).
+    Left out — or when the trip has no plan yet — the whole trip is planned again.
+    """
+
+    agent: Literal["flight_agent", "hotel_agent", "activities_agent"] | None = None

@@ -111,7 +111,8 @@ export interface SSEAgentUpdateEvent {
   agent?: string;
   status?: AgentStatus;
   summary?: string;
-  event?: string;               // "planning_started" | "planning_complete" | "planning_failed" | "budget_conflict"
+  retryable?: boolean;          // a failed search (Phase 20): whether running it again could help
+  event?: string;               // "planning_started" | "planning_complete" | "planning_failed" | "budget_conflict" | "builder_token"
   agents_done?: number;
   agents_total?: number;
   itinerary_id?: string | null;
@@ -119,6 +120,10 @@ export interface SSEAgentUpdateEvent {
   error?: string;               // planning_failed
   options?: BudgetConflictOption[];
   turn?: number;
+  refinement_type?: string;     // planning_started, for a refinement or a retry
+  retry?: string;               // planning_started: the search a retry repeats
+  token?: string;               // builder_token (Phase 20): the next piece of the itinerary being written
+  seq?: number;                 // builder_token: its place in the build's stream, from 0
 }
 
 export type ReplanChoice = "cheaper_flights" | "reduce_days" | "increase_budget";
@@ -139,6 +144,13 @@ export type SSEEvent = SSEConnectedEvent | SSEAgentUpdateEvent;
 
 // ── Progress (from GET /trips/{id}/status) ────────────────────────────────
 
+/** The run in flight, for a page that was loaded after its `planning_started` event had gone by. */
+export interface CurrentRun {
+  turn: number;
+  refinement_type?: string;
+  retry?: string;
+}
+
 export interface TripStatusResponse {
   status: TripStatus;
   trip_id: string;
@@ -146,7 +158,10 @@ export interface TripStatusResponse {
     agents_done: number;
     agents_total: number;
     agents: Record<string, AgentStatus>;
+    errors?: Record<string, string>;        // why each failed search failed (Phase 20)
+    retryable?: Record<string, boolean>;    // whether running each failed search again could help
   };
+  run?: CurrentRun | null;                  // null unless a run is in flight
   budget_conflict: BudgetConflict | null;   // set when the last run ended in one — survives a reload
   failure_reason: string | null;            // why the last run failed, when the planner can say
 }

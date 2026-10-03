@@ -12,6 +12,9 @@ v5:       a refinement request (trip_meta["request"]) is added the same way, and
 Phase 18: coordinates, category and rating are attached to every slot from the
           source data (_attach_source_data), and free time is said once per day
           (_normalise_free_time); see itinerary_builder_v6.md.
+Phase 20: the model's reply can be streamed — `on_token` receives each piece as it
+          is written. Nothing changes about what happens to the finished reply:
+          it is parsed and checked whole, exactly as before.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import date
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -32,6 +36,9 @@ logger = logging.getLogger(__name__)
 
 BUDGET_MATH_TOLERANCE_INR = 500.0
 _ALLOWED_FALLBACK_PHRASES = {FREE_TIME}
+
+# Called with each piece of the model's reply as it arrives (Phase 20).
+OnToken = Callable[[str], Awaitable[None]]
 
 
 # ── Draft schema ─────────────────────────────────────────────────────────
@@ -213,12 +220,22 @@ def _build_user_prompt(
     )
 
 
-async def _call_llm(system_prompt: str, user_prompt: str) -> str:
+async def _call_llm(system_prompt: str, user_prompt: str, on_token: OnToken | None = None) -> str:
+    """The model's whole reply. With `on_token` it is streamed: every piece is handed over as it arrives."""
     from langchain_groq import ChatGroq
 
     llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=8192)  # room for a long trip plus the model's reasoning
-    response = await llm.ainvoke([("system", system_prompt), ("user", user_prompt)])
-    return content_to_text(response.content)
+    messages = [("system", system_prompt), ("user", user_prompt)]
+    if on_token is None:
+        return content_to_text((await llm.ainvoke(messages)).content)
+
+    pieces: list[str] = []
+    # The model reasons before it answers; that arrives beside the content, not in it, and is not part of the reply.
+    async for chunk in llm.astream(messages):
+        if piece := content_to_text(chunk.content):
+            pieces.append(piece)
+            await on_token(piece)
+    return "".join(pieces)
 
 
 def _normalise_free_time(draft: dict) -> None:
@@ -310,14 +327,22 @@ async def build_itinerary(
     flights: list[dict],
     hotels: list[dict],
     attractions: list[dict],
+    on_token: OnToken | None = None,
 ) -> ItineraryDraft | BuilderError:
+    """One draft from the model, checked. `on_token` sees the reply while it is being written;
+
+    what it sees is unchecked text — only the returned draft has passed the checks below.
+    """
     if not flights and not hotels and not attractions:
         return BuilderError(error="No source data available to build an itinerary.", code="NO_SOURCE_DATA")
 
     user_prompt = _build_user_prompt(trip_meta, flights, hotels, attractions)
 
     try:
-        raw = await _call_llm(_SYSTEM_PROMPT, user_prompt)
+        if on_token is None:
+            raw = await _call_llm(_SYSTEM_PROMPT, user_prompt)
+        else:
+            raw = await _call_llm(_SYSTEM_PROMPT, user_prompt, on_token)
     except Exception as exc:
         logger.exception("ItineraryBuilder LLM call failed")
         return BuilderError(error=f"LLM call failed: {exc}", code="LLM_ERROR")
@@ -362,10 +387,14 @@ class ItineraryBuilder:
         db: AsyncSession | None = None,
         trip_id: uuid.UUID | None = None,
         turn: int = 1,
+        on_token: OnToken | None = None,
     ) -> dict:
-        """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
+        """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1.
+
+        Phase 20: `on_token` receives the model's reply piece by piece while it is written.
+        """
         async with timed_run() as timer:
-            result = await build_itinerary(trip_meta, flights, hotels, attractions)
+            result = await build_itinerary(trip_meta, flights, hotels, attractions, on_token=on_token)
 
         if isinstance(result, BuilderError):
             output = {"draft": None, "error": result.model_dump()}

@@ -80,6 +80,7 @@ PLANE_FOLD: tuple[tuple[float, float], ...] = ((9.9, 13.1), (21, 3))
 # ── Typefaces ──────────────────────────────────────────────────────────────
 
 FONT_DIR = Path(__file__).parent / "fonts"
+SCRIPT_FONT_DIR = FONT_DIR / "noto"  # the other scripts of India (Phase 20) — scripts.py picks among them
 
 REGULAR = "Inter-Regular"
 MEDIUM = "Inter-Medium"
@@ -92,4 +93,4 @@ CAP_HEIGHT = 0.727
 
 
 def font_path(name: str) -> Path:
-    return FONT_DIR / f"{name}.ttf"
+    return (FONT_DIR if name in FONTS else SCRIPT_FONT_DIR) / f"{name}.ttf"

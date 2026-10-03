@@ -98,6 +98,68 @@ function dateChange(before: DaySchedule[], after: DaySchedule[]): string | null 
   return range(before) === range(after) ? null : `Dates: ${range(before)} → ${range(after)}`;
 }
 
+// ── Which parts of the plan differ (Phase 20) ──────────────────────────────
+
+/** The three things a plan is made of — and the three searches behind it. */
+export type PlanSection = "flights" | "stay" | "activities";
+
+/** The section a targeted refinement (or a retry) works on; any other kind of run touches all of it. */
+export const SECTION_OF_REFINEMENT: Record<string, PlanSection> = {
+  targeted_flights: "flights",
+  targeted_hotel: "stay",
+  targeted_activities: "activities",
+};
+
+export const SECTION_OF_AGENT: Record<string, PlanSection> = {
+  flight_agent: "flights",
+  hotel_agent: "stay",
+  activities_agent: "activities",
+};
+
+// Part keys: what the day cards and the cost card are asked about.
+export const flightPart = "flight";
+export const stayPart = (day: number) => `stay:${day}`;
+export const stopPart = (day: number, slot: string) => `stop:${day}-${slot}`;
+export const tilePart = (section: PlanSection) => `tile:${section}`;
+export const totalPart = "total";
+
+const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+const stayCost = (days: DaySchedule[]) => sum(days.map((day) => day.hotel?.cost_per_night ?? 0));
+const activitiesCost = (days: DaySchedule[]) => sum(days.flatMap((day) => SLOTS.map((slot) => day[slot]?.cost ?? 0)));
+const sameHotel = (a: HotelSlot | null, b: HotelSlot | null) =>
+  a?.name === b?.name && Math.round(a?.cost_per_night ?? 0) === Math.round(b?.cost_per_night ?? 0);
+
+/**
+ * The parts of `after` that are not as they were in `before` — what the page marks "Updated"
+ * once a change has come back. Like describeChanges it is a comparison, so nothing is marked
+ * that did not change.
+ */
+export function changedParts(before: StructuredItinerary, after: StructuredItinerary): Set<string> {
+  const parts = new Set<string>();
+  const was = new Map(before.days.map((day) => [day.day, day]));
+
+  if (flightChange(firstFlight(before.days), firstFlight(after.days))) parts.add(flightPart).add(tilePart("flights"));
+
+  for (const day of after.days) {
+    const old = was.get(day.day);
+    if (day.hotel && !sameHotel(old?.hotel ?? null, day.hotel)) parts.add(stayPart(day.day));
+    for (const slot of SLOTS) {
+      const name = day[slot]?.activity;
+      if (name && name !== FREE_TIME && name !== old?.[slot]?.activity) parts.add(stopPart(day.day, slot));
+    }
+  }
+
+  const stops = (days: DaySchedule[]) => Array.from(placements(days).entries()).map((entry) => entry.join("@")).join("|");
+  if (Math.round(stayCost(before.days)) !== Math.round(stayCost(after.days)) || Array.from(parts).some((p) => p.startsWith("stay:"))) {
+    parts.add(tilePart("stay"));
+  }
+  if (Math.round(activitiesCost(before.days)) !== Math.round(activitiesCost(after.days)) || stops(before.days) !== stops(after.days)) {
+    parts.add(tilePart("activities"));
+  }
+  if (Math.round(before.total_cost) !== Math.round(after.total_cost)) parts.add(totalPart);
+  return parts;
+}
+
 /**
  * Compare the itinerary before a change request with the one after it.
  * `trips` adds what lives on the trip rather than the itinerary (the destination).

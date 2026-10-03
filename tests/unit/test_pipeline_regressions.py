@@ -161,7 +161,9 @@ async def test_failed_flight_search_is_published_and_replan_loosens_the_search()
         result = await run_flight_node({**_STATE, "publish_fn": publish, "replan_attempts": 1})
 
     assert result["flight_status"] == "failed" and result["flight_error"]["code"] == "DUFFEL_ERROR"
-    assert published == [{"agent": "flight_agent", "status": "failed", "summary": "Duffel down"}]
+    # Phase 20: in the traveller's words, and a provider error may clear up — the page offers a Retry
+    published_failure = {"agent": "flight_agent", "status": "failed", "summary": "The flight provider did not answer."}
+    assert published == [{**published_failure, "retryable": True}]
 
     sent = MockFA.return_value.run.await_args.args[0]
     assert sent["budget"] == 50_000 * 0.65 and sent["max_stops"] == 2  # re-plan: tighter cap, one more stop

@@ -202,6 +202,21 @@ export async function replanTrip(
   });
 }
 
+export type RetryResponse =
+  | { status: "retry_started"; trip_id: string; turn: number; refinement_type: string; agent: string }
+  | PlanResponse;
+
+/**
+ * Try again what failed (Phase 20). With `agent` on a trip that has a plan, that one search runs
+ * again and the plan keeps the rest; otherwise the whole trip is planned again.
+ */
+export async function retryTrip(tripId: string, agent?: string): Promise<RetryResponse> {
+  return request(`/trips/${tripId}/retry`, {
+    method: "POST",
+    body: JSON.stringify(agent ? { agent } : {}),
+  });
+}
+
 export async function getItinerary(tripId: string): Promise<Itinerary> {
   return request<Itinerary>(`/trips/${tripId}/itinerary`);
 }
@@ -234,12 +249,27 @@ export async function downloadTripPdf(tripId: string): Promise<PdfFile> {
   // A 200 that is not a PDF (a proxy's error page) must not be saved as one.
   if (!blob.type.includes("pdf")) throw new ApiError(res.status, "The server did not send a PDF.");
 
-  const named = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "");
   return {
     blob,
-    filename: named?.[1] ?? "trip-itinerary.pdf",
+    filename: attachmentName(res.headers.get("Content-Disposition")) ?? "trip-itinerary.pdf",
     mapMissing: res.headers.get("X-Itinerary-Map") === "unavailable",
   };
+}
+
+/**
+ * The file name a Content-Disposition header gives. `filename*` (RFC 6266) comes first: it carries
+ * a name in any script, e.g. "trip-गोवा-2027-12-10.pdf" (Phase 20). Plain `filename` is ASCII only.
+ */
+export function attachmentName(header: string | null): string | null {
+  const encoded = /filename\*\s*=\s*UTF-8''([^;\s]+)/i.exec(header ?? "");
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1]);
+    } catch {
+      // a malformed escape: the plain name below is still good
+    }
+  }
+  return /filename\s*=\s*"?([^";]+)"?/i.exec(header ?? "")?.[1] ?? null;
 }
 
 export { ApiError };

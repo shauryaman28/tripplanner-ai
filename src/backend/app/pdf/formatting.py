@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from datetime import date
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -114,3 +115,33 @@ def describe_rating(rating: float | None) -> tuple[str, bool] | None:
     heritage = rating > 3
     level = min(3, max(1, math.floor((rating - 4 if heritage else rating) + 0.5)))
     return _RATING_LABELS[level - 1], heritage
+
+
+# ── Cutting text ───────────────────────────────────────────────────────────
+
+_JOINERS = "\u200c\u200d"  # zero-width non-joiner and joiner: they steer how the letters on either side join
+
+
+def clip(text: str, limit: int) -> str:
+    """At most `limit` characters of `text`, cut between two syllables (Phase 20).
+
+    A vowel sign, a nukta or a virama belongs to the letter before it. Cut
+    between the two and the sign is left on nothing — HarfBuzz draws it on a
+    dotted circle — or the virama joins whatever comes next to the letter.
+    """
+    if len(text) <= limit:
+        return text
+    cut = limit
+
+    def inside_a_syllable(at: int) -> bool:
+        following, before = text[at], text[at - 1]
+        return (
+            unicodedata.category(following).startswith("M")  # a sign that belongs to the letter before it
+            or following in _JOINERS
+            or before in _JOINERS
+            or unicodedata.combining(before) == 9  # a virama joins the next letter to it
+        )
+
+    while cut > 0 and inside_a_syllable(cut):
+        cut -= 1
+    return text[:cut]
