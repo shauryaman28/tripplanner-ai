@@ -14,6 +14,8 @@ What the stubbed providers do depends on the destination, so one test can
 drive one situation:
 
     Udaipur (or any budget the flights eat up)   ₹8,200 direct, ₹2,500 with a connection
+    Jaisalmer                                    ₹30,000 direct (₹2,500 with a connection): on ₹42,000 a conflict
+                                                 whose shorter trip and 3-star stay both fit (Phase 21)
     Hampi, Badami                                the hotel search is down; it answers when retried
     Kaza                                         no airport is known for it: the flight search fails, every time
     Shimla, Manali                               every search is down; they answer when the trip is retried
@@ -57,6 +59,7 @@ if __name__ == "__main__":
     HOTEL_DOWN = {"Hampi", "Badami"}
     ALL_DOWN = {"Shimla", "Manali"}
     NO_AIRPORT = {"Kaza"}  # in Spiti: there is none
+    DEAR_FLIGHTS = {"Jaisalmer": 30_000.0}
 
     # How often each search has been made (see the module docstring).
     searches: Counter[str] = Counter()
@@ -78,7 +81,8 @@ if __name__ == "__main__":
         if params.get("destination") in ALL_DOWN and first_of_a_pair("flights", params, "destination", "date"):
             return down("flight")
         # ₹8,200 direct; a re-plan that allows connections ("cheaper flights") finds ₹2,500.
-        return [flight(2_500.0 if params.get("max_stops", 1) >= 2 else 8_200.0)]
+        direct = DEAR_FLIGHTS.get(params.get("destination"), 8_200.0)
+        return [flight(2_500.0 if params.get("max_stops", 1) >= 2 else direct)]
 
     def hotel_tool(_name: str, params: dict):
         first = first_of_a_pair("hotels", params, "destination", "check_in", "guests")

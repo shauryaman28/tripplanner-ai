@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–20
+# How to Run & Verify — Phases 1–21
 
 ## What changed vs the original codebase?
 
@@ -19,6 +19,7 @@
 | 18 | `tools.py`, `models.py`, `builder.py`, `orchestrator.py`, `trips.py` (`budget_conflict` in `/status`), `main.py`, every frontend page and component — see `docs/phase18_build_log.md` | `src/ai/itinerary.py`, `ItineraryMap.tsx`, `CostSummary.tsx`, `AppHeader.tsx`, `Brand.tsx`, `ui.tsx`, `lib/map.ts`, `lib/places.ts`, `lib/format.ts`, `tests/database.py`, `tests/unit/test_phase18_map.py` |
 | 19 | `trips.py` (`GET /trips/{id}/export/pdf`), `deps.py`, `config.py` (`MAP_TILE_URL`), `main.py` (CORS exposes the download's headers), `requirements.txt` (`reportlab`, `pillow`), `ItineraryView.tsx`, `lib/api.ts`, `playwright.config.ts`, `tests/fakes.py` — see `docs/phase19_build_log.md` | `src/backend/app/pdf/` (`export.py`, `plan.py`, `static_map.py`, `document.py`, `flowables.py`, `formatting.py`, `theme.py`, `fonts/`), `DownloadPdfButton.tsx`, `Toast.tsx`, `lib/download.ts`, `tests/unit/test_phase19_pdf.py` |
 | 20 | `builder.py` (streams), `orchestrator.py` (`builder_token`, `retry_search`), `conversation.py`, `trips.py` (`POST /trips/{id}/retry`; `/status` gains `errors`, `retryable`, `run`; `filename*`), `requirements.txt` (`reportlab[shaping]`), `document.py`, `flowables.py`, `build_fonts.py`, the trip page and its components, `tests/e2e/stub_backend.py` — see `docs/phase20_build_log.md` | `src/ai/utils/failures.py`, `src/backend/app/pdf/scripts.py`, `pdf/fonts/noto/`, `LiveDraft.tsx`, `ProgressSheet.tsx`, `TripStages.tsx`, `lib/draft.ts`, `lib/useWideScreen.ts`, `tests/unit/test_phase20_streaming.py`, `tests/unit/test_phase20_scripts.py`, `e2e/draft.spec.ts`, `e2e/polish.spec.ts` |
+| 21 | `tools.py` + `models.py` (`estimate_budget`: destination, month, nights → a range and the season), `evaluator.py`, `orchestrator.py` (a conflict priced; a trip that fits goes ahead; a picked way out is gone ahead with), `trips.py` (`/replan` applies the option as offered; `/status` returns its estimate), `TripStages.tsx`, the trip page, `types.ts`, `tests/e2e/stub_backend.py` — see `docs/phase21_build_log.md` | `src/ai/pricing.py`, `src/ai/agents/budget_alternatives.py`, `tests/unit/test_phase21_budget.py`, `e2e/budget.spec.ts` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -299,7 +300,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–20 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–21 check
 
 Run from the **project root**:
 
@@ -307,7 +308,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **580 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
+Expected: **624 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -315,7 +316,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **20 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **21 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -499,7 +500,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 34 passed
+npx playwright test                 # 37 passed
 ```
 
 Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
@@ -602,6 +603,34 @@ will resolve a city in any language) — and the page says to write it in Englis
 
 ---
 
+## Step 19 — Verify Phase 21: smarter budget intelligence
+
+**The estimate.** With the venv active, from the repo root:
+
+```bash
+python -c "
+from src.ai.mcp_server.tools import estimate_budget
+from src.ai.mcp_server.models import BudgetInput
+print(estimate_budget(BudgetInput(flights=8000, hotels=3000, days=5, daily_spend=2000, destination='Goa', month=12)))"
+```
+
+Expected: `total=33000.0 … total_min=26400.0 total_max=39600.0 season='peak' season_multiplier=1.4
+off_peak_months=[6, 7, 8, 9] off_peak_total=23571.4…` — December is peak season in Goa, about 40% above
+the monsoon, so the total may land anywhere within ±20% by the time it is booked.
+
+**A conflict, priced.** In the browser, plan a trip whose flights eat the budget — for two people, Goa,
+three or four days about six weeks out, on about ₹35,000 (the sandbox's return fare for two from Delhi
+is around ₹24,000). The card says "Over budget", then what the trip as asked would cost at a 4-star
+hotel and the range it may land in, then three ways out as cards — a cheaper stay, a shorter trip, the
+off-season — each with what it would come to and whether that fits, and two buttons: connecting flights,
+and a bigger budget. Reload: all of it is still there (`GET /trips/{id}/status` → `budget_conflict.estimate`).
+
+Pick **Stay at a budget hotel** (or the shorter trip): the plan is made on the same flights. In
+`GET /trips/{id}/runs` the second `budget_decision` row says "going ahead with the cheaper stay you
+chose". The off-season card moves the trip to its dates and searches the flights again for them.
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -643,3 +672,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **19 (PDF)** | Start the backend with `MAP_TILE_URL=https://tiles.unreachable.invalid/{z}/{x}/{y}.png` and export a trip → still `200` and a PDF, one page shorter; `x-itinerary-map: unavailable`; the log says "the map was left out — the tile server could not be reached"; in the browser a note says the PDF came without the map. Set `MAP_TILE_URL=` (empty) → no map and no warning (`none`). Stop Redis → the export still works, it just fetches the tiles every time. In the browser's dev tools, block the request to `/export/pdf` → the toast "PDF generation failed — try again", and the button works again. |
 | **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 34 passed. |
 | **20 (Polish)** | Reload the page while the itinerary is being written → no draft (a page that joins late waits for the next build's `seq` 0), and the checked plan still arrives. A streamed reply that fails its checks is never saved — `test_a_streamed_reply_that_is_not_valid_is_never_saved` makes every reply invalid. Delete the trip's saved state (`docker exec tripplanner_redis redis-cli DEL trip:$TRIP_ID:planning_state`) and `POST /retry {"agent": "hotel_agent"}` → `409` "This plan is too old to retry a single search". Retry a search while a run is in flight → `409`. At 375 px open the progress sheet → "Ask for a change" hides until it is closed. Uninstall `uharfbuzz` (`pip uninstall uharfbuzz`) and export a Devanagari trip → the letters print unjoined, and `pytest tests/unit/test_phase20_scripts.py` fails on "HarfBuzz is installed". |
+| **21 (Budget)** | `estimate_budget(…, destination="Goa", month=7)` → `season='off-peak'`, a ±10% range and no off-season price: July is the off-season. A conflict's alternatives are worked out without searching: in the run's `agent_runs`, no `hotel_agent` or `activities_agent` row comes before `escalate`. `POST /replan {"choice": "off_peak"}` on a conflict that did not offer it → `409`. Pick the shorter trip → the second `budget_decision` row is `continue`, "going ahead with the shorter trip you chose", though the flights are the same share of the budget. `pytest tests/unit/test_phase21_budget.py -k misquoted` → a ₹4,000 quote for a ₹4,500 hotel is caught, though the total is inside a peak season's ±20%. |

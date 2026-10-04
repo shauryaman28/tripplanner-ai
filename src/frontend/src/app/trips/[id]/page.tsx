@@ -44,9 +44,13 @@ function errorText(err: unknown) {
 const withoutFullStop = (text: string) => text.replace(/\.+$/, "");
 
 /** What the assistant says about a budget conflict. A refinement that hit one leaves the plan as it was. */
-function conflictMessage({ reason, options }: BudgetConflict, keptItinerary = false) {
+function conflictMessage({ reason, options, estimate }: BudgetConflict, keptItinerary = false) {
   if (keptItinerary) return `${reason} Your itinerary is unchanged.`;
-  return `${reason} ${options.length > 0 ? "Pick one of the options, or describe a different trip." : "Describe a different trip to try again."}`;
+  // Phase 21: what the trip as asked would come to, so the options' amounts have something to stand against
+  const priced = estimate
+    ? ` With ${estimate.stay} and things to do, the trip as asked comes to about ${formatINR(estimate.total)}.`
+    : "";
+  return `${reason}${priced} ${options.length > 0 ? "Pick one of the options, or describe a different trip." : "Describe a different trip to try again."}`;
 }
 
 /** How a run that produced no itinerary ended. */
@@ -308,7 +312,11 @@ export default function TripDetailPage() {
       if (ev.event === "planning_started") {
         announcedConflict.current = null;
       } else if (ev.event === "budget_conflict") {
-        announcedConflict.current = { reason: ev.reason ?? "Flights exceed the budget.", options: ev.options ?? [] };
+        announcedConflict.current = {
+          reason: ev.reason ?? "Flights exceed the budget.",
+          options: ev.options ?? [],
+          estimate: ev.estimate ?? null,
+        };
       } else if (ev.event === "planning_complete") {
         finishRun(true);
       } else if (ev.event === "planning_failed") {
@@ -439,6 +447,8 @@ export default function TripDetailPage() {
     addMessage("user", option.description);
     launch("planning", async () => {
       await replanTrip(tripId, option.choice);
+      // a shorter trip, the off-season or a bigger budget changes the trip itself: show it at once
+      getTrip(tripId).then(setTrip).catch(() => {});
       return "Re-planning with that change…";
     });
   }

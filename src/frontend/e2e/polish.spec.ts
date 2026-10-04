@@ -308,13 +308,13 @@ test("every view works at 375px, and the planning progress is a bottom sheet the
   await failed.getByRole("button", { name: "Retry" }).click();
   await expect(itinerary.getByRole("article").first()).toBeVisible({ timeout: 90_000 });
 
-  // ── a budget conflict: the three ways out are cards, one under another ───
+  // ── a budget conflict: the priced ways out are cards, one under another ───
   await page.goto("/trips");
   await createTrip(page, { destination: "Udaipur", day: 26, budget: "12000" });
   await send(page, "A long weekend of palaces and lakes");
   const options = page.getByLabel("Budget options");
-  await expect(options.getByRole("button")).toHaveCount(3, { timeout: 90_000 });
-  const boxes = await options.getByRole("button").evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().toJSON()));
+  await expect(options.locator("[data-alternative]")).toHaveCount(2, { timeout: 90_000 });
+  const boxes = await options.locator("[data-alternative]").evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().toJSON()));
   expect(boxes[1].top).toBeGreaterThan(boxes[0].bottom - 1); // stacked, not squeezed side by side
   for (const box of boxes) expect(box.width).toBeGreaterThan(250); // each one easy to tap
   await expectFitsTheScreen(page, "a budget conflict");

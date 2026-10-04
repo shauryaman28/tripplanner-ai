@@ -12,6 +12,11 @@ Thresholds (fraction of total budget remaining after cheapest flight):
 Design: make_budget_decision() is a pure function — no I/O, no side effects,
 trivially unit-testable. The LangGraph node wraps it with DB logging.
 
+Phase 21: when this rule would stop a trip, the node prices the rest of it
+first (budget_alternatives.py, orchestrator._settle_conflict): a trip that fits
+at typical prices goes ahead, a way out the traveller already picked is gone
+ahead with, and otherwise the conflict carries its ways out with amounts.
+
 Verification:
     ₹40k budget, ₹28k flights (70%) → 30% remaining < 35% → escalate  ✓
     ₹40k budget, ₹16k flights (40%) → 60% remaining ≥ 50% → continue  ✓

@@ -22,6 +22,7 @@ from datetime import date, datetime, timedelta
 
 import httpx
 
+from src.ai import pricing
 from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync
 from src.ai.mcp_server.config import mcp_settings
 from src.ai.mcp_server.models import (
@@ -846,6 +847,9 @@ def estimate_budget(input: BudgetInput) -> BudgetEstimate | ToolError:
     Pure arithmetic — no external API.
     Phase 3 adds explicit validation so agents receive a ToolError
     instead of a Pydantic ValidationError on negative values.
+    Phase 21: given a destination and a month, the estimate knows the season —
+    how far the prices may move before they are booked (total_min / total_max)
+    and what the same trip costs in the off-season (src/ai/pricing.py).
     """
     if input.flights < 0:
         return ToolError(error="flights must be ≥ 0.", code="INVALID_INPUT")
@@ -854,19 +858,35 @@ def estimate_budget(input: BudgetInput) -> BudgetEstimate | ToolError:
     if input.daily_spend < 0:
         return ToolError(error="daily_spend must be ≥ 0.", code="INVALID_INPUT")
 
-    hotel_total = input.hotels * input.days
-    activities = input.daily_spend * input.days
-    total = input.flights + hotel_total + activities
+    estimate = pricing.estimate(
+        flights=input.flights,
+        nightly=input.hotels,
+        nights=input.days if input.nights is None else input.nights,
+        daily=input.daily_spend,
+        days=input.days,
+        destination=input.destination,
+        month=input.month,
+    )
+    season = estimate.season
+    notes = (
+        "Budget is within typical range."
+        if estimate.total < 80_000
+        else "Budget is above ₹80,000 — consider cheaper alternatives."
+    )
+    if season is not None:
+        notes = f"{notes} {season.describe(input.destination or '')}"
 
     return BudgetEstimate(
         flights=input.flights,
-        hotels=hotel_total,
-        activities_estimate=activities,
-        total=total,
-        per_person=total,  # Phase 25 makes this per-person aware
-        notes=(
-            "Budget is within typical range."
-            if total < 80_000
-            else "Budget is above ₹80,000 — consider cheaper alternatives."
-        ),
+        hotels=estimate.stay,
+        activities_estimate=estimate.activities,
+        total=estimate.total,
+        per_person=estimate.total,  # Phase 25 makes this per-person aware
+        notes=notes,
+        total_min=estimate.total_min,
+        total_max=estimate.total_max,
+        season=season.label if season else None,
+        season_multiplier=season.multiplier if season else 1.0,
+        off_peak_months=list(season.off_peak_months) if season else [],
+        off_peak_total=estimate.off_peak_total,
     )

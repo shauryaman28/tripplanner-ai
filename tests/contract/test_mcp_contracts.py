@@ -198,3 +198,15 @@ class TestBudgetContract:
         result = estimate_budget(BudgetInput(flights=5_000, hotels=2_000, days=3, daily_spend=1_500))
         expected = 5_000 + (2_000 * 3) + (1_500 * 3)
         assert result.total == expected
+
+    def test_budget_estimate_has_a_range_and_a_season(self):
+        """Phase 21: total_min ≤ total ≤ total_max always; the season fields once a month is given."""
+        result = estimate_budget(
+            BudgetInput(flights=8_000, hotels=3_000, days=5, daily_spend=2_000, destination="Goa", month=12)
+        )
+        assert isinstance(result.total_min, float) and isinstance(result.total_max, float)
+        assert result.total_min <= result.total <= result.total_max
+        assert result.season in ("peak", "shoulder", "off-peak")
+        assert isinstance(result.season_multiplier, float) and result.season_multiplier >= 1.0
+        assert all(isinstance(month, int) and 1 <= month <= 12 for month in result.off_peak_months)
+        assert isinstance(result.off_peak_total, float) and result.off_peak_total < result.total

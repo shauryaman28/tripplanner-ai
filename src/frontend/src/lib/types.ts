@@ -122,22 +122,45 @@ export interface SSEAgentUpdateEvent {
   turn?: number;
   refinement_type?: string;     // planning_started, for a refinement or a retry
   retry?: string;               // planning_started: the search a retry repeats
+  estimate?: ConflictEstimate | null;  // budget_conflict (Phase 21): the trip as asked, priced
   token?: string;               // builder_token (Phase 20): the next piece of the itinerary being written
   seq?: number;                 // builder_token: its place in the build's stream, from 0
 }
 
-export type ReplanChoice = "cheaper_flights" | "reduce_days" | "increase_budget";
+export type ReplanChoice = "cheaper_flights" | "reduce_days" | "increase_budget" | "cheaper_hotel" | "off_peak";
 
 export interface BudgetConflictOption {
   choice: ReplanChoice;
   description: string;
   estimated_saving: string;
+  // Phase 21 — the trip with this change, priced at typical prices (whole rupees, to the nearest ₹100)
+  total?: number | null;
+  saving?: number | null;          // against the trip as asked
+  flight_saving?: number | null;   // off_peak: what the flights would cost less
+  fits?: boolean;                  // the total is within the budget
+  days?: number;                   // reduce_days: the length offered
+  start_date?: string;             // off_peak: the dates offered
+  end_date?: string;
+  budget?: number;                 // increase_budget: the budget offered
+}
+
+/** The trip as asked, priced at typical prices — what the options are measured against (Phase 21). */
+export interface ConflictEstimate {
+  total: number;
+  total_min: number;   // where the cost will likely land once booked
+  total_max: number;
+  stay: string;        // "a 4-star hotel"
+  month: number;       // 1–12
+  season: "peak" | "shoulder" | "off-peak";
+  about: string;       // "December is peak season in Goa: prices run about 40% above the off-season."
+  budget: number;
 }
 
 /** Flights left too little of the budget for the rest of the trip — the ways out the user can pick from. */
 export interface BudgetConflict {
   reason: string;
   options: BudgetConflictOption[];
+  estimate?: ConflictEstimate | null;
 }
 
 export type SSEEvent = SSEConnectedEvent | SSEAgentUpdateEvent;

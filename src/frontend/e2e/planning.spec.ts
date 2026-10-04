@@ -294,12 +294,14 @@ test("a budget conflict keeps its options across a reload, and re-plans", async 
   await chat.press("Enter");
 
   const options = page.getByLabel("Budget options");
-  await expect(options.getByText("Over budget")).toBeVisible({ timeout: 90_000 });
-  await expect(options.getByRole("button")).toHaveCount(3);
+  await expect(options.getByText("Over budget", { exact: true })).toBeVisible({ timeout: 90_000 });
+  // Phase 21: the ways out that change the trip, priced (here none fits ₹12,000), then the two plain actions
+  await expect(options.locator("[data-alternative]")).toHaveCount(2);
+  await expect(options.getByRole("button")).toHaveCount(4);
 
   // the SSE event that carried the options is gone after a reload — GET /status brings them back
   await page.reload();
-  await expect(options.getByRole("button")).toHaveCount(3);
+  await expect(options.getByRole("button")).toHaveCount(4);
   await expect(page.locator('[data-stream="connected"]')).toBeVisible();
 
   await options.getByRole("button", { name: /cheaper connecting flights/i }).click();

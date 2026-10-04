@@ -8,10 +8,13 @@ categories of correctness failure:
                               travel window (trip.start_date .. trip.end_date)
      missing_days          — a date in that window has no day in the itinerary,
                               or has two (DECISIONS.md #93)
-  2. budget_mismatch       — itinerary total_cost differs by more than 5% from
-                              the total recomputed from source prices
-                              (expected_total_cost: the estimate_budget
-                              arithmetic applied to this itinerary)
+  2. budget_mismatch       — itinerary total_cost falls outside the range of
+                              the estimate recomputed from source prices
+                              (itinerary_estimate: the estimate_budget
+                              arithmetic applied to this itinerary — Phase 21:
+                              ±10–20% by season, 5% when no range is given),
+                              or a hotel is priced in the plan at something
+                              other than what the hotel search found
   3. duplicate_activity    — the same activity appears twice on the same day
   4. hallucinated_activity — an activity name that wasn't in ActivitiesAgent's
                               get_attractions results
@@ -49,11 +52,14 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai import pricing
 from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
 MAX_EVALUATOR_RETRIES = 3
-BUDGET_TOLERANCE_PCT = 0.05  # 5%
+BUDGET_TOLERANCE_PCT = 0.05  # 5% — the range around the recomputed total when no estimate range is given
+# A hotel priced in the plan must be the price the search found: within ₹50, or 1% of it.
+PRICE_TOLERANCE_INR, PRICE_TOLERANCE_PCT = 50.0, 0.01
 
 # Free time is the one activity the builder may write that is not in the
 # attraction list — it must not be flagged as a hallucination or a duplicate.
@@ -166,41 +172,97 @@ def check_day_coverage(draft: dict, trip_start: str, trip_end: str) -> Evaluator
     )
 
 
-# ── Check 2: budget consistency within 5% ──────────────────────────────────
+# ── Check 2: budget consistency — within the estimate's range ──────────────
+
+
+def itinerary_estimate(
+    draft: dict,
+    flights: list[dict],
+    hotels: list[dict],
+    destination: str | None = None,
+    month: int | None = None,
+) -> pricing.Estimate:
+    """What the draft should cost, recomputed from SOURCE prices, with its range (Phase 21).
+
+    The estimate_budget arithmetic (flights + hotel nights + daily spend)
+    applied to this itinerary: the cheapest flight, each hotel night at the
+    price the hotel search found, and the activities as drafted — they have no
+    source price. The trip's destination and month set how wide the range is.
+    """
+    hotel_prices = {h.get("name"): h.get("price_per_night_inr") for h in hotels}
+    flight = min((f.get("price_inr") or 0.0 for f in flights), default=0.0)
+    stay, nights, activities = 0.0, 0, 0.0
+    days = draft.get("days", [])
+    for day in days:
+        if hotel := day.get("hotel") or {}:
+            stay += hotel_prices.get(hotel.get("name")) or hotel.get("cost_per_night") or 0.0
+            nights += 1
+        activities += sum((day.get(slot) or {}).get("cost") or 0.0 for slot in SLOTS)
+    return pricing.estimate(
+        flights=flight,
+        nightly=stay / nights if nights else 0.0,
+        nights=nights,
+        daily=activities / len(days) if days else 0.0,
+        days=len(days),
+        destination=destination,
+        month=month,
+    )
 
 
 def expected_total_cost(draft: dict, flights: list[dict], hotels: list[dict]) -> float:
-    """What the draft should cost, recomputed from SOURCE prices.
-
-    Same arithmetic as the estimate_budget tool (flights + hotel nights +
-    daily spend), applied to this itinerary. Hotel nights are priced from the
-    hotel search results rather than the draft, so a builder that misquotes a
-    hotel is caught; activities have no source price and are taken as drafted.
-    """
-    hotel_prices = {h.get("name"): h.get("price_per_night_inr") for h in hotels}
-    total = min((f.get("price_inr") or 0.0 for f in flights), default=0.0)
-    for day in draft.get("days", []):
-        hotel = day.get("hotel") or {}
-        total += hotel_prices.get(hotel.get("name")) or hotel.get("cost_per_night") or 0.0
-        total += sum((day.get(slot) or {}).get("cost") or 0.0 for slot in SLOTS)
-    return total
+    """The recomputed total alone (see itinerary_estimate)."""
+    return itinerary_estimate(draft, flights, hotels).total
 
 
-def check_budget_consistency(draft: dict, expected_total: float) -> EvaluatorFailure | None:
+def check_budget_consistency(
+    draft: dict, expected_total: float, budget_range: tuple[float, float] | None = None
+) -> EvaluatorFailure | None:
+    """The plan's total must fall within the range of the estimate (5% either side when none is given)."""
     total_cost = draft.get("total_cost")
     if total_cost is None or expected_total is None or expected_total == 0:
         return None
 
-    diff_pct = abs(total_cost - expected_total) / expected_total
-    if diff_pct > BUDGET_TOLERANCE_PCT:
-        return EvaluatorFailure(
-            check="budget_mismatch",
-            detail=(
-                f"Itinerary total_cost ₹{total_cost:,.0f} differs from the recomputed total "
-                f"₹{expected_total:,.0f} by {diff_pct:.1%} — exceeds the {BUDGET_TOLERANCE_PCT:.0%} tolerance."
-            ),
+    low, high = budget_range or (
+        expected_total * (1 - BUDGET_TOLERANCE_PCT),
+        expected_total * (1 + BUDGET_TOLERANCE_PCT),
+    )
+    if low <= total_cost <= high:
+        return None
+    off = (total_cost - expected_total) / expected_total
+    return EvaluatorFailure(
+        check="budget_mismatch",
+        detail=(
+            f"Itinerary total_cost ₹{total_cost:,.0f} is {off:+.1%} off the recomputed total ₹{expected_total:,.0f} — "
+            f"outside the estimate's range ₹{low:,.0f}–₹{high:,.0f}."
+        ),
+    )
+
+
+def check_source_prices(draft: dict, hotels: list[dict]) -> EvaluatorFailure | None:
+    """Every hotel in the plan at the price the hotel search found (Phase 21).
+
+    The range on the total (above) is as wide as the season makes prices
+    move; a plan that quotes its hotel at the wrong price must not hide in it.
+    """
+    found = {h.get("name"): h.get("price_per_night_inr") for h in hotels if h.get("price_per_night_inr")}
+    misquoted: dict[str, tuple[float, float]] = {}
+    for day in draft.get("days", []):
+        hotel = day.get("hotel") or {}
+        source, quoted = found.get(hotel.get("name")), hotel.get("cost_per_night")
+        if source is None or quoted is None:
+            continue
+        if abs(quoted - source) > max(PRICE_TOLERANCE_INR, source * PRICE_TOLERANCE_PCT):
+            misquoted[hotel["name"]] = (quoted, source)
+    if not misquoted:
+        return None
+    return EvaluatorFailure(
+        check="budget_mismatch",
+        detail="; ".join(
+            f"{name} is priced at ₹{quoted:,.0f} a night in the plan, but the hotel search found ₹{source:,.0f}"
+            for name, (quoted, source) in misquoted.items()
         )
-    return None
+        + ".",
+    )
 
 
 # ── Check 3: duplicate activities on the same day ──────────────────────────
@@ -257,19 +319,26 @@ def evaluate_itinerary(
     expected_budget_total: float,
     attractions: list[dict],
     retry_count: int = 0,
+    budget_range: tuple[float, float] | None = None,
+    hotels: list[dict] | None = None,
 ) -> EvaluatorVerdict:
     """Run every check and return a single EvaluatorVerdict.
 
     Pure function — no I/O, no mocks needed in tests. All failures found
     are reported, not just the first (helps the caller pick the best
     single agent to retry via next_agent_for_failures()).
+
+    Phase 21: `budget_range` is the estimate's (total_min, total_max) — the
+    total must fall inside it; `hotels` (the search results) has each hotel's
+    price in the plan checked against what was found.
     """
     failures: list[EvaluatorFailure] = []
 
     for failure in (
         check_activity_dates(draft, trip_start, trip_end),
         check_day_coverage(draft, trip_start, trip_end),
-        check_budget_consistency(draft, expected_budget_total),
+        check_budget_consistency(draft, expected_budget_total, budget_range),
+        check_source_prices(draft, hotels or []),
         check_duplicate_activities(draft),
         check_hallucinated_activities(draft, attractions),
     ):
@@ -337,6 +406,8 @@ class EvaluatorAgent:
         db: AsyncSession | None = None,
         trip_id: uuid.UUID | None = None,
         turn: int = 1,
+        budget_range: tuple[float, float] | None = None,
+        hotels: list[dict] | None = None,
     ) -> EvaluatorVerdict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
@@ -347,6 +418,8 @@ class EvaluatorAgent:
                 expected_budget_total=expected_budget_total,
                 attractions=attractions,
                 retry_count=retry_count,
+                budget_range=budget_range,
+                hotels=hotels,
             )
 
         if db is not None and trip_id is not None:
@@ -358,6 +431,7 @@ class EvaluatorAgent:
                     "trip_start": trip_start,
                     "trip_end": trip_end,
                     "expected_budget_total": expected_budget_total,
+                    "budget_range": list(budget_range) if budget_range else None,
                     "attractions_count": len(attractions),
                     "retry_count": retry_count,
                 },

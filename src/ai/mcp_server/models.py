@@ -47,6 +47,10 @@ class BudgetInput(BaseModel):
     hotels: float = Field(..., description="Hotel cost per night in INR")
     days: int = Field(..., ge=1)
     daily_spend: float = Field(..., description="Estimated daily spend in INR")
+    # Phase 21 — the season, and what the range is
+    nights: int | None = Field(None, ge=0, description="Hotel nights; defaults to days")
+    destination: str | None = Field(None, description="Where the trip goes, e.g. Goa — sets its seasons")
+    month: int | None = Field(None, ge=1, le=12, description="Month of travel, 1–12: the prices are this month's")
 
 
 # ── Outputs ────────────────────────────────────────────────────────────────
@@ -104,6 +108,13 @@ class BudgetEstimate(BaseModel):
     total: float
     per_person: float
     notes: str
+    # Phase 21: where the total will likely land once booked (±10–20% by season), and the season itself
+    total_min: float
+    total_max: float
+    season: str | None = None  # "peak" | "shoulder" | "off-peak"; None without a month
+    season_multiplier: float = 1.0  # this month's prices against the destination's cheapest month
+    off_peak_months: list[int] = Field(default_factory=list)
+    off_peak_total: float | None = None  # the same trip in the off-season; None when it is the off-season
 
 
 # ── Errors ─────────────────────────────────────────────────────────────────
