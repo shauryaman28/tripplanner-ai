@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 20 / 50 — Frontend Polish**
+**Status: Phase 21 / 50 — Smarter Budget Intelligence**
 
 ---
 
@@ -87,16 +87,17 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 580 tests
+# Unit + contract tests (no Docker, no network) — 624 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 20 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 21 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser tests (Playwright) — 34 tests: 5 end-to-end flows, 5 for Phase 20's polish (live draft, refinement
-# marks, retry, 375 px), 16 for the live draft's reader, 8 for the change summary. Starts its own stack: a stub backend
+# Browser tests (Playwright) — 37 tests: 5 end-to-end flows, 3 for Phase 21's priced budget conflict, 5 for
+# Phase 20's polish (live draft, refinement marks, retry, 375 px), 16 for the live draft's reader, 8 for the change
+# summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
 # `tripplanner_db_e2e` database, and a second Next.js dev server on :3100.
 cd src/frontend
@@ -116,7 +117,7 @@ while your dev servers (:8000 / :3000) are up and never touches dev data.
 ```
 tripplanner-ai/
 ├── src/
-│   ├── frontend/                        ← Phases 17–20: Next.js 14 App Router
+│   ├── frontend/                        ← Phases 17–21: Next.js 14 App Router
 │   │   ├── package.json
 │   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
 │   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
@@ -124,6 +125,7 @@ tripplanner-ai/
 │   │   ├── playwright.config.ts         ← starts the E2E stack (stub backend :8100, dev server :3100)
 │   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, PDF download, budget conflict
 │   │   ├── e2e/polish.spec.ts           ← Phase 20: live draft, refinement marks, retry, every view at 375 px
+│   │   ├── e2e/budget.spec.ts           ← Phase 21: a budget conflict priced, and each way out planned
 │   │   ├── e2e/changes.spec.ts          ← what the assistant says changed (pure function tests)
 │   │   ├── e2e/draft.spec.ts            ← the live draft's partial-JSON reader (pure function tests)
 │   │   └── src/
@@ -175,6 +177,7 @@ tripplanner-ai/
 │   │                                      with the script that builds them
 │   └── ai/
 │       ├── llm.py                       ← model IDs + tolerant JSON parsing of LLM replies
+│       ├── pricing.py                   ← Phase 21: seasons by destination, typical costs, the estimate arithmetic
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
 │       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
 │       ├── embeddings/                  ← Phase 14: Gemini embedding writer
@@ -189,7 +192,9 @@ tripplanner-ai/
 │       │   ├── hotel_agent.py           ← Phase 8 Dev A: 3-node graph, hotel-specific routing
 │       │   ├── activities_agent.py      ← Phase 8 Dev B: 3-node graph, dual-requirement router
 │       │   ├── budget_decision.py       ← Phase 10: pure budget threshold logic
-│       │   ├── evaluator.py             ← Phase 11: 4 deterministic itinerary checks + retry routing
+│       │   ├── budget_alternatives.py   ← Phase 21: a budget conflict's ways out, priced without a search
+│       │   ├── evaluator.py             ← Phase 11: 4 deterministic itinerary checks + retry routing;
+│       │   │                                  Phase 21: the total within the estimate's range, hotels at the searched price
 │       │   ├── refinement_classifier.py ← Phase 15: which agents a follow-up message re-runs
 │       │   └── preference_extractor.py  ← Phase 16: learning lasting preferences from trips
 │       ├── builder/
@@ -204,16 +209,16 @@ tripplanner-ai/
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (573 tests)
-│   ├── contract/                        ← Response shape tests (mocked, 7 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 20 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (616 tests)
+│   ├── contract/                        ← Response shape tests (mocked, 8 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 21 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–20) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–21) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -251,6 +256,7 @@ tripplanner-ai/
 | 18 | Map View (Leaflet) + frontend redesign ([docs/phase18_build_log.md](docs/phase18_build_log.md)) | ✅ Done | 33 unit + 4 Playwright E2E |
 | 19 | PDF Export — ReportLab, static map from OpenStreetMap tiles ([docs/phase19_build_log.md](docs/phase19_build_log.md)) | ✅ Done | 94 unit + 1 integration + 1 Playwright E2E |
 | 20 | Frontend polish — streamed itinerary, refinement marks, retry, phone layout; the PDF in the scripts of India ([docs/phase20_build_log.md](docs/phase20_build_log.md)) | ✅ Done | 120 unit + 3 integration + 21 Playwright E2E |
+| 21 | Smarter budget intelligence — seasons, a confidence range, a budget conflict priced three ways ([docs/phase21_build_log.md](docs/phase21_build_log.md)) | ✅ Done | 43 unit + 1 contract + 1 integration + 3 Playwright E2E |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 

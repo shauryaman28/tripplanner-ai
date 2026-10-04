@@ -34,13 +34,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
 from src.ai.agents.activities_agent import ActivitiesAgent
-from src.ai.agents.budget_decision import make_budget_decision, replan_flight_budget, viable_budget
+from src.ai.agents.budget_alternatives import conflict_alternatives, plain_options
+from src.ai.agents.budget_decision import BudgetDecision, make_budget_decision, replan_flight_budget
 from src.ai.agents.evaluator import (
     MAX_EVALUATOR_RETRIES,
     EvaluatorAgent,
     EvaluatorFailure,
     EvaluatorVerdict,
-    expected_total_cost,
+    itinerary_estimate,
     next_agent_for_failures,
     route_after_evaluation,
 )
@@ -114,6 +115,10 @@ class OrchestratorState(TypedDict, total=False):
     replan_attempts: int
     budget_decision: dict | None
     budget_conflict_options: list[dict] | None
+    # Phase 21: the trip as asked, priced, when the budget check stops; and the way out the traveller
+    # picked (POST /replan), which the check then goes ahead with instead of asking again
+    budget_estimate: dict | None
+    budget_choice: dict | None
 
     draft_itinerary: dict | None
     builder_error: dict | None
@@ -261,6 +266,14 @@ def _nights(state: OrchestratorState) -> int:
         return max(1, (date.fromisoformat(state["end_date"]) - date.fromisoformat(state["start_date"])).days)
     except (KeyError, TypeError, ValueError):
         return 7
+
+
+def _travel_month(state: OrchestratorState) -> int | None:
+    """The month the trip starts in — the season its prices belong to (Phase 21)."""
+    try:
+        return date.fromisoformat(state["start_date"]).month
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 async def _run_agent(
@@ -457,6 +470,60 @@ async def run_flight_node(state: OrchestratorState) -> OrchestratorState:
     return {**state, **await _search_flights(state, attempt=state.get("replan_attempts", 0))}
 
 
+# The ways out that leave the flights as they are: once the traveller has picked one, the budget check
+# goes ahead with it instead of stopping them again on the same flights (Phase 21).
+GOING_AHEAD = {"reduce_days": "the shorter trip", "cheaper_hotel": "the cheaper stay"}
+
+
+def _trip_dates(state: OrchestratorState) -> tuple[date, date] | None:
+    try:
+        return date.fromisoformat(state["start_date"]), date.fromisoformat(state["end_date"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _settle_conflict(
+    state: OrchestratorState, decision: BudgetDecision
+) -> tuple[BudgetDecision, dict | None, list[dict] | None]:
+    """Phase 21 — before stopping a trip on its flights, price the rest of it.
+
+    Returns the decision (possibly "continue" after all), the trip as asked
+    with its price and range, and the ways out with theirs (budget_alternatives.py).
+    Without a fare or dates there is nothing to price: the two plain options.
+    """
+    budget, fare = decision.total_budget, decision.flight_cost
+    replan_attempts = state.get("replan_attempts", 0)
+    dates = _trip_dates(state)
+    if fare <= 0 or dates is None:
+        return decision, None, plain_options(fare, budget, replan_attempts)
+
+    share = f"{fare / budget:.0%} of the budget" if budget else "the whole budget"
+    choice = (state.get("budget_choice") or {}).get("choice")
+    if choice in GOING_AHEAD and decision.remaining_budget > 0:
+        reason = f"Flights cost ₹{fare:,.0f} — {share} — going ahead with {GOING_AHEAD[choice]} you chose."
+        return decision.model_copy(update={"decision": "continue", "reason": reason}), None, None
+
+    start, end = dates
+    trip, options = conflict_alternatives(
+        flight_cost=fare,
+        budget=budget,
+        start=start,
+        end=end,
+        travellers=state.get("group_size") or 1,
+        destination=state.get("destination") or "",
+        replan_attempts=replan_attempts,
+        today=date.today(),
+    )
+    if trip["total"] <= budget:
+        # The share rule is blunt: a short trip can spend most of its budget on flights and still fit.
+        reason = (
+            f"Flights cost ₹{fare:,.0f} — {share} — but at typical prices the rest still fits: "
+            f"{trip['stay']} and things to do bring the trip to about ₹{trip['total']:,} of ₹{budget:,.0f}."
+        )
+        return decision.model_copy(update={"decision": "continue", "reason": reason}), None, None
+    return decision, trip, options
+
+
 async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
     flights = state.get("flights", [])
     total_budget = state.get("budget") or 0.0
@@ -464,28 +531,10 @@ async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
 
     async with timed_run() as timer:
         decision = make_budget_decision(flights, total_budget, replan_attempts, state.get("flight_error"))
-
-    budget_conflict_options: list[dict] | None = None
-    if decision.decision == "escalate":
-        # Offer a budget that actually clears the check, never less than +25%.
-        target_budget = max(total_budget * 1.25, viable_budget(decision.flight_cost))
-        budget_conflict_options = [
-            {
-                "choice": "cheaper_flights",
-                "description": "Search for cheaper connecting flights",
-                "estimated_saving": f"₹{decision.flight_cost * 0.35:,.0f}",
-            },
-            {
-                "choice": "reduce_days",
-                "description": "Shorten the trip by 2 days to reduce hotel costs",
-                "estimated_saving": "~₹8,000–15,000",
-            },
-            {
-                "choice": "increase_budget",
-                "description": f"Increase total budget to ₹{target_budget:,.0f}",
-                "estimated_saving": f"Additional ₹{target_budget - total_budget:,.0f}",
-            },
-        ]
+        budget_estimate: dict | None = None
+        budget_conflict_options: list[dict] | None = None
+        if decision.decision == "escalate":
+            decision, budget_estimate, budget_conflict_options = _settle_conflict(state, decision)
 
     await _log(
         state,
@@ -504,6 +553,7 @@ async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
         **state,
         "budget_decision": decision.model_dump(),
         "budget_conflict_options": budget_conflict_options,
+        "budget_estimate": budget_estimate,
         "replan_attempts": replan_attempts + (1 if decision.decision == "replan" else 0),
     }
 
@@ -536,7 +586,12 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
             "total_budget": bd.get("total_budget", 0),
         },
         # the options are stored, not just counted: GET /status hands them back after a page reload
-        output={"reason": reason, "options": options, "trip_status": "failed"},
+        output={
+            "reason": reason,
+            "options": options,
+            "estimate": state.get("budget_estimate"),
+            "trip_status": "failed",
+        },
         duration_ms=timer.duration_ms,
     )
 
@@ -548,6 +603,8 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
             "flight_cost": bd.get("flight_cost", 0),
             "remaining_budget": bd.get("remaining_budget", 0),
             "options": options,
+            # Phase 21: the trip as asked, priced — what the options' savings are measured from
+            "estimate": state.get("budget_estimate"),
         },
     )
     await _publish(state, {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": reason})
@@ -635,16 +692,27 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
     if draft is None:
         return {**state, "evaluator_verdict": {"passed": False, "failures": [], "retry_count": retry_count}}
 
+    # Phase 21: the plan's total must fall within the range of its estimate — as wide as the season
+    # makes prices move — and each hotel must be priced at what the search found.
+    estimate = itinerary_estimate(
+        draft,
+        state.get("flights", []),
+        state.get("hotels", []),
+        destination=state.get("destination"),
+        month=_travel_month(state),
+    )
     verdict = await EvaluatorAgent().run(
         draft=draft,
         trip_start=state.get("start_date", ""),
         trip_end=state.get("end_date", ""),
-        expected_budget_total=expected_total_cost(draft, state.get("flights", []), state.get("hotels", [])),
+        expected_budget_total=estimate.total,
         attractions=state.get("attractions", []),
         retry_count=retry_count,
         db=state.get("db"),
         trip_id=state.get("trip_id"),
         turn=state.get("turn", 1),
+        budget_range=(estimate.total_min, estimate.total_max),
+        hotels=state.get("hotels", []),
     )
     return {**state, "evaluator_verdict": verdict.model_dump()}
 
@@ -928,6 +996,7 @@ _RESULT_DEFAULTS: dict[str, Any] = {
     "replan_attempts": 0,
     "budget_decision": None,
     "budget_conflict_options": None,
+    "budget_estimate": None,
     "draft_itinerary": None,
     "builder_error": None,
     "evaluator_verdict": None,

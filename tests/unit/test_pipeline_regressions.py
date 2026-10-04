@@ -414,11 +414,12 @@ async def test_status_hands_back_the_budget_conflict_after_a_reload():
             "estimated_saving": "Additional ₹16,500",
         }
     ]
+    estimate = {"total": 39_200, "total_min": 31_400, "total_max": 47_000, "stay": "a 4-star hotel", "month": 12}
     escalate = AgentRun(
         trip_id=trip.id,
         agent_name="escalate",
         status="completed",
-        output={"reason": "Flights cost ₹18,234.", "options": options},
+        output={"reason": "Flights cost ₹18,234.", "options": options, "estimate": estimate},
     )
     earlier_run = [_run(trip.id, "flight_agent"), _run(trip.id, "orchestrator")]
     last_run = [_run(trip.id, "flight_agent"), escalate, _run(trip.id, "orchestrator", "failed")]
@@ -426,7 +427,8 @@ async def test_status_hands_back_the_budget_conflict_after_a_reload():
     with _client(trip, earlier_run + last_run) as (client, _, __):
         body = (await client.get(f"/trips/{trip.id}/status")).json()
 
-    assert body["budget_conflict"] == {"reason": "Flights cost ₹18,234.", "options": options}
+    # Phase 21: the trip as asked, priced, comes back too — what the options' amounts are measured from
+    assert body["budget_conflict"] == {"reason": "Flights cost ₹18,234.", "options": options, "estimate": estimate}
 
 
 @pytest.mark.asyncio

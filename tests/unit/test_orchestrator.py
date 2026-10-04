@@ -256,8 +256,17 @@ async def test_budget_decision_node_escalates_on_expensive_flights():
 
     assert result["budget_decision"]["decision"] == "escalate"
     assert result["budget_decision"]["remaining_budget"] == 15_000.0
-    assert result["budget_conflict_options"] is not None
-    assert len(result["budget_conflict_options"]) == 3
+    # Phase 21: three ways out priced from the trip itself, then the two plain actions
+    options = result["budget_conflict_options"]
+    assert [o["choice"] for o in options] == [
+        "cheaper_hotel",
+        "reduce_days",
+        "off_peak",
+        "cheaper_flights",
+        "increase_budget",
+    ]
+    assert all(isinstance(o["total"], int) and o["total"] > 0 for o in options[:3])
+    assert result["budget_estimate"]["total"] > 50_000  # the trip as asked does not fit: that is the conflict
     # replan_attempts not incremented on escalate
     assert result["replan_attempts"] == 0
 

@@ -28,7 +28,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -343,37 +343,70 @@ async def replan_trip(
 ) -> dict:
     """Re-plan after a budget conflict. The chosen adjustment is saved on the trip.
 
+    Phase 21: the conflict priced its options (src/ai/agents/budget_alternatives.py),
+    and the one picked is applied as it was offered — the shorter trip at the
+    length the card said, the off-season on the dates it said. A choice the
+    last conflict did not offer is refused (409). A shorter trip or a cheaper
+    stay leaves the flights as they were, so the budget check goes ahead with
+    it instead of stopping the traveller again on the same flights.
+
     "increase_budget" raises the budget to what the last flight search needs to
     pass the budget check (and by at least 25%), so the option is never a dead end.
     """
     trip = await _get_trip_or_404(trip_id, current_user.id, db)
     _ensure_not_planning(trip)
 
-    replan_attempts = 0
+    # The last word on the budget: the conflict's options, or — from before Phase 21, or with no
+    # conflict on record — the last budget check, with the fare the options are worked out from.
+    last = (
+        (
+            await db.execute(
+                select(AgentRun)
+                .where(AgentRun.trip_id == trip_id, AgentRun.agent_name.in_(("escalate", "budget_decision")))
+                .order_by(AgentRun.created_at.desc())
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    output = (last.output or {}) if last else {}
+    offered = (
+        {o.get("choice"): o for o in output.get("options") or []} if last and last.agent_name == "escalate" else None
+    )
+    option = (offered or {}).get(body.choice)
+    if option is None and (offered is not None or body.choice in ("cheaper_hotel", "off_peak")):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That way out was not offered for this trip's budget. Pick one of the options shown, or plan it again.",
+        )
+
+    replan_attempts, budget_choice = 0, None
     if body.choice == "cheaper_flights":
         replan_attempts = 1
     elif body.choice == "reduce_days":
-        new_end = trip.end_date - timedelta(days=2)
+        days = (option or {}).get("days")
+        new_end = trip.start_date + timedelta(days=days - 1) if days else trip.end_date - timedelta(days=2)
         if new_end <= trip.start_date:
             raise HTTPException(status_code=422, detail="The trip is too short to remove 2 days.")
         trip.end_date = new_end
-    else:
-        last_check = (
-            (
-                await db.execute(
-                    select(AgentRun)
-                    .where(AgentRun.trip_id == trip_id, AgentRun.agent_name == "budget_decision")
-                    .order_by(AgentRun.created_at.desc())
-                    .limit(1)
-                )
+        budget_choice = {"choice": "reduce_days", "days": (new_end - trip.start_date).days + 1}
+    elif body.choice == "cheaper_hotel":
+        budget_choice = {"choice": "cheaper_hotel", "tier": option.get("tier")}
+    elif body.choice == "off_peak":
+        start, end = date.fromisoformat(option["start_date"]), date.fromisoformat(option["end_date"])
+        if start <= date.today():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Those dates have passed. Plan the trip again for new options.",
             )
-            .scalars()
-            .first()
-        )
-        flight_cost = (last_check.output or {}).get("flight_cost") or 0 if last_check else 0
-        trip.budget = max(round(trip.budget * 1.25, 2), viable_budget(flight_cost))
+        trip.start_date, trip.end_date = start, end
+    else:
+        flight_cost = output.get("flight_cost") or 0
+        target = (option or {}).get("budget") or max(round(trip.budget * 1.25, 2), viable_budget(flight_cost))
+        trip.budget = target
 
-    state = {**_trip_state(trip), "replan_attempts": replan_attempts}
+    state = {**_trip_state(trip), "replan_attempts": replan_attempts, "budget_choice": budget_choice}
     await _start_run(
         trip,
         db,
@@ -566,7 +599,7 @@ async def get_trip_status(
                 "retryable": {"flight_agent": true, ...}
             },
             "run": {"turn": 2, "refinement_type": "targeted_hotel", ...} | null,
-            "budget_conflict": {"reason": "...", "options": [...]} | null,
+            "budget_conflict": {"reason": "...", "options": [...], "estimate": {...} | null} | null,
             "failure_reason": "..." | null
         }
 
@@ -597,7 +630,11 @@ async def get_trip_status(
         previous_end = run_ends[-2] + 1 if len(run_ends) > 1 else 0
         latest_run = {run.agent_name: run.output or {} for run in since_last_end or runs[previous_end:]}
         if (output := latest_run.get("escalate")) is not None:
-            conflict = {"reason": output.get("reason", ""), "options": output.get("options", [])}
+            conflict = {
+                "reason": output.get("reason", ""),
+                "options": output.get("options", []),
+                "estimate": output.get("estimate"),  # Phase 21: the trip as asked, priced
+            }
         elif (output := latest_run.get("nothing_found")) is not None:
             failure_reason = output.get("reason")
         elif (output := latest_run.get("builder_failed")) is not None:

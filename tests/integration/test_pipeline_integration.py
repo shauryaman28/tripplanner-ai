@@ -316,11 +316,22 @@ async def test_a_trip_typed_in_devanagari_exports_in_devanagari(db_session):
 
 
 @pytest.mark.asyncio
-async def test_budget_conflict_then_replan_end_to_end(db_session):
-    """Phase 10: ₹40,000 budget, ₹28,000 direct flights → escalate; "cheaper_flights" → completes."""
+def _dear_flights(_name: str, params: dict):
+    """₹30,000 direct, ₹15,000 with connections: on ₹40,000 for two over three days, a conflict in any month.
 
-    def flight_tool(_name: str, params: dict):
-        return [flight(15_000.0 if params.get("max_stops", 1) >= 2 else 28_000.0)]
+    (At ₹28,000 the trip as asked comes to exactly ₹40,000 at off-season prices — a trip that fits is not
+    stopped since Phase 21 — and the test would pass or fail with the month it runs in.)
+    """
+    return [flight(15_000.0 if params.get("max_stops", 1) >= 2 else 30_000.0)]
+
+
+@pytest.mark.asyncio
+async def test_budget_conflict_then_replan_end_to_end(db_session):
+    """Phase 10: ₹40,000 budget, ₹30,000 direct flights → escalate; "cheaper_flights" → completes.
+
+    Phase 21: the conflict prices the trip as asked and three ways out, with nothing searched for them.
+    """
+    flight_tool = _dear_flights
 
     async with _stack(flight_tool) as (client, events, tools):
         await _login(client)
@@ -330,17 +341,30 @@ async def test_budget_conflict_then_replan_end_to_end(db_session):
         runs = await _run_finished(client, trip_id, orchestrator_rows=1)
 
         decision = next(r for r in runs if r["agent_name"] == "budget_decision")
-        assert decision["output"]["decision"] == "escalate" and decision["output"]["remaining_budget"] == 12_000
+        assert decision["output"]["decision"] == "escalate" and decision["output"]["remaining_budget"] == 10_000
         assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "failed"
         tools["hotel"].assert_not_awaited()  # no point searching hotels the budget cannot cover
+        tools["activities"].assert_not_awaited()  # …and the ways out below were priced without a search
 
         seen = [e.get("event") or e["agent"] for e in events]
         assert seen == ["planning_started", "flight_agent", "budget_conflict", "planning_failed"]
         conflict = events[2]
-        assert [o["choice"] for o in conflict["options"]] == ["cheaper_flights", "reduce_days", "increase_budget"]
+        choices = [o["choice"] for o in conflict["options"]]
+        assert choices[:2] == ["cheaper_hotel", "reduce_days"] and choices[-2:] == [
+            "cheaper_flights",
+            "increase_budget",
+        ]
+        priced = [o for o in conflict["options"] if o["choice"] in ("cheaper_hotel", "reduce_days", "off_peak")]
+        assert all(isinstance(o["total"], int) and o["total"] % 100 == 0 for o in priced)  # whole rupees, said round
+        estimate = conflict["estimate"]
+        assert estimate["total"] > 40_000 and estimate["total_min"] < estimate["total"] < estimate["total_max"]
         # the same options are still there for a client that reloads the page and missed the event
         status = (await client.get(f"/trips/{trip_id}/status")).json()
-        assert status["budget_conflict"] == {"reason": conflict["reason"], "options": conflict["options"]}
+        assert status["budget_conflict"] == {
+            "reason": conflict["reason"],
+            "options": conflict["options"],
+            "estimate": estimate,
+        }
 
         # a failed trip has nothing to refine
         with patch("app.api.routes.trips.classify_refinement", AsyncMock()):
@@ -358,6 +382,36 @@ async def test_budget_conflict_then_replan_end_to_end(db_session):
         assert (await client.get(f"/trips/{trip_id}")).json()["status"] == "completed"
         assert (await client.get(f"/trips/{trip_id}/status")).json()["budget_conflict"] is None
         assert (await client.get(f"/trips/{trip_id}/itinerary")).json()["total_cost"] == 15_000 + 2 * 4_500
+
+
+@pytest.mark.asyncio
+async def test_a_shorter_trip_picked_in_a_conflict_goes_ahead_on_the_same_flights(db_session):
+    """Phase 21: the flights are still ₹30,000 of ₹40,000 — the check goes ahead with the traveller's choice."""
+    async with _stack(_dear_flights) as (client, events, _):
+        await _login(client)
+        trip_id = await _create_trip(client, budget=40_000)
+        await client.post(f"/trips/{trip_id}/plan")
+        await _run_finished(client, trip_id, orchestrator_rows=1)
+        offered = next(e for e in events if e.get("event") == "budget_conflict")["options"]
+        shorter = next(o for o in offered if o["choice"] == "reduce_days")
+        assert shorter["days"] == 2 and shorter["description"] == "Make it 2 days instead of 3"
+
+        resp = await client.post(f"/trips/{trip_id}/replan", json={"choice": "reduce_days"})
+        assert resp.json() == {"status": "replanning_started", "trip_id": trip_id, "choice": "reduce_days"}
+        runs = await _run_finished(client, trip_id, orchestrator_rows=2)
+
+        checks = [r["output"] for r in runs if r["agent_name"] == "budget_decision"]
+        assert [check["decision"] for check in checks] == ["escalate", "continue"]
+        assert checks[1]["flight_cost"] == 30_000  # the same flights…
+        assert (
+            checks[1]["reason"]
+            == "Flights cost ₹30,000 — 75% of the budget — going ahead with the shorter trip you chose."
+        )
+        trip = (await client.get(f"/trips/{trip_id}")).json()
+        assert (trip["status"], trip["end_date"]) == ("completed", str(START + timedelta(days=1)))
+        days = (await client.get(f"/trips/{trip_id}/itinerary")).json()["structured_data"]["days"]
+        assert len(days) == 2
+        assert (await client.get(f"/trips/{trip_id}/status")).json()["budget_conflict"] is None
 
 
 @pytest.mark.asyncio

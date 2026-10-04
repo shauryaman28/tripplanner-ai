@@ -9,7 +9,9 @@ import {
   BedDouble,
   CalendarDays,
   CalendarMinus,
+  CalendarRange,
   CircleAlert,
+  CircleCheck,
   MapPin,
   MessageCircleQuestion,
   Plane,
@@ -56,7 +58,63 @@ const REPLAN_ICONS: Record<ReplanChoice, LucideIcon> = {
   cheaper_flights: Plane,
   reduce_days:     CalendarMinus,
   increase_budget: Wallet,
+  cheaper_hotel:   BedDouble,
+  off_peak:        CalendarRange,
 };
+
+// The ways out that change the trip itself, priced (Phase 21); the others are plain actions.
+const PRICED_CHOICES = new Set<ReplanChoice>(["cheaper_hotel", "reduce_days", "off_peak"]);
+
+/** One way to bring the trip within the budget: what changes, what it would come to, and whether that fits. */
+function AlternativeCard({
+  option,
+  budget,
+  onPick,
+  disabled,
+}: {
+  option: BudgetConflictOption;
+  budget: number | null;
+  onPick: () => void;
+  disabled: boolean;
+}) {
+  const Icon = REPLAN_ICONS[option.choice] ?? Wallet;
+  const priced = typeof option.total === "number";
+  const over = priced && budget !== null ? (option.total as number) - budget : null;
+  const saving = option.flight_saving
+    ? `Flights about ${formatINR(option.flight_saving)} less`
+    : option.saving
+      ? `About ${formatINR(option.saving)} less than as asked`
+      : null;
+  return (
+    <button
+      onClick={onPick}
+      disabled={disabled}
+      data-alternative={option.choice}
+      className="focus-ring group flex flex-col rounded-2xl border border-ink-200 bg-white p-4 text-left transition
+                 hover:-translate-y-0.5 hover:border-ink-900 hover:shadow-lift disabled:pointer-events-none disabled:opacity-50"
+    >
+      <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-700 transition-colors group-hover:bg-ink-900 group-hover:text-white">
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <p className="mt-3 text-sm font-medium leading-snug text-ink-900">{option.description}</p>
+      {priced ? (
+        <>
+          <p className="mt-2 text-lg font-semibold tabular-nums tracking-tight text-ink-900">About {formatINR(option.total as number)}</p>
+          {/* a status is said in words, not by its colour alone */}
+          {over !== null && (
+            <p className={`mt-0.5 inline-flex items-center gap-1 text-xs font-medium ${over <= 0 ? "text-good-ink" : "text-warn-ink"}`}>
+              {over <= 0 ? <CircleCheck className="h-3.5 w-3.5" aria-hidden /> : <TriangleAlert className="h-3.5 w-3.5" aria-hidden />}
+              {over <= 0 ? "Within your budget" : `${formatINR(over)} over budget`}
+            </p>
+          )}
+          {saving && <p className="mt-1 text-xs text-ink-500">{saving}</p>}
+        </>
+      ) : (
+        <p className="mt-1 text-xs text-ink-500">{option.estimated_saving}</p>
+      )}
+    </button>
+  );
+}
 
 const SEARCH_ICONS: Record<string, LucideIcon> = {
   flight_agent:     Plane,
@@ -250,6 +308,9 @@ export function FailedStage({
   disabled: boolean;
 }) {
   if (conflict) {
+    const estimate = conflict.estimate ?? null;
+    const alternatives = conflict.options.filter((option) => PRICED_CHOICES.has(option.choice));
+    const actions = conflict.options.filter((option) => !PRICED_CHOICES.has(option.choice));
     return (
       <div className="card animate-rise p-7 sm:p-10" aria-label="Budget options">
         <p className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-3 py-1.5 text-xs font-medium text-warn-ink">
@@ -260,27 +321,50 @@ export function FailedStage({
           The flights don&apos;t leave enough for the rest
         </h2>
         <p className="mt-2 max-w-prose text-ink-600">{conflict.reason}</p>
+        {estimate && (
+          <p className="mt-3 max-w-prose text-sm text-ink-600" data-estimate>
+            With {estimate.stay} and things to do, the trip as asked comes to about{" "}
+            <span className="font-semibold text-ink-900">{formatINR(estimate.total)}</span> — likely between{" "}
+            {formatINR(estimate.total_min)} and {formatINR(estimate.total_max)} once booked. {estimate.about}
+          </p>
+        )}
 
-        <div className="mt-7 grid gap-3 empty:hidden sm:grid-cols-3">
-          {conflict.options.map((option) => {
-            const Icon = REPLAN_ICONS[option.choice] ?? Wallet;
-            return (
-              <button
-                key={option.choice}
-                onClick={() => onReplan(option)}
-                disabled={disabled}
-                className="focus-ring group rounded-2xl border border-ink-200 bg-white p-4 text-left transition
-                           hover:-translate-y-0.5 hover:border-ink-900 hover:shadow-lift disabled:pointer-events-none disabled:opacity-50"
-              >
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-100 text-ink-700 transition-colors group-hover:bg-ink-900 group-hover:text-white">
-                  <Icon className="h-[18px] w-[18px]" aria-hidden />
-                </span>
-                <p className="mt-3 text-sm font-medium leading-snug text-ink-900">{option.description}</p>
-                <p className="mt-1 text-xs text-ink-500">{option.estimated_saving}</p>
-              </button>
-            );
-          })}
-        </div>
+        {alternatives.length > 0 && (
+          <>
+            <p className="eyebrow mt-7">Ways to bring it within {estimate ? formatINR(estimate.budget) : "the budget"}</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {alternatives.map((option) => (
+                <AlternativeCard
+                  key={option.choice}
+                  option={option}
+                  budget={estimate?.budget ?? null}
+                  onPick={() => onReplan(option)}
+                  disabled={disabled}
+                />
+              ))}
+            </div>
+          </>
+        )}
+        {/* the plain actions; a conflict recorded before Phase 21 carries no amounts, and its cards show its words */}
+        {actions.length > 0 && (
+          <div className={`flex flex-wrap gap-2 ${alternatives.length > 0 ? "mt-4" : "mt-7"}`}>
+            {actions.map((option) => {
+              const Icon = REPLAN_ICONS[option.choice] ?? Wallet;
+              return (
+                <button
+                  key={option.choice}
+                  onClick={() => onReplan(option)}
+                  disabled={disabled}
+                  title={option.estimated_saving}
+                  className="btn-secondary gap-2 rounded-xl px-3.5 py-2 text-sm"
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {option.description}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <p className="mt-5 text-sm text-ink-500">
           {conflict.options.length > 0 ? "Or describe" : "Describe"} a different trip to the assistant.
         </p>
