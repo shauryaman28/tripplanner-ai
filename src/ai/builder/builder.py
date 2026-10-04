@@ -15,6 +15,9 @@ Phase 18: coordinates, category and rating are attached to every slot from the
 Phase 20: the model's reply can be streamed — `on_token` receives each piece as it
           is written. Nothing changes about what happens to the finished reply:
           it is parsed and checked whole, exactly as before.
+Phase 22: the DestinationIntelligenceAgent's local tips are attached to the checked
+          draft under "local_intelligence" — by code. The model that writes the
+          plan never sees them and cannot write them.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from datetime import date
 from pydantic import BaseModel, ValidationError, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai.itinerary import FREE_TIME, SLOTS
+from src.ai.itinerary import FREE_TIME, SLOTS, LocalIntelligence
 from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -86,6 +89,7 @@ class ItineraryDraft(BaseModel):
     days: list[DaySchedule]
     total_cost: float
     currency: str = "INR"
+    local_intelligence: LocalIntelligence | None = None  # Phase 22 — set by ItineraryBuilder.run, never by the model
 
 
 class BuilderError(BaseModel):
@@ -353,6 +357,7 @@ async def build_itinerary(
         return BuilderError(error=f"Failed to parse builder JSON: {exc}", code="JSON_PARSE_ERROR")
     if not isinstance(parsed, dict):
         return BuilderError(error="Builder reply was not a JSON object.", code="JSON_PARSE_ERROR")
+    parsed.pop("local_intelligence", None)  # only the DestinationIntelligenceAgent's output goes there
 
     # Shape first: every check below can then rely on it instead of guarding against
     # a slot that is a string or a day that is a list.
@@ -377,6 +382,18 @@ async def build_itinerary(
     return ItineraryDraft(**draft)
 
 
+def _checked_intelligence(local_intelligence: dict | None) -> LocalIntelligence | None:
+    """The agent's output as the draft holds it. Anything that is not its shape is left out, not fatal."""
+    if not local_intelligence:
+        return None
+    try:
+        intelligence = LocalIntelligence.model_validate(local_intelligence)
+    except ValidationError:
+        logger.warning("Local intelligence did not have the expected shape — left out of the itinerary")
+        return None
+    return None if intelligence.is_empty() else intelligence
+
+
 class ItineraryBuilder:
     async def run(
         self,
@@ -388,13 +405,18 @@ class ItineraryBuilder:
         trip_id: uuid.UUID | None = None,
         turn: int = 1,
         on_token: OnToken | None = None,
+        local_intelligence: dict | None = None,
     ) -> dict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1.
 
         Phase 20: `on_token` receives the model's reply piece by piece while it is written.
+        Phase 22: `local_intelligence` (the DestinationIntelligenceAgent's output) is put into the
+        draft under that key once the draft has passed its checks.
         """
         async with timed_run() as timer:
             result = await build_itinerary(trip_meta, flights, hotels, attractions, on_token=on_token)
+            if isinstance(result, ItineraryDraft):
+                result.local_intelligence = _checked_intelligence(local_intelligence)
 
         if isinstance(result, BuilderError):
             output = {"draft": None, "error": result.model_dump()}
@@ -413,6 +435,7 @@ class ItineraryBuilder:
                     "flights_count": len(flights),
                     "hotels_count": len(hotels),
                     "attractions_count": len(attractions),
+                    "local_intelligence": bool(local_intelligence),
                 },
                 output=output,
                 duration_ms=timer.duration_ms,

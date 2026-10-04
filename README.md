@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 21 / 50 — Smarter Budget Intelligence**
+**Status: Phase 22 / 50 — Destination Intelligence Agent**
 
 ---
 
@@ -14,9 +14,9 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
                          │                      │
                     JWT auth              ┌─────┼─────────────┐
                     SSE stream            ▼     ▼             ▼
-                    Redis pub/sub   FlightAgent HotelAgent ActivitiesAgent
-                                          │     │             │
-                                          └─────┴─────────────┘
+                    Redis pub/sub   FlightAgent HotelAgent ActivitiesAgent   DestinationIntelligenceAgent
+                                          │     │             │              (local tips, from what the
+                                          └─────┴─────────────┘               model knows — no tools)
                                                 │
                                         MCP Server (5 tools)
                          Duffel · LiteAPI · OpenTripMap · OpenWeatherMap
@@ -30,7 +30,7 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
                                         SSE → Frontend
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
-itinerary (cover, day by day, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
+itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
 Text in the scripts of India is drawn in Noto and shaped by HarfBuzz.
 ```
 
@@ -87,17 +87,17 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 624 tests
+# Unit + contract tests (no Docker, no network) — 675 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 21 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 23 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser tests (Playwright) — 37 tests: 5 end-to-end flows, 3 for Phase 21's priced budget conflict, 5 for
-# Phase 20's polish (live draft, refinement marks, retry, 375 px), 16 for the live draft's reader, 8 for the change
-# summary. Starts its own stack: a stub backend
+# Browser tests (Playwright) — 47 tests: 5 end-to-end flows, 10 for Phase 22's local tips, 3 for Phase 21's priced
+# budget conflict, 5 for Phase 20's polish (live draft, refinement marks, retry, 375 px), 16 for the live draft's
+# reader, 8 for the change summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
 # `tripplanner_db_e2e` database, and a second Next.js dev server on :3100.
 cd src/frontend
@@ -117,7 +117,7 @@ while your dev servers (:8000 / :3000) are up and never touches dev data.
 ```
 tripplanner-ai/
 ├── src/
-│   ├── frontend/                        ← Phases 17–21: Next.js 14 App Router
+│   ├── frontend/                        ← Phases 17–22: Next.js 14 App Router
 │   │   ├── package.json
 │   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
 │   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
@@ -126,6 +126,7 @@ tripplanner-ai/
 │   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, PDF download, budget conflict
 │   │   ├── e2e/polish.spec.ts           ← Phase 20: live draft, refinement marks, retry, every view at 375 px
 │   │   ├── e2e/budget.spec.ts           ← Phase 21: a budget conflict priced, and each way out planned
+│   │   ├── e2e/tips.spec.ts             ← Phase 22: the Local tips accordion; no section when there are no tips
 │   │   ├── e2e/changes.spec.ts          ← what the assistant says changed (pure function tests)
 │   │   ├── e2e/draft.spec.ts            ← the live draft's partial-JSON reader (pure function tests)
 │   │   └── src/
@@ -139,12 +140,13 @@ tripplanner-ai/
 │   │       │       └── [id]/page.tsx    ← the plan, the assistant, live progress
 │   │       ├── components/              ← ItineraryView, CostSummary, DayCard, ItineraryMap (Phase 18),
 │   │       │                              DownloadPdfButton + Toast (Phase 19), LiveDraft, ProgressSheet,
-│   │       │                              TripStages (Phase 20), AgentProgressPanel, MessageThread,
-│   │       │                              ChatInput, AppHeader, Brand, ui
+│   │       │                              TripStages (Phase 20), LocalTips (Phase 22), AgentProgressPanel,
+│   │       │                              MessageThread, ChatInput, AppHeader, Brand, ui
 │   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), map.ts (pins, routes,
 │   │                                      day colours), changes.ts (what a change request changed, and
 │   │                                      which parts), draft.ts (the itinerary while it is written),
-│   │                                      useWideScreen.ts, download.ts, places.ts, format.ts, types.ts
+│   │                                      tips.ts (local tips), useWideScreen.ts, download.ts, places.ts,
+│   │                                      format.ts, types.ts
 │   ├── backend/
 │   │   ├── Dockerfile
 │   │   └── app/
@@ -196,29 +198,30 @@ tripplanner-ai/
 │       │   ├── evaluator.py             ← Phase 11: 4 deterministic itinerary checks + retry routing;
 │       │   │                                  Phase 21: the total within the estimate's range, hotels at the searched price
 │       │   ├── refinement_classifier.py ← Phase 15: which agents a follow-up message re-runs
+│       │   ├── destination_intelligence.py ← Phase 22: local tips from what a model knows — no tools
 │       │   └── preference_extractor.py  ← Phase 16: learning lasting preferences from trips
 │       ├── builder/
 │       │   └── builder.py               ← Phase 12: ItineraryBuilder (Groq gpt-oss-120b), data-scope + budget-math validation;
 │       │                                      Phase 20: streams its reply
 │       └── orchestrator/
-│           └── orchestrator.py          ← Phase 9–20: full graph with preference injection, refinement & loops,
-│                                              builder_token streaming, retry of one search
+│           └── orchestrator.py          ← Phase 9–22: full graph with preference injection, refinement & loops,
+│                                              builder_token streaming, retry of one search, local tips
 ├── migrations/                          ← Alembic migrations
 │   └── versions/
 │       ├── 001_initial_schema.py        ← All 5 tables + pgvector
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (616 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (667 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 21 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 23 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–21) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–22) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -257,6 +260,7 @@ tripplanner-ai/
 | 19 | PDF Export — ReportLab, static map from OpenStreetMap tiles ([docs/phase19_build_log.md](docs/phase19_build_log.md)) | ✅ Done | 94 unit + 1 integration + 1 Playwright E2E |
 | 20 | Frontend polish — streamed itinerary, refinement marks, retry, phone layout; the PDF in the scripts of India ([docs/phase20_build_log.md](docs/phase20_build_log.md)) | ✅ Done | 120 unit + 3 integration + 21 Playwright E2E |
 | 21 | Smarter budget intelligence — seasons, a confidence range, a budget conflict priced three ways ([docs/phase21_build_log.md](docs/phase21_build_log.md)) | ✅ Done | 43 unit + 1 contract + 1 integration + 3 Playwright E2E |
+| 22 | Destination Intelligence Agent — local tips from what a model knows, in an accordion and in the PDF ([docs/phase22_build_log.md](docs/phase22_build_log.md)) | ✅ Done | 51 unit + 2 integration + 10 Playwright E2E |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
@@ -271,7 +275,7 @@ tripplanner-ai/
 | Variable | Service | Sign-up |
 |---|---|---|
 | `GOOGLE_API_KEY` | Gemini — intent parsing, refinement classifier, embeddings | https://aistudio.google.com/apikey |
-| `GROQ_API_KEY` | Groq — itinerary builder, preference extraction; also answers Gemini's prompts when Gemini is unavailable | https://console.groq.com |
+| `GROQ_API_KEY` | Groq — itinerary builder, preference extraction, local tips; also answers Gemini's prompts when Gemini is unavailable | https://console.groq.com |
 | `DUFFEL_ACCESS_TOKEN` | Flights (a test-mode token returns sandbox offers) | https://duffel.com |
 | `LITEAPI_API_KEY` | Hotels (the free sandbox key is enough) | https://liteapi.travel |
 | `OPENTRIPMAP_API_KEY` | Attractions | https://opentripmap.io |
@@ -311,7 +315,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Auth | JWT (python-jose + passlib/bcrypt) |
 | SSE | sse-starlette + Redis pub/sub |
 | Agents | LangGraph, MCP SDK |
-| LLMs | Gemini Flash (intent parsing, refinement), Groq gpt-oss-120b (itinerary, preference extraction) |
+| LLMs | Gemini Flash (intent parsing, refinement), Groq gpt-oss-120b (itinerary, preference extraction, local tips) |
 | Database | PostgreSQL 16 + pgvector |
 | Cache | Redis 7 |
 | ORM | SQLModel + Alembic |

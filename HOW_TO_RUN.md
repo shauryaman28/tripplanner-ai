@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–21
+# How to Run & Verify — Phases 1–22
 
 ## What changed vs the original codebase?
 
@@ -20,6 +20,7 @@
 | 19 | `trips.py` (`GET /trips/{id}/export/pdf`), `deps.py`, `config.py` (`MAP_TILE_URL`), `main.py` (CORS exposes the download's headers), `requirements.txt` (`reportlab`, `pillow`), `ItineraryView.tsx`, `lib/api.ts`, `playwright.config.ts`, `tests/fakes.py` — see `docs/phase19_build_log.md` | `src/backend/app/pdf/` (`export.py`, `plan.py`, `static_map.py`, `document.py`, `flowables.py`, `formatting.py`, `theme.py`, `fonts/`), `DownloadPdfButton.tsx`, `Toast.tsx`, `lib/download.ts`, `tests/unit/test_phase19_pdf.py` |
 | 20 | `builder.py` (streams), `orchestrator.py` (`builder_token`, `retry_search`), `conversation.py`, `trips.py` (`POST /trips/{id}/retry`; `/status` gains `errors`, `retryable`, `run`; `filename*`), `requirements.txt` (`reportlab[shaping]`), `document.py`, `flowables.py`, `build_fonts.py`, the trip page and its components, `tests/e2e/stub_backend.py` — see `docs/phase20_build_log.md` | `src/ai/utils/failures.py`, `src/backend/app/pdf/scripts.py`, `pdf/fonts/noto/`, `LiveDraft.tsx`, `ProgressSheet.tsx`, `TripStages.tsx`, `lib/draft.ts`, `lib/useWideScreen.ts`, `tests/unit/test_phase20_streaming.py`, `tests/unit/test_phase20_scripts.py`, `e2e/draft.spec.ts`, `e2e/polish.spec.ts` |
 | 21 | `tools.py` + `models.py` (`estimate_budget`: destination, month, nights → a range and the season), `evaluator.py`, `orchestrator.py` (a conflict priced; a trip that fits goes ahead; a picked way out is gone ahead with), `trips.py` (`/replan` applies the option as offered; `/status` returns its estimate), `TripStages.tsx`, the trip page, `types.ts`, `tests/e2e/stub_backend.py` — see `docs/phase21_build_log.md` | `src/ai/pricing.py`, `src/ai/agents/budget_alternatives.py`, `tests/unit/test_phase21_budget.py`, `e2e/budget.spec.ts` |
+| 22 | `orchestrator.py` (the fourth agent beside the hotel and activities searches; tips carried by refinements), `builder.py` (tips attached to the checked draft), `itinerary.py`, `pdf/plan.py` + `document.py` (a Local tips page), `ItineraryView.tsx`, `lib/changes.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase22_build_log.md` | `src/ai/agents/destination_intelligence.py`, `prompts/destination_intelligence_v1.md`, `LocalTips.tsx`, `lib/tips.ts`, `tests/unit/test_phase22_intelligence.py`, `e2e/tips.spec.ts` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -300,7 +301,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–21 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–22 check
 
 Run from the **project root**:
 
@@ -308,7 +309,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **624 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
+Expected: **675 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -316,7 +317,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **21 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **23 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -500,7 +501,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 37 passed
+npx playwright test                 # 47 passed
 ```
 
 Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
@@ -631,6 +632,43 @@ chose". The off-season card moves the trip to its dates and searches the flights
 
 ---
 
+## Step 20 — Verify Phase 22: local tips
+
+Plan a trip in the browser (Step 16) — say Jaipur, three days, about six weeks out. Under the day
+cards, above the map, is **Local tips**: five sections — Getting around, Local customs, Tourist traps,
+Best times to visit, Staying safe — every one closed. Click a heading: it opens; click again: it
+closes; several can be open at once. Under "Best times to visit", a place that is one of the plan's
+stops is marked "In your plan · Day 1 · Evening". The line under the heading says where this comes
+from: the model's own knowledge of the place, not a live source.
+
+**The fourth agent, in the run log** (`$TRIP_ID`, `$TOKEN` as before):
+
+```bash
+curl -s "http://localhost:8000/trips/$TRIP_ID/runs" -H "Authorization: Bearer $TOKEN" | python -c "
+import json, sys
+from datetime import datetime, timedelta
+for run in json.load(sys.stdin):
+    if run['agent_name'] in ('flight_agent', 'hotel_agent', 'activities_agent', 'destination_intelligence'):
+        end = datetime.fromisoformat(run['created_at'])
+        start = end - timedelta(milliseconds=run['duration_ms'])
+        print(f\"{run['agent_name']:26} {start:%H:%M:%S.%f} → {end:%H:%M:%S.%f}  {run['status']}\")"
+```
+
+`destination_intelligence` starts with `hotel_agent` and `activities_agent` — within a few
+milliseconds — and ends inside their span: the three ran side by side. Its row's `input` is the trip
+(destination, month, days, travellers, interests) and the model; its `output` has `"tool_calls": 0`
+and the tips, which are the itinerary's `structured_data.local_intelligence`:
+
+```bash
+curl -s "http://localhost:8000/trips/$TRIP_ID/itinerary" -H "Authorization: Bearer $TOKEN" \
+  | python -c "import json, sys; print(json.dumps(json.load(sys.stdin)['structured_data']['local_intelligence'], indent=1, ensure_ascii=False))"
+```
+
+Ask for a change ("a cheaper hotel"): the tips stay, and `runs` shows no second
+`destination_intelligence` row. **Download PDF**: a "Local tips" page follows the days.
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -673,3 +711,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **17 (Frontend & SSE)** | Reload a planned trip → itinerary still shown. Stop the backend mid-plan → the panel shows "Reconnecting…" with the last known state; restart → the interrupted trip is marked `failed` and the page reports it through `GET /status`. Timestamps end in `Z`; `OPTIONS /trips` from `http://localhost:3000` is allowed, from any other origin it is not. `npx playwright test` → 34 passed. |
 | **20 (Polish)** | Reload the page while the itinerary is being written → no draft (a page that joins late waits for the next build's `seq` 0), and the checked plan still arrives. A streamed reply that fails its checks is never saved — `test_a_streamed_reply_that_is_not_valid_is_never_saved` makes every reply invalid. Delete the trip's saved state (`docker exec tripplanner_redis redis-cli DEL trip:$TRIP_ID:planning_state`) and `POST /retry {"agent": "hotel_agent"}` → `409` "This plan is too old to retry a single search". Retry a search while a run is in flight → `409`. At 375 px open the progress sheet → "Ask for a change" hides until it is closed. Uninstall `uharfbuzz` (`pip uninstall uharfbuzz`) and export a Devanagari trip → the letters print unjoined, and `pytest tests/unit/test_phase20_scripts.py` fails on "HarfBuzz is installed". |
 | **21 (Budget)** | `estimate_budget(…, destination="Goa", month=7)` → `season='off-peak'`, a ±10% range and no off-season price: July is the off-season. A conflict's alternatives are worked out without searching: in the run's `agent_runs`, no `hotel_agent` or `activities_agent` row comes before `escalate`. `POST /replan {"choice": "off_peak"}` on a conflict that did not offer it → `409`. Pick the shorter trip → the second `budget_decision` row is `continue`, "going ahead with the shorter trip you chose", though the flights are the same share of the budget. `pytest tests/unit/test_phase21_budget.py -k misquoted` → a ₹4,000 quote for a ₹4,500 hotel is caught, though the total is inside a peak season's ±20%. |
+| **22 (Local tips)** | `cd src/frontend && npx playwright test e2e/tips.spec.ts --headed`: for "Pondicherry" the stand-in model never answers → the plan is complete, there is no Local tips section and no error anywhere on the page; for "Gokarna" it answers the second time → no tips with the plan, then they arrive with the first change and the assistant says "Local tips added". `pytest tests/unit/test_phase22_intelligence.py -k whatever_goes_wrong -v` → a rate limit, a timeout, a reply that is not JSON, a place the model does not know: each is no tips and a code, never an exception. In `GET /trips/{id}/runs` of a plan made that way, only the `destination_intelligence` row is `failed`; the trip is `completed`. `-k cannot_write` → a `local_intelligence` the plan's own model writes into its reply is dropped. |

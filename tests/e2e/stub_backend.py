@@ -18,6 +18,8 @@ drive one situation:
                                                  whose shorter trip and 3-star stay both fit (Phase 21)
     Hampi, Badami                                the hotel search is down; it answers when retried
     Kaza                                         no airport is known for it: the flight search fails, every time
+    Pondicherry                                  the local-tips model does not answer: a plan without tips (Phase 22)
+    Gokarna                                      no local tips with the plan; they come with the first change to it
     Shimla, Manali                               every search is down; they answer when the trip is retried
     anywhere else                                everything is found; a second hotel search finds a different hotel
 
@@ -28,9 +30,11 @@ so tests do not disturb each other and a stub server left running behaves the
 same on the next run.
 """
 
+import json
 import os
 import sys
 from collections import Counter
+from unittest.mock import patch
 
 import uvicorn
 
@@ -99,7 +103,19 @@ if __name__ == "__main__":
             return down("attraction")
         return ATTRACTIONS
 
-    with network_stubs(flight_tool=flight_tool, hotel_tool=hotel_tool) as tools:
+    TIPS_LATE = {"Gokarna"}
+
+    async def tips_model(system: str, user_prompt: str) -> str:
+        """The DestinationIntelligenceAgent's model (Phase 22): tests/fakes.py's, late for some destinations."""
+        facts = json.loads(user_prompt)
+        if facts["destination"] in TIPS_LATE and first_of_a_pair("tips", facts, "destination", "month"):
+            raise RuntimeError("Error code: 503 - the model is not answering")
+        return await fakes.fake_intelligence_llm(system, user_prompt)
+
+    with (
+        network_stubs(flight_tool=flight_tool, hotel_tool=hotel_tool) as tools,
+        patch("src.ai.agents.destination_intelligence._call_llm", tips_model),
+    ):
         tools["activities"].side_effect = activities_tool
         from app.main import app
 

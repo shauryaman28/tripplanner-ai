@@ -11,6 +11,7 @@ import CostSummary from "./CostSummary";
 import DayCard from "./DayCard";
 import DownloadPdfButton from "./DownloadPdfButton";
 import type { MapFocus } from "./ItineraryMap";
+import LocalTips from "./LocalTips";
 
 // Leaflet touches `window` at import time, so the map only ever loads in the browser.
 const ItineraryMap = dynamic(() => import("./ItineraryMap"), {
@@ -108,6 +109,9 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
           </li>
         ))}
       </ol>
+
+      {/* Local tips (Phase 22) — nothing at all when the itinerary has none. */}
+      <LocalTips intelligence={data.local_intelligence} days={data.days} destination={trip?.destination ?? null} />
 
       {/* Map (Phase 18). It draws the stops, so it waits with them. */}
       <div ref={mapRef} id="trip-map" className={`transition-opacity duration-300 ${section === "activities" ? "opacity-60" : ""}`}>

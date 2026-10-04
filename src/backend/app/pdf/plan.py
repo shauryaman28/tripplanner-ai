@@ -127,6 +127,29 @@ class Costs:
 
 
 @dataclass(frozen=True)
+class LocalTips:
+    """The itinerary's local tips (Phase 22), as the page's "Local tips" section shows them."""
+
+    transport: str | None
+    customs: tuple[str, ...]
+    traps: tuple[str, ...]
+    best_times: tuple[tuple[str, str], ...]  # (place, when to go)
+    safety: tuple[str, ...]
+
+
+# The section headings, in the page's order (lib/tips.ts — a test keeps the two in step).
+TIP_SECTIONS = (
+    ("local_transport", "Getting around"),
+    ("cultural_norms", "Local customs"),
+    ("tourist_traps", "Tourist traps"),
+    ("best_times", "Best times to visit"),
+    ("safety_tips", "Staying safe"),
+)
+# A card cannot run on to the next page, so however much an itinerary holds, this much is printed.
+MAX_TIPS_PRINTED = 8
+
+
+@dataclass(frozen=True)
 class TripPlan:
     destination: str
     start_date: date
@@ -136,6 +159,7 @@ class TripPlan:
     interests: tuple[str, ...]
     days: tuple[Day, ...]
     costs: Costs
+    tips: LocalTips | None = None
 
     @property
     def nights(self) -> int:
@@ -251,6 +275,37 @@ def _read_day(raw: dict, index: int) -> Day:
     )
 
 
+def _read_tips(raw: object) -> LocalTips | None:
+    """`structured_data["local_intelligence"]` → the tips, or None when there is nothing to print.
+
+    Read as forgivingly as the rest: a list where a sentence should be, or an
+    entry that is not text, is left out rather than failing the export.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    def lines(key: str) -> tuple[str, ...]:
+        items = raw.get(key)
+        found = [text for item in (items if isinstance(items, list) else []) if (text := _text(item))]
+        return tuple(found[:MAX_TIPS_PRINTED])
+
+    places = raw.get("best_times")
+    best_times = [
+        (name, when)
+        for place, advice in (places.items() if isinstance(places, dict) else [])
+        if (name := _text(place)) and (when := _text(advice))
+    ]
+    tips = LocalTips(
+        transport=_text(raw.get("local_transport")),
+        customs=lines("cultural_norms"),
+        traps=lines("tourist_traps"),
+        best_times=tuple(best_times[:MAX_TIPS_PRINTED]),
+        safety=lines("safety_tips"),
+    )
+    has_any = tips.transport or tips.customs or tips.traps or tips.best_times or tips.safety
+    return tips if has_any else None
+
+
 def build_plan(
     *,
     destination: str,
@@ -290,6 +345,7 @@ def build_plan(
         interests=tuple(i.strip() for i in interests or [] if isinstance(i, str) and i.strip()),
         days=days,
         costs=Costs(flights=flights, stay=stay, activities=activities, total=total),
+        tips=_read_tips(structured_data.get("local_intelligence")),
     )
 
 

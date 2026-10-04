@@ -8,6 +8,7 @@
 
 import { formatDateRange, formatINR, plural } from "./format";
 import { FREE_TIME, SLOTS, SLOT_LABELS } from "./map";
+import { hasTips } from "./tips";
 import type { DaySchedule, FlightInfo, HotelSlot, StructuredItinerary, Trip } from "./types";
 
 export interface ChangeSummary {
@@ -178,6 +179,8 @@ export function describeChanges(
     flightChange(firstFlight(before.days), firstFlight(after.days)),
     stayChange(firstHotel(before.days), firstHotel(after.days)),
     ...placeChanges(before.days, after.days),
+    // Phase 22: a plan made without local tips gets them with its next change
+    !hasTips(before.local_intelligence) && hasTips(after.local_intelligence) ? "Local tips added" : null,
   ]) {
     if (point) points.push(point);
   }

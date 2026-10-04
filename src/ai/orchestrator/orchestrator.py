@@ -1,7 +1,7 @@
-"""OrchestratorAgent — the planning graph (Phases 9–20).
+"""OrchestratorAgent — the planning graph (Phases 9–22).
 
     intent_parsing → apply_preferences → run_flight → budget_decision
-        ├─ continue → hotel_activities → build_itinerary → evaluate
+        ├─ continue → hotel_activities (+ local tips) → build_itinerary → evaluate
         │                 ├─ passed → persist → merge → extract_preferences → END
         │                 ├─ retry  → retry_dispatch → build_itinerary
         │                 └─ failed → builder_failed → END
@@ -18,6 +18,11 @@ carry everything else forward, and go straight to build → evaluate → persist
 
 While the builder writes, its reply is published piece by piece as
 `builder_token` events (Phase 20) — see _TokenStream.
+
+The DestinationIntelligenceAgent (Phase 22) runs beside the hotel and
+activities searches. It is the one agent a plan does not depend on: it
+publishes nothing, and when it has nothing to say the plan is made without
+local tips — see _local_tips.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from typing_extensions import TypedDict
 from src.ai.agents.activities_agent import ActivitiesAgent
 from src.ai.agents.budget_alternatives import conflict_alternatives, plain_options
 from src.ai.agents.budget_decision import BudgetDecision, make_budget_decision, replan_flight_budget
+from src.ai.agents.destination_intelligence import UNKNOWN_DESTINATION, DestinationIntelligenceAgent
 from src.ai.agents.evaluator import (
     MAX_EVALUATOR_RETRIES,
     EvaluatorAgent,
@@ -119,6 +125,10 @@ class OrchestratorState(TypedDict, total=False):
     # picked (POST /replan), which the check then goes ahead with instead of asking again
     budget_estimate: dict | None
     budget_choice: dict | None
+
+    # Phase 22: what the DestinationIntelligenceAgent knew about the place (None: nothing — and why)
+    local_intelligence: dict | None
+    intelligence_error: dict | None
 
     draft_itinerary: dict | None
     builder_error: dict | None
@@ -370,6 +380,41 @@ async def _search_activities(state: OrchestratorState) -> dict:
     }
 
 
+def _wants_local_tips(state: OrchestratorState) -> bool:
+    """No tips yet — and not because the model said it does not know the place (asking again would not help)."""
+    if state.get("local_intelligence"):
+        return False
+    return (state.get("intelligence_error") or {}).get("code") != UNKNOWN_DESTINATION
+
+
+async def _local_tips(state: OrchestratorState) -> dict:
+    """Destination intelligence → state updates (Phase 22).
+
+    Unlike a search it never fails a plan and publishes nothing: without tips
+    the plan is simply made without them. Tips a plan already has are kept —
+    a change to the hotel does not change what is true of the place.
+    """
+    if not _wants_local_tips(state):
+        return {}
+    try:
+        result = await DestinationIntelligenceAgent().run(
+            {
+                "destination": state.get("destination", ""),
+                "start_date": state.get("start_date"),
+                "end_date": state.get("end_date"),
+                "group_size": state.get("group_size") or 1,
+                "interests": state.get("interests") or DEFAULT_INTERESTS,
+            },
+            db=state.get("db"),
+            trip_id=state.get("trip_id"),
+            turn=state.get("turn", 1),
+        )
+    except Exception as exc:
+        logger.exception("DestinationIntelligenceAgent crashed — planning without local tips")
+        return {"local_intelligence": None, "intelligence_error": {"error": str(exc), "code": "AGENT_EXCEPTION"}}
+    return {"local_intelligence": result.get("local_intelligence"), "intelligence_error": result.get("error")}
+
+
 # ── Nodes ─────────────────────────────────────────────────────────────────
 
 
@@ -563,9 +608,16 @@ def route_after_budget_decision(state: OrchestratorState) -> str:
 
 
 async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
-    """Hotels and activities are independent of each other — search them concurrently."""
-    hotel_updates, activities_updates = await asyncio.gather(_search_hotels(state), _search_activities(state))
-    return {**state, **hotel_updates, **activities_updates}
+    """Hotels and activities are independent of each other — search them concurrently.
+
+    Phase 22: the DestinationIntelligenceAgent runs beside them. It runs here,
+    not beside the flight search, because a trip the budget check stops has no
+    use for local tips (DECISIONS #133).
+    """
+    hotel_updates, activities_updates, tips = await asyncio.gather(
+        _search_hotels(state), _search_activities(state), _local_tips(state)
+    )
+    return {**state, **hotel_updates, **activities_updates, **tips}
 
 
 async def escalate_node(state: OrchestratorState) -> OrchestratorState:
@@ -678,6 +730,7 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         trip_id=state.get("trip_id"),
         turn=state.get("turn", 1),
         on_token=stream.push if stream else None,
+        local_intelligence=state.get("local_intelligence"),  # Phase 22: attached to the draft as it is
     )
     if stream:
         await stream.flush()
@@ -997,6 +1050,8 @@ _RESULT_DEFAULTS: dict[str, Any] = {
     "budget_decision": None,
     "budget_conflict_options": None,
     "budget_estimate": None,
+    "local_intelligence": None,
+    "intelligence_error": None,
     "draft_itinerary": None,
     "builder_error": None,
     "evaluator_verdict": None,
@@ -1068,6 +1123,7 @@ def _result_summary(state: dict) -> dict:
         "budget_decision": state.get("budget_decision"),
         "replan_attempts": state.get("replan_attempts", 0),
         "evaluator_retry_count": state.get("evaluator_retry_count", 0),
+        "local_tips": bool(state.get("local_intelligence")),
         "itinerary_id": str(state["itinerary_id"]) if state.get("itinerary_id") else None,
     }
 
@@ -1130,6 +1186,10 @@ class OrchestratorAgent:
         forward unchanged, then build → evaluate → persist. The user's message
         goes to the builder as context so it can choose differently among the
         provided data ("closer to the beach", "a direct flight").
+
+        Local tips (Phase 22) are about the place, so they are carried forward
+        by every refinement that keeps the destination; a plan that has none yet
+        gets them beside the search a targeted refinement repeats.
         """
         if refinement_type in ("full_replan", "add_day"):
             fresh: dict = {k: prior_state.get(k) for k in TRIP_FIELDS}
@@ -1137,6 +1197,8 @@ class OrchestratorAgent:
                 fresh.update(raw_input=refinement_message, intent_override=True)
             else:
                 fresh["end_date"] = _shift_date(fresh.get("end_date"), 1)
+                # the same place, a day longer: what is true of it has not changed
+                fresh.update({key: prior_state.get(key) for key in ("local_intelligence", "intelligence_error")})
             return await self.run(
                 fresh, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn, on_complete=on_complete
             )
@@ -1218,10 +1280,16 @@ class OrchestratorAgent:
             attractions=True,
         )
 
+        async def search(run) -> dict:
+            """The search — and, beside it, the local tips of a plan that has none yet (Phase 22)."""
+            updates, tips = await asyncio.gather(run(state), _local_tips(state))
+            state.update(tips)
+            return updates
+
         async with timed_run() as timer:
             escalated = False
             if refinement_type == "targeted_flights":
-                updates = await _search_flights(state)
+                updates = await search(_search_flights)
                 found, error = bool(updates["flights"]), updates["flight_error"]
                 if found:  # a failed search keeps the previous flights
                     # The flights already found stay in the running (the plan takes the cheapest), so a
@@ -1232,7 +1300,7 @@ class OrchestratorAgent:
                     state = await budget_decision_node({**state, **updates, "replan_attempts": 0})
                     escalated = route_after_budget_decision(state) == "escalate"
             elif refinement_type == "targeted_hotel":
-                updates = await _search_hotels(state)
+                updates = await search(_search_hotels)
                 found, error = bool(updates["hotels"]), updates["hotel_error"]
                 if found:
                     state.update(updates)
@@ -1244,7 +1312,7 @@ class OrchestratorAgent:
                         new_interests = None
                     if new_interests:
                         state["interests"] = new_interests
-                updates = await _search_activities(state)
+                updates = await search(_search_activities)
                 found, error = bool(updates["attractions"]), updates["activities_error"]
                 if found:
                     # the new finds join the places already in the plan: "add a food stop" must not

@@ -431,7 +431,8 @@ async def test_saved_preferences_reach_flight_and_activities_agents():
     assert "vegetarian" in MockAA.return_value.run.await_args.args[0]["interests"]
 
     logged = [o for o in db._added if isinstance(o, AgentRun)]
-    assert [r.agent_name for r in logged] == ["preferences"]
+    # the three searches are mocked; the fourth agent (Phase 22) is real and logs its own row
+    assert [r.agent_name for r in logged] == ["preferences", "destination_intelligence"]
     assert logged[0].output["loaded"] is True
 
 

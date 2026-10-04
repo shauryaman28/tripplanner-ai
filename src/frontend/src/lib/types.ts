@@ -83,11 +83,20 @@ export interface DaySchedule {
   flight: FlightInfo | null;
 }
 
+/** What the DestinationIntelligenceAgent knew about the place (Phase 22) — a model's knowledge, not a search result. */
+export interface LocalIntelligence {
+  local_transport: string | null;
+  cultural_norms: string[];
+  tourist_traps: string[];
+  best_times: Record<string, string>;   // place → when to go, and why
+  safety_tips: string[];
+}
+
 export interface StructuredItinerary {
   days: DaySchedule[];
   total_cost: number;
   currency: string;
-  local_intelligence?: Record<string, unknown>;
+  local_intelligence?: LocalIntelligence | null;   // absent on older itineraries, null when the agent had nothing
 }
 
 export interface Itinerary {
