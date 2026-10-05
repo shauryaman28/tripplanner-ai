@@ -315,23 +315,55 @@ async def _run_agent(
     return ([], error) if error else (items, None)
 
 
+# What each search agent is given. Functions of the state alone, so that cache warming (warming.py,
+# Phase 24) can make the very searches a plan will make, before the plan is asked for.
+
+
+def flight_search_input(state: OrchestratorState, attempt: int = 0) -> dict:
+    """The flight agent's input. `attempt` > 0 is a re-plan: tighter budget cap, one more stop."""
+    budget = state.get("budget") or 0.0
+    return {
+        "destination": state.get("destination", ""),
+        "origin": state.get("origin") or DEFAULT_ORIGIN,
+        "date": state.get("start_date", ""),
+        "return_date": state.get("end_date") or None,
+        "budget": replan_flight_budget(budget, attempt) if attempt else budget,
+        "passengers": state.get("group_size") or 1,
+        "preferred_airlines": preferred_airlines_from(state),
+        "max_stops": min(MAX_FLIGHT_STOPS, 1 + attempt),
+    }
+
+
+def hotel_search_input(state: OrchestratorState) -> dict:
+    """The hotel agent's input: what is left of the budget after the flights, a night."""
+    remaining = (state.get("budget_decision") or {}).get("remaining_budget")
+    if remaining is None:
+        remaining = state.get("budget") or 0.0
+    return {
+        "destination": state.get("destination", ""),
+        "check_in": state.get("start_date", ""),
+        "check_out": state.get("end_date", ""),
+        "budget_per_night": round(remaining / _nights(state), 2),
+        "guests": state.get("group_size") or 1,
+    }
+
+
+def activities_search_input(state: OrchestratorState) -> dict:
+    """The activities agent's input."""
+    return {
+        "destination": state.get("destination", ""),
+        "interests": state.get("interests") or DEFAULT_INTERESTS,
+        "limit": ATTRACTIONS_LIMIT,
+    }
+
+
 async def _search_flights(state: OrchestratorState, attempt: int = 0) -> dict:
     """Flight search → state updates. `attempt` > 0 is a re-plan: tighter budget cap, one more stop."""
-    budget = state.get("budget") or 0.0
     flights, error = await _run_agent(
         state,
         FlightAgent(),
         "flight_agent",
-        {
-            "destination": state.get("destination", ""),
-            "origin": state.get("origin") or DEFAULT_ORIGIN,
-            "date": state.get("start_date", ""),
-            "return_date": state.get("end_date") or None,
-            "budget": replan_flight_budget(budget, attempt) if attempt else budget,
-            "passengers": state.get("group_size") or 1,
-            "preferred_airlines": preferred_airlines_from(state),
-            "max_stops": min(MAX_FLIGHT_STOPS, 1 + attempt),
-        },
+        flight_search_input(state, attempt),
         "flights",
         "flights",
         note=f" (re-plan attempt {attempt})" if attempt else "",
@@ -340,20 +372,11 @@ async def _search_flights(state: OrchestratorState, attempt: int = 0) -> dict:
 
 
 async def _search_hotels(state: OrchestratorState) -> dict:
-    remaining = (state.get("budget_decision") or {}).get("remaining_budget")
-    if remaining is None:
-        remaining = state.get("budget") or 0.0
     hotels, error = await _run_agent(
         state,
         HotelAgent(),
         "hotel_agent",
-        {
-            "destination": state.get("destination", ""),
-            "check_in": state.get("start_date", ""),
-            "check_out": state.get("end_date", ""),
-            "budget_per_night": round(remaining / _nights(state), 2),
-            "guests": state.get("group_size") or 1,
-        },
+        hotel_search_input(state),
         "hotels",
         "hotels",
     )
@@ -365,11 +388,7 @@ async def _search_activities(state: OrchestratorState) -> dict:
         state,
         ActivitiesAgent(),
         "activities_agent",
-        {
-            "destination": state.get("destination", ""),
-            "interests": state.get("interests") or DEFAULT_INTERESTS,
-            "limit": ATTRACTIONS_LIMIT,
-        },
+        activities_search_input(state),
         "attractions",
         "attractions",
     )

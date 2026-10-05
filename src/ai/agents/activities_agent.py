@@ -95,14 +95,17 @@ async def clarify_node(state: ActivitiesState) -> ActivitiesState:
     return {**state, "clarification_question": question, "attractions": [], "error": None}
 
 
-async def get_attractions_node(state: ActivitiesState) -> ActivitiesState:
-    params = {
+def attraction_tool_params(state: ActivitiesState) -> dict:
+    """What `get_attractions` is called with. Cache warming makes the same call (src/ai/orchestrator/warming.py)."""
+    return {
         "destination": state["destination"],
         "interests": state.get("interests", []),
         "limit": state.get("limit", 5),
     }
 
-    result = await call_tool("get_attractions", params)
+
+async def get_attractions_node(state: ActivitiesState) -> ActivitiesState:
+    result = await call_tool("get_attractions", attraction_tool_params(state))
 
     if hasattr(result, "code"):
         return {**state, "error": result.model_dump(), "attractions": []}

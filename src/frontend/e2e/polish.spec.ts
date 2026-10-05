@@ -11,7 +11,8 @@
  * Runs on the Playwright stack's stub backend (tests/e2e/stub_backend.py). What
  * its providers do depends on the destination — Hampi / Badami: the hotel search
  * is down until retried; Shimla / Manali: every search is down until the trip is
- * retried; Kaza: no airport is known for it, so the flight search always fails.
+ * retried; Kaza: no airport is known for it, so the flight search always fails;
+ * Munnar: the flight provider says "asked too often" until retried (Phase 24).
  * Each test plans on dates of its own, so the stub's per-search counters of one
  * test never reach another.
  *
@@ -212,6 +213,34 @@ test("a search that would fail the same way again says what would help, and offe
   await page.reload();
   await expect(flights).toHaveAttribute("data-state", "failed");
   await expect(flights).toContainText("No airport is known by this name.");
+  await expect(progress.getByRole("button", { name: /retry/i })).toHaveCount(0);
+});
+
+test("a search turned away for being asked too often says so, and Retry finds the flights", async ({ page }) => {
+  // Phase 24: the flight provider answered 429 through every backoff. The traveller is not shown
+  // "HTTP 429" or the provider's name — and, unlike a missing airport, trying again is what helps.
+  await signIn(page);
+  await createTrip(page, { destination: "Munnar", day: 12 });
+  await send(page, "Tea gardens and misty hills");
+  await expect(page.getByLabel("Your itinerary").getByRole("article").first()).toBeVisible({ timeout: 90_000 });
+
+  const progress = page.getByLabel("Planning progress");
+  const flights = progress.locator('[data-agent="flight_agent"]');
+  await expect(flights).toHaveAttribute("data-state", "failed");
+  await expect(flights).toContainText("This search is busy right now. Try again in a minute.");
+  await expect(flights).not.toContainText("429");
+  await expect(flights).not.toContainText(/duffel/i);
+
+  // the same after a reload, with the way out
+  await page.reload();
+  await expect(flights).toContainText("This search is busy right now. Try again in a minute.");
+  const retry = progress.getByRole("button", { name: "Retry the flight search" });
+  await expect(retry).toBeVisible();
+
+  await expect(page.locator('[data-stream="connected"]')).toBeAttached();
+  await retry.click();
+  await expect(page.getByRole("list", { name: "What changed" }).last()).toContainText("Flight", { timeout: 90_000 });
+  await expect(flights).toHaveAttribute("data-state", "completed");
   await expect(progress.getByRole("button", { name: /retry/i })).toHaveCount(0);
 });
 

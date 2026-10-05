@@ -102,8 +102,9 @@ async def clarify_node(state: HotelState) -> HotelState:
     }
 
 
-async def search_hotels_node(state: HotelState) -> HotelState:
-    params = {
+def hotel_tool_params(state: HotelState) -> dict:
+    """What `search_hotels` is called with. Cache warming makes the same call (src/ai/orchestrator/warming.py)."""
+    return {
         "destination": state["destination"],
         "check_in": state["check_in"],
         "check_out": state["check_out"],
@@ -111,7 +112,9 @@ async def search_hotels_node(state: HotelState) -> HotelState:
         "guests": state.get("guests", 1),
     }
 
-    result = await call_tool("search_hotels", params)
+
+async def search_hotels_node(state: HotelState) -> HotelState:
+    result = await call_tool("search_hotels", hotel_tool_params(state))
 
     if hasattr(result, "code"):
         return {**state, "error": result.model_dump(), "hotels": []}

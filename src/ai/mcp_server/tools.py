@@ -7,23 +7,35 @@ OpenWeatherMap (weather), Nominatim / OpenStreetMap (geocoding, no key).
 Rules:
 - Missing API key  → ToolError(code="API_NOT_CONFIGURED")  — server never crashes
 - Validation first → ToolError before any network call
-- Every tool caches; TTLs match Phase 24 spec (implemented early):
+- Every tool caches; the TTLs are the Phase 3 spec's, read back from Redis in Phase 24:
     flights     5 min   search_flights
     hotels     15 min   search_hotels
     attractions 6 hr    get_attractions
     weather     1 hr    get_weather
 - estimate_budget is pure logic — no network, no cache needed
+
+Phase 24 — how a request reaches a provider:
+- The tools run in worker threads, several at once (server.py). Nothing here may
+  assume it is the only search running.
+- A flight or hotel search is cached by what the provider is asked. The budget
+  and the preferred airlines are applied to the answer afterwards, so the same
+  search under another budget is a cache hit — and a trip's caches can be warmed
+  before its budget for hotels is known.
+- One search per cache key at a time (cache.single_flight): a second identical
+  search waits for the first and reads its answer from the cache.
+- Every request goes out through outbound.send(): in the provider's rate limit's
+  turn, and again after a backoff when it is answered 429 or 5xx. A provider that
+  still says 429 after that is ToolError(code="RATE_LIMITED").
 """
 
 import logging
 import re
-import threading
 from datetime import date, datetime, timedelta
 
 import httpx
 
 from src.ai import pricing
-from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync
+from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync, single_flight
 from src.ai.mcp_server.config import mcp_settings
 from src.ai.mcp_server.models import (
     Airport,
@@ -39,6 +51,8 @@ from src.ai.mcp_server.models import (
     ToolError,
     WeatherInput,
 )
+from src.ai.mcp_server.outbound import send
+from src.ai.mcp_server.rate_limiter import RateLimited
 
 logger = logging.getLogger(__name__)
 
@@ -267,13 +281,15 @@ def _nominatim(query: str, country_code: str | None = None) -> list[dict]:
     params = {"q": query, "format": "json", "limit": 5, "addressdetails": 1, "accept-language": "en"}
     if country_code:
         params["countrycodes"] = country_code.lower()
-    resp = httpx.get(
-        "https://nominatim.openstreetmap.org/search",
-        params=params,
-        headers={"User-Agent": "tripplanner-ai (github.com/shauryaman28/tripplanner-ai)"},
-        timeout=10,
+    resp = send(
+        "nominatim",
+        lambda: httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params=params,
+            headers={"User-Agent": "tripplanner-ai (github.com/shauryaman28/tripplanner-ai)"},
+            timeout=10,
+        ),
     )
-    resp.raise_for_status()
     return resp.json()
 
 
@@ -292,9 +308,6 @@ def _best_place(matches: list[dict]) -> dict | None:
 # Below this Nominatim importance an in-country match is a minor place; a famous namesake abroad
 # is then the likelier meaning ("Bali" is also a town in Rajasthan, "Dubai" a village in Kerala).
 _CONFIDENT_IMPORTANCE = 0.3
-_geocode_lock = (
-    threading.Lock()
-)  # one lookup at a time: Nominatim allows 1 request/s, and the second caller hits the cache
 
 
 def _geocode(destination: str) -> tuple[float, float] | None:
@@ -310,7 +323,9 @@ def _geocode(destination: str) -> tuple[float, float] | None:
     whatever shares its name at home.
     """
     cache_key = make_cache_key("geocode:v2", {"q": destination.strip().lower()})
-    with _geocode_lock:
+    # One lookup per place at a time — the hotel and the attractions search of a plan both ask for the
+    # same one, and the second finds it cached. Nominatim's 1 request/s is kept by its rate limit (send).
+    with single_flight(cache_key):
         cached = get_cached_sync(cache_key)
         if cached is None:
             cached = _lookup_place(destination)
@@ -402,14 +417,18 @@ def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayF
 # ── Tool: search_flights ───────────────────────────────────────────────────
 
 
-def _offer_to_flight(offer: dict, budget: float) -> Flight | None:
-    """Map one Duffel offer to a Flight, or None if it is unpriceable or over budget."""
+def _rate_limited(exc: RateLimited) -> ToolError:
+    """A provider that is being asked too often. The traveller is told to try again (src/ai/utils/failures.py)."""
+    logger.warning("Rate limited — %s", exc)
+    return ToolError(error=f"Rate limited — {exc}.", code="RATE_LIMITED")
+
+
+def _offer_to_flight(offer: dict) -> Flight | None:
+    """Map one Duffel offer to a Flight, or None if it cannot be priced in rupees."""
     rate = _FX_TO_INR.get(offer.get("total_currency", ""))
     if rate is None:
         return None
     price = round(float(offer["total_amount"]) * rate, 2)  # total_amount already covers all passengers
-    if price > budget:
-        return None
 
     outbound = offer["slices"][0]
     first, last = outbound["segments"][0], outbound["segments"][-1]
@@ -472,60 +491,85 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
             code="UNKNOWN_DESTINATION",
         )
 
-    # --- cache ---
-    cache_key = make_cache_key("flights", input.model_dump())
-    cached = get_cached_sync(cache_key)
-    if cached is not None:
-        return [Flight(**f) for f in cached]
-
-    # --- real API call ---
-    slices = [{"origin": origin, "destination": destination, "departure_date": input.date}]
-    if input.return_date:
-        slices.append({"origin": destination, "destination": origin, "departure_date": input.return_date})
+    # --- cache, then Duffel ---
     try:
-        resp = httpx.post(
-            f"{DUFFEL_API_URL}/air/offer_requests",
-            params={"return_offers": "true", "supplier_timeout": 15_000},
-            headers={
-                "Authorization": f"Bearer {mcp_settings.DUFFEL_ACCESS_TOKEN}",
-                "Duffel-Version": "v2",
-                "Accept": "application/json",
-            },
-            json={
-                "data": {
-                    "slices": slices,
-                    "passengers": [{"type": "adult"}] * input.passengers,
-                    "cabin_class": "economy",
-                    "max_connections": input.max_stops,
-                }
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        offers = resp.json()["data"].get("offers") or []
-
-        flights = [f for f in (_offer_to_flight(offer, input.budget) for offer in offers) if f is not None]
-        if not flights:
-            return ToolError(
-                error=f"No flights from {origin} to {destination} within ₹{input.budget:,.0f}.",
-                code="NO_RESULTS",
-            )
-        flights = sorted(flights, key=lambda f: f.price_inr)[:MAX_FLIGHT_RESULTS]
-
-        if input.preferred_airlines:
-            preferred = {code.strip().upper() for code in input.preferred_airlines}
-            # Soft preference: list.sort is stable, so preferred carriers move to the front
-            # while price order is preserved within each group. Nothing is dropped.
-            flights.sort(key=lambda f: f.airline.upper() not in preferred)
-        set_cached_sync(cache_key, [f.model_dump() for f in flights], TTL_FLIGHTS)
-        return flights
-
+        on_offer = _flights_on_offer(origin, destination, input)
+    except RateLimited as exc:
+        return _rate_limited(exc)
     except httpx.HTTPStatusError as exc:
         logger.error("Duffel flight search error: %s", exc)
         return ToolError(error=f"Duffel API error: HTTP {exc.response.status_code}", code="DUFFEL_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in search_flights")
         return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+
+    # --- this traveller's budget and airlines, applied to the shared answer ---
+    flights = [f for f in on_offer if f.price_inr <= input.budget]
+    if not flights:
+        return ToolError(
+            error=f"No flights from {origin} to {destination} within ₹{input.budget:,.0f}.",
+            code="NO_RESULTS",
+        )
+    if input.preferred_airlines:
+        preferred = {code.strip().upper() for code in input.preferred_airlines}
+        # Soft preference: list.sort is stable, so preferred carriers move to the front
+        # while price order is preserved within each group. Nothing is dropped.
+        flights.sort(key=lambda f: f.airline.upper() not in preferred)
+    return flights
+
+
+def _flights_on_offer(origin: str, destination: str, input: FlightSearchInput) -> list[Flight]:
+    """The cheapest flights Duffel has for this search, whatever the budget. Raises httpx errors and RateLimited.
+
+    Cached for 5 minutes under what Duffel is asked — the airports, the dates,
+    the passengers and the connections allowed. The budget is not part of it:
+    of the offers within any budget, the cheapest five are always among the
+    cheapest five of all, so those are all that need keeping.
+    """
+    asked = {
+        "origin": origin,
+        "destination": destination,
+        "date": input.date,
+        "return_date": input.return_date,
+        "passengers": input.passengers,
+        "max_stops": input.max_stops,
+    }
+    cache_key = make_cache_key("flights", asked)
+    with single_flight(cache_key):
+        cached = get_cached_sync(cache_key)
+        if cached is not None:
+            return [Flight(**f) for f in cached]
+
+        slices = [{"origin": origin, "destination": destination, "departure_date": input.date}]
+        if input.return_date:
+            slices.append({"origin": destination, "destination": origin, "departure_date": input.return_date})
+        resp = send(
+            "duffel",
+            lambda: httpx.post(
+                f"{DUFFEL_API_URL}/air/offer_requests",
+                params={"return_offers": "true", "supplier_timeout": 15_000},
+                headers={
+                    "Authorization": f"Bearer {mcp_settings.DUFFEL_ACCESS_TOKEN}",
+                    "Duffel-Version": "v2",
+                    "Accept": "application/json",
+                },
+                json={
+                    "data": {
+                        "slices": slices,
+                        "passengers": [{"type": "adult"}] * input.passengers,
+                        "cabin_class": "economy",
+                        "max_connections": input.max_stops,
+                    }
+                },
+                timeout=30,
+            ),
+        )
+        offers = resp.json()["data"].get("offers") or []
+        flights = sorted((f for f in map(_offer_to_flight, offers) if f is not None), key=lambda f: f.price_inr)
+        flights = flights[:MAX_FLIGHT_RESULTS]
+        if flights:  # an empty answer is not kept: the next search asks again
+            set_cached_sync(cache_key, [f.model_dump() for f in flights], TTL_FLIGHTS)
+        return flights
 
 
 # ── Tool: search_hotels ────────────────────────────────────────────────────
@@ -570,76 +614,101 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
             code="API_NOT_CONFIGURED",
         )
 
-    # --- cache ---
-    cache_key = make_cache_key("hotels", input.model_dump())
-    cached = get_cached_sync(cache_key)
-    if cached is not None:
-        return [Hotel(**h) for h in cached]
-
-    # --- real API call ---
-    rooms, odd_guest = divmod(input.guests, 2)
-    request = {
-        "checkin": input.check_in,
-        "checkout": input.check_out,
-        "currency": "INR",
-        "guestNationality": COUNTRY_CODE,
-        "occupancies": [{"adults": 2}] * rooms + [{"adults": 1}] * odd_guest,
-        "includeHotelData": True,
-        "limit": 30,
-    }
-
-    def search(location: dict) -> list[Hotel]:
-        resp = httpx.post(
-            f"{LITEAPI_URL}/hotels/rates",
-            headers={"X-API-Key": mcp_settings.LITEAPI_API_KEY, "Accept": "application/json"},
-            json={**request, **location},
-            timeout=45,
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        info_by_id = {h["id"]: h for h in body.get("hotels") or []}
-        return [
-            hotel
-            for item in body.get("data") or []
-            if item["hotelId"] in info_by_id
-            and (
-                hotel := _to_hotel(info_by_id[item["hotelId"]], item.get("roomTypes") or [], nights, input.destination)
-            )
-        ]
-
+    # --- cache, then LiteAPI ---
     try:
-        # LiteAPI's own city match is exact for cities. A region ("Kerala") matches
-        # no city, so fall back to a radius around its geocoded centre.
-        found = search({"cityName": input.destination.strip(), "countryCode": COUNTRY_CODE})
-        if not found:
-            coords = _geocode(input.destination)
-            if coords is None:
-                return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
-            found = search({"latitude": coords[0], "longitude": coords[1], "radius": HOTEL_SEARCH_RADIUS_M})
-
-        hotels = sorted(
-            (h for h in found if h.price_per_night_inr <= input.budget_per_night), key=lambda h: h.price_per_night_inr
-        )
-        if not hotels:
-            cheapest = min((h.price_per_night_inr for h in found), default=None)
-            hint = f" The cheapest available is ₹{cheapest:,.0f}/night." if cheapest else ""
-            return ToolError(
-                error=f"No hotels within ₹{input.budget_per_night:,.0f}/night in {input.destination}.{hint}",
-                code="NO_RESULTS",
-            )
-
-        hotels = hotels[:MAX_HOTEL_RESULTS]
-        set_cached_sync(cache_key, [h.model_dump() for h in hotels], TTL_HOTELS)
-        return hotels
-
+        on_offer = _hotels_on_offer(input, nights)
     except OutsideCoverage as exc:
         return ToolError(error=str(exc), code="OUTSIDE_COVERAGE")
+    except RateLimited as exc:
+        return _rate_limited(exc)
     except httpx.HTTPStatusError as exc:
         logger.error("LiteAPI hotel search error: HTTP %s", exc.response.status_code)
         return ToolError(error=f"LiteAPI error: HTTP {exc.response.status_code}", code="LITEAPI_ERROR")
     except Exception as exc:
         logger.exception("Unexpected error in search_hotels")
         return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+    if on_offer is None:
+        return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
+
+    # --- this traveller's budget, applied to the shared answer ---
+    hotels = [h for h in on_offer if h.price_per_night_inr <= input.budget_per_night]
+    if not hotels:
+        cheapest = min((h.price_per_night_inr for h in on_offer), default=None)
+        hint = f" The cheapest available is ₹{cheapest:,.0f}/night." if cheapest else ""
+        return ToolError(
+            error=f"No hotels within ₹{input.budget_per_night:,.0f}/night in {input.destination}.{hint}",
+            code="NO_RESULTS",
+        )
+    return hotels
+
+
+def _hotels_on_offer(input: HotelSearchInput, nights: int) -> list[Hotel] | None:
+    """The cheapest hotels LiteAPI has for this stay, whatever the budget; None when the place is not known.
+
+    Raises httpx errors, RateLimited and OutsideCoverage. Cached for 15 minutes
+    under what LiteAPI is asked — the place, the dates and the guests. The
+    nightly budget is not part of it (see _flights_on_offer): it depends on what
+    the flights cost, and is different on every re-plan of the same stay.
+    """
+    asked = {
+        "destination": input.destination.strip(),
+        "check_in": input.check_in,
+        "check_out": input.check_out,
+        "guests": input.guests,
+    }
+    cache_key = make_cache_key("hotels", asked)
+    with single_flight(cache_key):
+        cached = get_cached_sync(cache_key)
+        if cached is not None:
+            return [Hotel(**h) for h in cached]
+
+        rooms, odd_guest = divmod(input.guests, 2)
+        request = {
+            "checkin": input.check_in,
+            "checkout": input.check_out,
+            "currency": "INR",
+            "guestNationality": COUNTRY_CODE,
+            "occupancies": [{"adults": 2}] * rooms + [{"adults": 1}] * odd_guest,
+            "includeHotelData": True,
+            "limit": 30,
+        }
+
+        def search(location: dict) -> list[Hotel]:
+            resp = send(
+                "liteapi",
+                lambda: httpx.post(
+                    f"{LITEAPI_URL}/hotels/rates",
+                    headers={"X-API-Key": mcp_settings.LITEAPI_API_KEY, "Accept": "application/json"},
+                    json={**request, **location},
+                    timeout=45,
+                ),
+            )
+            body = resp.json()
+            info_by_id = {h["id"]: h for h in body.get("hotels") or []}
+            return [
+                hotel
+                for item in body.get("data") or []
+                if item["hotelId"] in info_by_id
+                and (
+                    hotel := _to_hotel(
+                        info_by_id[item["hotelId"]], item.get("roomTypes") or [], nights, input.destination
+                    )
+                )
+            ]
+
+        # LiteAPI's own city match is exact for cities. A region ("Kerala") matches
+        # no city, so fall back to a radius around its geocoded centre.
+        found = search({"cityName": asked["destination"], "countryCode": COUNTRY_CODE})
+        if not found:
+            coords = _geocode(input.destination)
+            if coords is None:
+                return None
+            found = search({"latitude": coords[0], "longitude": coords[1], "radius": HOTEL_SEARCH_RADIUS_M})
+
+        hotels = sorted(found, key=lambda h: h.price_per_night_inr)[:MAX_HOTEL_RESULTS]
+        if hotels:
+            set_cached_sync(cache_key, [h.model_dump() for h in hotels], TTL_HOTELS)
+        return hotels
 
 
 # ── Tool: get_attractions ──────────────────────────────────────────────────
@@ -659,26 +728,45 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
     # "v2": Phase 18 changed what `category` and `rating` mean. Entries cached before it would
     # otherwise be served for another 6 hours as if they were current; under a new key they just expire.
     cache_key = make_cache_key("attractions:v2", input.model_dump())
+    try:
+        with single_flight(cache_key):
+            return _find_attractions(input, cache_key)
+    except OutsideCoverage as exc:
+        return ToolError(error=str(exc), code="OUTSIDE_COVERAGE")
+    except RateLimited as exc:
+        return _rate_limited(exc)
+    except httpx.HTTPStatusError as exc:
+        # str(exc) contains the request URL, API key included — report the status only.
+        logger.error("OpenTripMap error: HTTP %s", exc.response.status_code)
+        return ToolError(error=f"OpenTripMap API error: HTTP {exc.response.status_code}", code="OTM_ERROR")
+    except Exception as exc:
+        logger.exception("Unexpected error in get_attractions")
+        return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+
+
+def _find_attractions(input: AttractionInput, cache_key: str) -> list[Attraction] | ToolError:
+    """The attractions for this search, from the cache or OpenTripMap. Raises httpx errors, RateLimited, OutsideCoverage."""
     cached = get_cached_sync(cache_key)
     if cached is not None:
         return [Attraction(**a) for a in cached]
 
-    try:
-        # Step 1 — geocode destination name to lat/lon
-        coords = _geocode(input.destination)
-        if coords is None:
-            return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
-        lat, lon = coords
+    # Step 1 — geocode destination name to lat/lon
+    coords = _geocode(input.destination)
+    if coords is None:
+        return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
+    lat, lon = coords
 
-        # Step 2 — one search per interest. Results come back nearest-first, so a
-        # single combined query would fill up with whatever is closest to the
-        # centre and crowd out the other interests.
-        searches = list(dict.fromkeys(_interest_to_otm_kinds(i) for i in input.interests)) or ["interesting_places"]
-        per_search = -(-input.limit // len(searches))  # ceil
+    # Step 2 — one search per interest. Results come back nearest-first, so a
+    # single combined query would fill up with whatever is closest to the
+    # centre and crowd out the other interests.
+    searches = list(dict.fromkeys(_interest_to_otm_kinds(i) for i in input.interests)) or ["interesting_places"]
+    per_search = -(-input.limit // len(searches))  # ceil
 
-        attractions: dict[str, Attraction] = {}  # by name — the same place can match two interests
-        for kinds in searches:
-            radius_resp = httpx.get(
+    attractions: dict[str, Attraction] = {}  # by name — the same place can match two interests
+    for kinds in searches:
+        radius_resp = send(
+            "opentripmap",
+            lambda kinds=kinds: httpx.get(
                 "https://api.opentripmap.com/0.1/en/places/radius",
                 params={
                     "radius": ATTRACTION_RADIUS_M,
@@ -691,49 +779,39 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
                     "apikey": mcp_settings.OPENTRIPMAP_API_KEY,
                 },
                 timeout=10,
-            )
-            radius_resp.raise_for_status()
-            for place in radius_resp.json():
-                name = (place.get("name") or "").strip()
-                point = place.get("point") or {}
-                # The builder can only schedule places it can name, and the map (Phase 18)
-                # can only pin places with coordinates — every attraction returned has both.
-                if not name or point.get("lat") is None or point.get("lon") is None:
-                    continue
-                category = _otm_kind_to_category(place.get("kinds", ""))
-                attractions.setdefault(
-                    name,
-                    Attraction(
-                        name=name,
-                        category=category,
-                        # OpenTripMap's popularity rate: 1–3, or 5–7 for the same scale on a
-                        # heritage site. 0 = unrated — never a made-up score.
-                        rating=float(place.get("rate") or 0),
-                        description=f"A popular {category} attraction in {input.destination}.",
-                        lat=point["lat"],
-                        lng=point["lon"],
-                    ),
-                )
-
-        if not attractions:
-            return ToolError(
-                error=f"No attractions found for {input.interests} in {input.destination}.",
-                code="NO_RESULTS",
+            ),
+        )
+        for place in radius_resp.json():
+            name = (place.get("name") or "").strip()
+            point = place.get("point") or {}
+            # The builder can only schedule places it can name, and the map (Phase 18)
+            # can only pin places with coordinates — every attraction returned has both.
+            if not name or point.get("lat") is None or point.get("lon") is None:
+                continue
+            category = _otm_kind_to_category(place.get("kinds", ""))
+            attractions.setdefault(
+                name,
+                Attraction(
+                    name=name,
+                    category=category,
+                    # OpenTripMap's popularity rate: 1–3, or 5–7 for the same scale on a
+                    # heritage site. 0 = unrated — never a made-up score.
+                    rating=float(place.get("rate") or 0),
+                    description=f"A popular {category} attraction in {input.destination}.",
+                    lat=point["lat"],
+                    lng=point["lon"],
+                ),
             )
 
-        attractions = list(attractions.values())[: input.limit]
-        set_cached_sync(cache_key, [a.model_dump() for a in attractions], TTL_ATTRACTIONS)
-        return attractions
+    if not attractions:
+        return ToolError(
+            error=f"No attractions found for {input.interests} in {input.destination}.",
+            code="NO_RESULTS",
+        )
 
-    except OutsideCoverage as exc:
-        return ToolError(error=str(exc), code="OUTSIDE_COVERAGE")
-    except httpx.HTTPStatusError as exc:
-        # str(exc) contains the request URL, API key included — report the status only.
-        logger.error("OpenTripMap error: HTTP %s", exc.response.status_code)
-        return ToolError(error=f"OpenTripMap API error: HTTP {exc.response.status_code}", code="OTM_ERROR")
-    except Exception as exc:
-        logger.exception("Unexpected error in get_attractions")
-        return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+    attractions = list(attractions.values())[: input.limit]
+    set_cached_sync(cache_key, [a.model_dump() for a in attractions], TTL_ATTRACTIONS)
+    return attractions
 
 
 # ── Tool: get_weather ──────────────────────────────────────────────────────
@@ -775,68 +853,73 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
 
     # --- cache ---
     cache_key = make_cache_key("weather", input.model_dump())
-    cached = get_cached_sync(cache_key)
-    if cached is not None:
-        return [DayForecast(**d) for d in cached]
+    with single_flight(cache_key):
+        cached = get_cached_sync(cache_key)
+        if cached is not None:
+            return [DayForecast(**d) for d in cached]
 
-    # --- beyond OWM window → climate estimate ---
-    if days_until_start > 4:
-        forecasts = _climate_forecast(input.destination, start_date, num_days)
-        set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
-        return forecasts
+        # --- beyond OWM window → climate estimate ---
+        if days_until_start > 4:
+            forecasts = _climate_forecast(input.destination, start_date, num_days)
+            set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
+            return forecasts
 
-    # --- real OWM API call ---
-    try:
-        resp = httpx.get(
-            "https://api.openweathermap.org/data/2.5/forecast",
-            params={
-                "q": f"{input.destination},IN",
-                "appid": mcp_settings.OPENWEATHER_API_KEY,
-                "units": "metric",
-                "cnt": 40,
-            },
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        # Group 3-hour readings by day — accumulate max/min temperature
-        days: dict[str, dict] = {}
-        for item in data.get("list", []):
-            dt = datetime.fromtimestamp(item["dt"])
-            dk = dt.date().isoformat()
-            if dk not in days:
-                days[dk] = {
-                    "condition": item["weather"][0]["main"],
-                    "t_max": item["main"]["temp_max"],
-                    "t_min": item["main"]["temp_min"],
-                }
-            else:
-                days[dk]["t_max"] = max(days[dk]["t_max"], item["main"]["temp_max"])
-                days[dk]["t_min"] = min(days[dk]["t_min"], item["main"]["temp_min"])
-
-        forecasts = [
-            DayForecast(
-                date=dk,
-                condition=info["condition"],
-                temp_high_c=round(info["t_max"], 1),
-                temp_low_c=round(info["t_min"], 1),
+        # --- real OWM API call ---
+        try:
+            resp = send(
+                "openweather",
+                lambda: httpx.get(
+                    "https://api.openweathermap.org/data/2.5/forecast",
+                    params={
+                        "q": f"{input.destination},IN",
+                        "appid": mcp_settings.OPENWEATHER_API_KEY,
+                        "units": "metric",
+                        "cnt": 40,
+                    },
+                    timeout=10,
+                ),
             )
-            for dk, info in list(days.items())[:num_days]
-        ]
-        set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
-        return forecasts
+            data = resp.json()
 
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
-            return ToolError(
-                error=f"City not found in OpenWeatherMap: {input.destination}",
-                code="NOT_FOUND",
-            )
-        return ToolError(error=f"OWM API error: HTTP {exc.response.status_code}", code="OWM_ERROR")
-    except Exception as exc:
-        logger.exception("Unexpected error in get_weather")
-        return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+            # Group 3-hour readings by day — accumulate max/min temperature
+            days: dict[str, dict] = {}
+            for item in data.get("list", []):
+                dt = datetime.fromtimestamp(item["dt"])
+                dk = dt.date().isoformat()
+                if dk not in days:
+                    days[dk] = {
+                        "condition": item["weather"][0]["main"],
+                        "t_max": item["main"]["temp_max"],
+                        "t_min": item["main"]["temp_min"],
+                    }
+                else:
+                    days[dk]["t_max"] = max(days[dk]["t_max"], item["main"]["temp_max"])
+                    days[dk]["t_min"] = min(days[dk]["t_min"], item["main"]["temp_min"])
+
+            forecasts = [
+                DayForecast(
+                    date=dk,
+                    condition=info["condition"],
+                    temp_high_c=round(info["t_max"], 1),
+                    temp_low_c=round(info["t_min"], 1),
+                )
+                for dk, info in list(days.items())[:num_days]
+            ]
+            set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
+            return forecasts
+
+        except RateLimited as exc:
+            return _rate_limited(exc)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return ToolError(
+                    error=f"City not found in OpenWeatherMap: {input.destination}",
+                    code="NOT_FOUND",
+                )
+            return ToolError(error=f"OWM API error: HTTP {exc.response.status_code}", code="OWM_ERROR")
+        except Exception as exc:
+            logger.exception("Unexpected error in get_weather")
+            return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
 
 
 # ── Tool: estimate_budget ──────────────────────────────────────────────────

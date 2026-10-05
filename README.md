@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 23 / 50 — pgvector Similarity Search**
+**Status: Phase 24 / 50 — Caching & Rate Limit Handling**
 
 ---
 
@@ -18,7 +18,8 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
                                           │     │             │              (local tips, from what the
                                           └─────┴─────────────┘               model knows — no tools)
                                                 │
-                                        MCP Server (5 tools)
+                                        MCP Server (5 tools, run side by side)
+                              Redis cache → rate limit → backoff on 429 / 5xx
                          Duffel · LiteAPI · OpenTripMap · OpenWeatherMap
                                                 │
                                    ItineraryBuilder (Groq gpt-oss-120b)
@@ -91,18 +92,18 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 696 tests
+# Unit + contract tests (no Docker, no network) — 786 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 36 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 39 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser tests (Playwright) — 55 tests: 5 end-to-end flows, 8 for Phase 23's similar trips and search, 10 for
+# Browser tests (Playwright) — 56 tests: 5 end-to-end flows, 8 for Phase 23's similar trips and search, 10 for
 # Phase 22's local tips, 3 for Phase 21's priced
-# budget conflict, 5 for Phase 20's polish (live draft, refinement marks, retry, 375 px), 16 for the live draft's
-# reader, 8 for the change summary. Starts its own stack: a stub backend
+# budget conflict, 5 for Phase 20's polish (live draft, refinement marks, retry, 375 px), 1 for Phase 24's
+# rate-limited search, 16 for the live draft's reader, 8 for the change summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
 # `tripplanner_db_e2e` database, and a second Next.js dev server on :3100.
 cd src/frontend
@@ -189,7 +190,9 @@ tripplanner-ai/
 │   └── ai/
 │       ├── llm.py                       ← model IDs + tolerant JSON parsing of LLM replies
 │       ├── pricing.py                   ← Phase 21: seasons by destination, typical costs, the estimate arithmetic
-│       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
+│       ├── mcp_server/                  ← Phase 3: server, tools, models, cache; Phase 24: rate_limiter.py (each
+│       │                                  provider's limit, a queue for the request over it), outbound.py (backoff
+│       │                                  on 429 / 5xx), the tools in threads, one search per cache key at a time
 │       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
 │       ├── embeddings/                  ← Phase 14: Gemini embedding writer; Phase 23: the summary text, query embedding
 │       ├── utils/
@@ -213,8 +216,9 @@ tripplanner-ai/
 │       │   └── builder.py               ← Phase 12: ItineraryBuilder (Groq gpt-oss-120b), data-scope + budget-math validation;
 │       │                                      Phase 20: streams its reply
 │       └── orchestrator/
-│           └── orchestrator.py          ← Phase 9–22: full graph with preference injection, refinement & loops,
-│                                              builder_token streaming, retry of one search, local tips
+│           ├── orchestrator.py          ← Phase 9–22: full graph with preference injection, refinement & loops,
+│           │                                  builder_token streaming, retry of one search, local tips
+│           └── warming.py               ← Phase 24: a trip's opening searches, made while it is being created
 ├── migrations/                          ← Alembic migrations
 │   └── versions/
 │       ├── 001_initial_schema.py        ← All 5 tables + pgvector
@@ -222,18 +226,20 @@ tripplanner-ai/
 │       ├── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 │       └── 004_embedding_kind.py        ← Phase 23: embeddings.kind, HNSW index over summaries, re-embedding queued
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (688 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (778 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 36 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 39 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
-│   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles)
+│   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
+│                                          fake providers behind the real MCP tools (Phase 24)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
-│                                          seed_demo_trips.py (a demo account with twelve embedded trips)
+│                                          seed_demo_trips.py (a demo account with twelve embedded trips),
+│                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–23) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–24) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -274,10 +280,11 @@ tripplanner-ai/
 | 21 | Smarter budget intelligence — seasons, a confidence range, a budget conflict priced three ways ([docs/phase21_build_log.md](docs/phase21_build_log.md)) | ✅ Done | 43 unit + 1 contract + 1 integration + 3 Playwright E2E |
 | 22 | Destination Intelligence Agent — local tips from what a model knows, in an accordion and in the PDF ([docs/phase22_build_log.md](docs/phase22_build_log.md)) | ✅ Done | 51 unit + 2 integration + 10 Playwright E2E |
 | 23 | pgvector similarity search — similar trips, search, the embedding experiment ([docs/phase23_build_log.md](docs/phase23_build_log.md)) | ✅ Done | 24 unit + 13 integration + 8 Playwright E2E |
-| 21–25 | Intelligence Layer | ⏳ | |
+| 24 | Caching & rate limits — cache warming on trip creation, a rate limit per provider, backoff on 429, the tools side by side ([docs/phase24_build_log.md](docs/phase24_build_log.md)) | ✅ Done | 90 unit + 3 integration + 1 Playwright E2E |
+| 25 | Group Trip Intelligence | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 457 unit + contract, 17 integration, 13 browser (5 end-to-end flows + 8 change-summary) — all passing.** Zero network calls in CI.
+**Total: 786 unit + contract, 39 integration, 56 browser — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -292,7 +299,7 @@ tripplanner-ai/
 | `DUFFEL_ACCESS_TOKEN` | Flights (a test-mode token returns sandbox offers) | https://duffel.com |
 | `LITEAPI_API_KEY` | Hotels (the free sandbox key is enough) | https://liteapi.travel |
 | `OPENTRIPMAP_API_KEY` | Attractions | https://opentripmap.io |
-| `OPENWEATHER_API_KEY` | Weather tool — optional, not used by planning yet | https://openweathermap.org/api |
+| `OPENWEATHER_API_KEY` | Weather tool — optional: no planning step reads it yet; cache warming asks for it when a trip is created | https://openweathermap.org/api |
 
 Five keys, all free tier. Geocoding uses Nominatim (OpenStreetMap) and needs no key — and neither
 does the map in the exported PDF, which is drawn from OpenStreetMap tiles (`MAP_TILE_URL` points it
@@ -303,6 +310,12 @@ to Groq's small model (`GROQ_SMALL_MODEL`) instead, so planning keeps working.
 
 **Scope:** trips within India, up to 14 nights. A destination abroad ("London") is refused with a
 clear message rather than planned as its nearest namesake.
+
+Every provider is asked no more often than it allows (Duffel 30 searches a minute, LiteAPI 5 requests a
+second, OpenTripMap 10, OpenWeather 60 a minute, Nominatim 1 a second): a request over the limit waits its
+turn, and one answered 429 or 5xx is tried again after a backoff. Creating a trip starts its searches in the
+background so that planning finds them cached — `CACHE_WARMING_ENABLED=false` turns that off where a quota
+is too tight to spend on trips that may never be planned.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.

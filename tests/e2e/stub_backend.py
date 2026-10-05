@@ -18,6 +18,8 @@ drive one situation:
                                                  whose shorter trip and 3-star stay both fit (Phase 21)
     Hampi, Badami                                the hotel search is down; it answers when retried
     Kaza                                         no airport is known for it: the flight search fails, every time
+    Munnar                                       the flight provider says "asked too often" (429) through every
+                                                 retry; the search answers when retried from the page (Phase 24)
     Leh                                          the attractions are a lake, a monastery and a pass: a trip that is
                                                  not like the others, for similar trips and search (Phase 23)
     Pondicherry                                  the local-tips model does not answer: a plan without tips (Phase 22)
@@ -65,6 +67,7 @@ if __name__ == "__main__":
     HOTEL_DOWN = {"Hampi", "Badami"}
     ALL_DOWN = {"Shimla", "Manali"}
     NO_AIRPORT = {"Kaza"}  # in Spiti: there is none
+    FLIGHTS_BUSY = {"Munnar"}
     DEAR_FLIGHTS = {"Jaisalmer": 30_000.0}
 
     # How often each search has been made (see the module docstring).
@@ -86,6 +89,9 @@ if __name__ == "__main__":
             )
         if params.get("destination") in ALL_DOWN and first_of_a_pair("flights", params, "destination", "date"):
             return down("flight")
+        if params.get("destination") in FLIGHTS_BUSY and first_of_a_pair("flights", params, "destination", "date"):
+            # what the real tool answers once its four attempts have all been turned away (Phase 24)
+            return ToolError(error="Rate limited — duffel: still HTTP 429 after 4 attempts.", code="RATE_LIMITED")
         # ₹8,200 direct; a re-plan that allows connections ("cheaper flights") finds ₹2,500.
         direct = DEAR_FLIGHTS.get(params.get("destination"), 8_200.0)
         return [flight(2_500.0 if params.get("max_stops", 1) >= 2 else direct)]
