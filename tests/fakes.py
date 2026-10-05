@@ -11,12 +11,14 @@ import asyncio
 import io
 import json
 import re
+import uuid
 from contextlib import contextmanager
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from PIL import Image
 
+from app import search
 from app.core.config import settings
 from src.ai.agents.refinement_classifier import RefinementClassification
 
@@ -107,6 +109,21 @@ ATTRACTIONS = [
     },
 ]
 
+
+# What the attractions search finds in the mountains (the stub backend serves it for Leh): nothing in
+# common with ATTRACTIONS, so a trip built from it is a different kind of trip (Phase 23).
+MOUNTAIN_ATTRACTIONS = [
+    {"name": "Pangong Lake", "category": "nature", "rating": 7.0, "description": "Lake.", "lat": 33.76, "lng": 78.67},
+    {
+        "name": "Thiksey Monastery",
+        "category": "spiritual",
+        "rating": 3.0,
+        "description": "Monastery.",
+        "lat": 34.06,
+        "lng": 77.67,
+    },
+    {"name": "Khardung La", "category": "nature", "rating": 2.0, "description": "Pass.", "lat": 34.28, "lng": 77.6},
+]
 
 _TARGETED_HOTEL = RefinementClassification(refinement_type="targeted_hotel", reason="stubbed classifier")
 
@@ -204,6 +221,44 @@ async def fake_builder_llm(_system: str, user_prompt: str, on_token=None) -> str
     return await stream_reply(reply, on_token) if on_token else reply
 
 
+# ── Embeddings (Phases 14, 23) ─────────────────────────────────────────────
+
+# Words that say nothing about what a text is about — the summary's own scaffolding among them.
+_FILLER = {"a", "an", "and", "the", "to", "of", "in", "for", "trip", "kinds", "places"}
+
+# The stand-in embedder scores on another scale than the real model, so the cut-offs that go with
+# it are its own (the real ones: app/search.py). Two stub trips built from the same attractions
+# score about 0.9, two built from different ones under 0.1; a one-word query scores 0.2–0.7
+# against a trip that has the word and 0 against one that has not.
+STUB_SIMILAR_FLOOR, STUB_SEARCH_FLOOR, STUB_SEARCH_WINDOW = 0.5, 0.15, 0.3
+# The search keeps each query's vector in Redis under the embedding model's name — and the test
+# stacks share Redis with the dev servers. A name of this process's own keeps the stand-in's vectors
+# away from the real model's, and from another run's (which numbered its words differently).
+STUB_EMBEDDING_MODEL = f"stub-words-{uuid.uuid4().hex[:8]}"
+
+
+# Each word's own dimension, in the order words are first seen. (Hashing words into 1536 dimensions
+# made unrelated words collide now and then: "zzzz" matched a trip.) One process embeds both the
+# stored texts and the queries, so the numbering only has to hold for as long as it runs.
+_dimension: dict[str, int] = {}
+
+
+def word_vector(text: str) -> list[float]:
+    """A stand-in embedding: one dimension per word, so two texts are as close as the words they share."""
+    vector = [0.0] * 1536
+    for word in re.findall(r"[a-z]+", text.lower()):
+        if word not in _FILLER:
+            vector[_dimension.setdefault(word, len(_dimension) % 1536)] += 1.0
+    if not any(vector):
+        vector[1535] = 1.0  # no words at all: still a direction (a zero vector has no cosine)
+    return vector
+
+
+async def fake_embed(text: str, _task_type: str | None = None) -> list[float]:
+    """Stand-in for the Gemini embedding call, for a stored text and a typed query alike."""
+    return word_vector(text)
+
+
 # What the stand-in DestinationIntelligenceAgent model knows (Phase 22). Written the way a model
 # writes: markdown it was told not to use, a list longer than asked for, a key nobody asked for.
 # One of the best_times places is in ATTRACTIONS, so a plan made from the stubs has a tip for one of its stops.
@@ -259,7 +314,12 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
         patch("src.ai.agents.destination_intelligence._call_llm", fake_intelligence_llm),
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
-        patch("src.ai.embeddings.embedder._call_embed", AsyncMock(return_value=[0.01] * 1536)),
+        patch("src.ai.embeddings.embedder._call_embed", AsyncMock(side_effect=fake_embed)),
+        patch("app.api.routes.trips.embed_query", AsyncMock(side_effect=fake_embed)),
+        patch("app.api.routes.trips.EMBEDDING_MODEL", STUB_EMBEDDING_MODEL),
+        patch.object(search, "SIMILAR_FLOOR", STUB_SIMILAR_FLOOR),
+        patch.object(search, "SEARCH_FLOOR", STUB_SEARCH_FLOOR),
+        patch.object(search, "SEARCH_WINDOW", STUB_SEARCH_WINDOW),
         patch("app.api.routes.trips.classify_refinement", AsyncMock(return_value=_TARGETED_HOTEL)),
         patch("app.pdf.static_map._download_tile", fake_tile),
         patch.object(settings, "MAP_TILE_URL", STUB_TILE_URL),

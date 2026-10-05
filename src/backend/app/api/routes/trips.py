@@ -16,7 +16,8 @@ GET    /trips/{id}/itineraries   all itinerary versions, newest first (Phase 15)
 GET    /trips/{id}/export/pdf    latest itinerary as a PDF download (Phase 19)
 GET    /trips/{id}/runs          all agent_runs for debugging; optional ?turn=N filter
 GET    /trips/{id}/timeline      ordered event log: agent_runs + itineraries (Phase 13)
-GET    /trips/{id}/similar       pgvector similarity (501 until Phase 23)
+GET    /trips/{id}/similar       the traveller's other trips most like this one (Phase 23)
+GET    /trips/search?q=…         the traveller's trips that match a typed query (Phase 23)
 
 Planning runs as a background task (see _run_orchestrator): the HTTP call
 returns immediately and progress arrives over SSE — the three searches, then
@@ -24,6 +25,7 @@ the itinerary as it is written (`builder_token`, Phase 20). Only one run per
 trip at a time — starting another while one is in flight is a 409.
 """
 
+import hashlib
 import json
 import logging
 import uuid
@@ -54,12 +56,17 @@ from app.schemas.trip import (
     RefineRequest,
     ReplanRequest,
     RetryRequest,
+    SimilarTripsResponse,
     TripCreate,
+    TripMatch,
     TripRead,
+    TripSearchResponse,
 )
 from app.schemas.types import as_utc
+from app.search import Match, search_trips, similar_trips
 from src.ai.agents.budget_decision import viable_budget
 from src.ai.agents.refinement_classifier import classify_refinement
+from src.ai.embeddings.embedder import EMBEDDING_MODEL, embed_query
 from src.ai.orchestrator.orchestrator import RETRY_REFINEMENTS, TRIP_FIELDS, OrchestratorAgent
 from src.ai.utils.conversation import (
     append_history,
@@ -245,6 +252,78 @@ async def create_trip(
     await db.commit()
     await db.refresh(trip)
     return trip
+
+
+# ── GET /trips/search ──────────────────────────────────────────────────────
+# Declared before /{trip_id}: "search" is not a trip id.
+
+# A query's embedding is kept a day: the same words typed again cost no second call to the model.
+_QUERY_VECTOR_TTL = 24 * 3600
+
+
+def _as_match(match: Match) -> TripMatch:
+    return TripMatch(
+        trip=TripRead.model_validate(match.trip),
+        itinerary_id=match.itinerary.id,
+        total_cost=match.itinerary.total_cost,
+        highlight=match.highlight,
+        similarity=round(match.similarity, 4),
+    )
+
+
+async def _query_vector(query: str, cache: aioredis.Redis | None) -> list[float]:
+    """The embedding of a typed query — from the cache when the same words were searched before."""
+    key = f"search:query:{EMBEDDING_MODEL}:{hashlib.sha256(query.lower().encode()).hexdigest()}"
+    if cache is not None:
+        try:
+            if cached := await cache.get(key):
+                return json.loads(cached)
+        except Exception:
+            logger.warning("Search: could not read the query cache", exc_info=True)
+
+    vector = await embed_query(query)
+    if cache is not None:
+        try:
+            await cache.set(key, json.dumps(vector), ex=_QUERY_VECTOR_TTL)
+        except Exception:
+            logger.warning("Search: could not write the query cache", exc_info=True)
+    return vector
+
+
+@router.get("/search", response_model=TripSearchResponse)
+async def search_my_trips(
+    q: str = Query(
+        ..., min_length=1, max_length=200, description="What to look for, in words: “beach under 50k 5 days”"
+    ),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    cache: aioredis.Redis | None = Depends(get_redis_or_none),
+) -> TripSearchResponse:
+    """Phase 23 — the traveller's planned trips that match a query, best first.
+
+    The query is embedded on the spot and compared with the summary embedding
+    of each trip's latest itinerary (pgvector, cosine). Only trips that are
+    close are returned — an empty list is an answer: nothing matched. Only the
+    caller's own trips are ever searched.
+
+    It matches by meaning ("somewhere quiet by the sea" finds the beach trips),
+    not by arithmetic: "under 50k" and "5 days" are words to it, not limits.
+
+    503 when the query cannot be embedded (no key, the model is not answering).
+    """
+    query = " ".join(q.split())
+    if len(query) < 2:
+        raise HTTPException(status_code=422, detail="Type at least two characters to search.")
+    try:
+        vector = await _query_vector(query, cache)
+    except Exception as exc:
+        logger.warning("Trip search: the query could not be embedded (%s)", str(exc)[:200])
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Search is not available right now. Try again in a moment.",
+        )
+    matches = await search_trips(db, current_user.id, vector)
+    return TripSearchResponse(query=query, results=[_as_match(match) for match in matches])
 
 
 # ── GET /trips/{id} ────────────────────────────────────────────────────────
@@ -802,14 +881,30 @@ async def export_trip_pdf(
 # ── GET /trips/{id}/similar ────────────────────────────────────────────────
 
 
-@router.get("/{trip_id}/similar")
+@router.get("/{trip_id}/similar", response_model=SimilarTripsResponse)
 async def get_similar_trips(
     trip_id: uuid.UUID,
+    limit: int = Query(5, ge=1, le=5),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> None:
-    await _get_trip_or_404(trip_id, current_user.id, db)
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Similarity search — Phase 23.")
+) -> SimilarTripsResponse:
+    """Phase 23 — up to five of the traveller's other trips most like this one, most alike first.
+
+    Each trip is compared by the summary embedding of its latest itinerary
+    (pgvector, cosine similarity). A trip that is merely the nearest is not
+    listed: only those above the similarity the experiment found to mean "the
+    same kind of trip" (app/search.py). Only the caller's own trips are compared.
+
+    `status` is "pending" while this trip's own embedding is not there yet — it
+    is made in the background just after the plan is saved — and "ready" otherwise.
+    A trip without an itinerary has nothing to compare: 404.
+    """
+    trip = await _get_trip_or_404(trip_id, current_user.id, db)
+    await _latest_itinerary_or_404(trip_id, db)
+    matches = await similar_trips(db, trip, limit=limit)
+    if matches is None:
+        return SimilarTripsResponse(status="pending", results=[])
+    return SimilarTripsResponse(status="ready", results=[_as_match(match) for match in matches])
 
 
 # ── GET /trips/{id}/runs ───────────────────────────────────────────────────

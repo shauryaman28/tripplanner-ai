@@ -65,7 +65,7 @@ async def generate_embeddings(itinerary_id: uuid.UUID) -> None:
                 itinerary_id=itinerary_id,
                 structured_data=itinerary.structured_data or {},
                 destination=trip.destination if trip else "Unknown",
-                total_cost=itinerary.total_cost,
+                interests=trip.interests if trip else None,
                 db=db,
             )
 

@@ -223,7 +223,8 @@ async def test_get_trip_runs_returns_empty_list():
 
 
 @pytest.mark.asyncio
-async def test_get_similar_returns_501():
+async def test_get_similar_is_no_longer_a_501():
+    """It was 501 from Phase 5 until Phase 23 (tests/unit/test_phase23_similarity.py has the rest)."""
     from app.db.session import get_db
     from app.main import app
 
@@ -242,7 +243,10 @@ async def test_get_similar_returns_501():
 
     app.dependency_overrides[get_db] = _override_get_db(mock_session)
     try:
-        with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
+        with (
+            patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))),
+            patch("app.api.routes.trips.similar_trips", AsyncMock(return_value=None)),  # not embedded yet
+        ):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
                 resp = await c.get(
                     f"/trips/{trip_id}/similar",
@@ -251,4 +255,5 @@ async def test_get_similar_returns_501():
     finally:
         app.dependency_overrides.pop(get_db, None)
 
-    assert resp.status_code == 501
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "pending", "results": []}

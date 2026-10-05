@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 22 / 50 — Destination Intelligence Agent**
+**Status: Phase 23 / 50 — pgvector Similarity Search**
 
 ---
 
@@ -28,6 +28,10 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
                                       Postgres + pgvector
                                          Redis pub/sub
                                         SSE → Frontend
+
+Every saved itinerary is embedded (Gemini, 1536 dimensions, pgvector). GET /trips/{id}/similar ranks a
+traveller's other trips by cosine similarity to this one; GET /trips/search?q=… ranks them against a
+typed query. Both search only the caller's own trips.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -87,15 +91,16 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 675 tests
+# Unit + contract tests (no Docker, no network) — 696 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 23 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 36 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser tests (Playwright) — 47 tests: 5 end-to-end flows, 10 for Phase 22's local tips, 3 for Phase 21's priced
+# Browser tests (Playwright) — 55 tests: 5 end-to-end flows, 8 for Phase 23's similar trips and search, 10 for
+# Phase 22's local tips, 3 for Phase 21's priced
 # budget conflict, 5 for Phase 20's polish (live draft, refinement marks, retry, 375 px), 16 for the live draft's
 # reader, 8 for the change summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
@@ -117,7 +122,7 @@ while your dev servers (:8000 / :3000) are up and never touches dev data.
 ```
 tripplanner-ai/
 ├── src/
-│   ├── frontend/                        ← Phases 17–22: Next.js 14 App Router
+│   ├── frontend/                        ← Phases 17–23: Next.js 14 App Router
 │   │   ├── package.json
 │   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
 │   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
@@ -127,6 +132,7 @@ tripplanner-ai/
 │   │   ├── e2e/polish.spec.ts           ← Phase 20: live draft, refinement marks, retry, every view at 375 px
 │   │   ├── e2e/budget.spec.ts           ← Phase 21: a budget conflict priced, and each way out planned
 │   │   ├── e2e/tips.spec.ts             ← Phase 22: the Local tips accordion; no section when there are no tips
+│   │   ├── e2e/similar.spec.ts          ← Phase 23: similar trips on the trip page; search on the trips list
 │   │   ├── e2e/changes.spec.ts          ← what the assistant says changed (pure function tests)
 │   │   ├── e2e/draft.spec.ts            ← the live draft's partial-JSON reader (pure function tests)
 │   │   └── src/
@@ -136,11 +142,12 @@ tripplanner-ai/
 │   │       │   ├── page.tsx             ← redirects → /trips
 │   │       │   ├── login/page.tsx       ← sign in / create account
 │   │       │   └── trips/
-│   │       │       ├── page.tsx         ← trip cards & new-trip form
+│   │       │       ├── page.tsx         ← trip cards, new-trip form, search (Phase 23)
 │   │       │       └── [id]/page.tsx    ← the plan, the assistant, live progress
 │   │       ├── components/              ← ItineraryView, CostSummary, DayCard, ItineraryMap (Phase 18),
 │   │       │                              DownloadPdfButton + Toast (Phase 19), LiveDraft, ProgressSheet,
-│   │       │                              TripStages (Phase 20), LocalTips (Phase 22), AgentProgressPanel,
+│   │       │                              TripStages (Phase 20), LocalTips (Phase 22), SimilarTrips (Phase 23),
+│   │       │                              AgentProgressPanel,
 │   │       │                              MessageThread, ChatInput, AppHeader, Brand, ui
 │   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), map.ts (pins, routes,
 │   │                                      day colours), changes.ts (what a change request changed, and
@@ -157,6 +164,7 @@ tripplanner-ai/
 │   │       │       ├── auth.py          ← POST /auth/register, /auth/login
 │   │       │       ├── health.py        ← GET /ping
 │   │       │       ├── trips.py         ← All trip routes + SSE + GET /status + POST /retry + GET /export/pdf
+│   │       │       │                              + GET /similar and GET /search (Phase 23)
 │   │       │       ├── users.py         ← GET/PUT /users/preferences (Phase 16)
 │   │       │       └── admin.py         ← GET /admin/embedding-health (Phase 14)
 │   │       ├── core/
@@ -167,6 +175,7 @@ tripplanner-ai/
 │   │       │   └── redis.py             ← async Redis singleton
 │   │       ├── models/                  ← SQLModel table models
 │   │       ├── schemas/                 ← Pydantic request/response schemas
+│   │       ├── search.py                ← Phase 23: similar trips and search — pgvector over itinerary summaries
 │   │       └── pdf/                     ← Phase 19: the itinerary as a PDF (Phase 20: in the scripts of India)
 │   │           ├── export.py            ← draw the map if it can be drawn, then build the PDF
 │   │           ├── plan.py              ← what the pages say — pure, mirrors the trip page's rules
@@ -182,7 +191,7 @@ tripplanner-ai/
 │       ├── pricing.py                   ← Phase 21: seasons by destination, typical costs, the estimate arithmetic
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache
 │       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
-│       ├── embeddings/                  ← Phase 14: Gemini embedding writer
+│       ├── embeddings/                  ← Phase 14: Gemini embedding writer; Phase 23: the summary text, query embedding
 │       ├── utils/
 │       │   ├── run_logger.py            ← Phase 6: writes agent_runs
 │       │   ├── conversation.py          ← Phase 7B/15: Redis history + planning state
@@ -210,18 +219,21 @@ tripplanner-ai/
 │   └── versions/
 │       ├── 001_initial_schema.py        ← All 5 tables + pgvector
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
-│       └── 003_add_user_preferences.py  ← Phase 16: user_preferences table
+│       ├── 003_add_user_preferences.py  ← Phase 16: user_preferences table
+│       └── 004_embedding_kind.py        ← Phase 23: embeddings.kind, HNSW index over summaries, re-embedding queued
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (667 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (688 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 23 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 36 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
+├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
+│                                          seed_demo_trips.py (a demo account with twelve embedded trips)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–22) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–23) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -261,6 +273,7 @@ tripplanner-ai/
 | 20 | Frontend polish — streamed itinerary, refinement marks, retry, phone layout; the PDF in the scripts of India ([docs/phase20_build_log.md](docs/phase20_build_log.md)) | ✅ Done | 120 unit + 3 integration + 21 Playwright E2E |
 | 21 | Smarter budget intelligence — seasons, a confidence range, a budget conflict priced three ways ([docs/phase21_build_log.md](docs/phase21_build_log.md)) | ✅ Done | 43 unit + 1 contract + 1 integration + 3 Playwright E2E |
 | 22 | Destination Intelligence Agent — local tips from what a model knows, in an accordion and in the PDF ([docs/phase22_build_log.md](docs/phase22_build_log.md)) | ✅ Done | 51 unit + 2 integration + 10 Playwright E2E |
+| 23 | pgvector similarity search — similar trips, search, the embedding experiment ([docs/phase23_build_log.md](docs/phase23_build_log.md)) | ✅ Done | 24 unit + 13 integration + 8 Playwright E2E |
 | 21–25 | Intelligence Layer | ⏳ | |
 | 26–50 | Production & Polish | ⏳ | |
 

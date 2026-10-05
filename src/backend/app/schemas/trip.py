@@ -53,6 +53,34 @@ class TripRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TripMatch(BaseModel):
+    """A trip found by similarity (Phase 23): enough to show it as a card, and how close it came."""
+
+    trip: TripRead
+    itinerary_id: uuid.UUID  # the itinerary it was matched on — the trip's latest
+    total_cost: float | None
+    highlight: str | None  # one place to name the trip by: its most popular stop
+    similarity: float  # cosine similarity of the two embeddings; 1 is the same
+
+
+class SimilarTripsResponse(BaseModel):
+    """GET /trips/{id}/similar.
+
+    status "pending": this trip's own embedding is not there yet — it is made
+    in the background just after a plan is saved — so nothing can be compared.
+    """
+
+    status: Literal["ready", "pending"]
+    results: list[TripMatch]
+
+
+class TripSearchResponse(BaseModel):
+    """GET /trips/search?q=…"""
+
+    query: str
+    results: list[TripMatch]
+
+
 class PlanRequest(BaseModel):
     """Optional body for POST /trips/{id}/plan."""
 

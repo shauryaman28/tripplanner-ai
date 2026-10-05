@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CalendarDays, Minus, Plus, Users, Wallet, X } from "lucide-react";
+import { ArrowRight, CalendarDays, MapPin, Minus, Plus, Search, Users, Wallet, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import AppHeader from "@/components/AppHeader";
 import { LogoMark } from "@/components/Brand";
 import { Spinner, TripStatusBadge } from "@/components/ui";
-import { createTrip, getToken, listTrips } from "@/lib/api";
+import { createTrip, getToken, listTrips, searchTrips } from "@/lib/api";
 import { formatDateRange, formatINR, nightsBetween, plural } from "@/lib/format";
-import type { Trip } from "@/lib/types";
+import type { Trip, TripMatch } from "@/lib/types";
 
 // What the attractions search understands best — one tap adds it to the list.
 const INTEREST_IDEAS = ["beach", "history", "food", "nature", "culture", "adventure", "shopping", "nightlife", "wellness"];
@@ -44,11 +44,13 @@ function parseInterests(text: string): string[] {
   return text.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-function TripCard({ trip }: { trip: Trip }) {
+/** A trip as a card. `match` — a search result: the card also says what the plan came to and one place in it. */
+function TripCard({ trip, match }: { trip: Trip; match?: TripMatch }) {
   const nights = nightsBetween(trip.start_date, trip.end_date);
   return (
     <Link
       href={`/trips/${trip.id}`}
+      data-similarity={match?.similarity}
       className="card focus-ring group flex h-full flex-col overflow-hidden transition duration-200 hover:-translate-y-0.5 hover:shadow-lift"
     >
       <div className={`relative h-24 bg-gradient-to-br ${coverFor(trip.destination)}`}>
@@ -78,8 +80,16 @@ function TripCard({ trip }: { trip: Trip }) {
           </li>
           <li className="flex items-center gap-2">
             <Wallet className="h-4 w-4 shrink-0 text-ink-400" aria-hidden />
-            {formatINR(trip.budget)} budget
+            {match && match.total_cost !== null
+              ? `${formatINR(match.total_cost)} of ${formatINR(trip.budget)} budget`
+              : `${formatINR(trip.budget)} budget`}
           </li>
+          {match?.highlight && (
+            <li className="flex items-start gap-2">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-ink-400" aria-hidden />
+              <span className="min-w-0 break-words">{match.highlight}</span>
+            </li>
+          )}
         </ul>
 
         {trip.interests && trip.interests.length > 0 && (
@@ -118,6 +128,12 @@ export default function TripsPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Search (Phase 23): what is typed, what was last searched for and found, and whether a search is in flight
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<{ query: string; matches: TripMatch[] } | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!getToken()) {
       router.replace("/login");
@@ -135,6 +151,30 @@ export default function TripsPage() {
   function toggleInterest(idea: string) {
     const next = chosen.includes(idea) ? chosen.filter((i) => i !== idea) : [...chosen, idea];
     setInterests(next.join(", "));
+  }
+
+  function showAllTrips() {
+    setQuery("");
+    setFound(null);
+    setSearchError(null);
+  }
+
+  /** Search the traveller's planned trips by what they are about. An empty box goes back to all of them. */
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const wanted = query.trim().replace(/\s+/g, " ");
+    if (wanted.length < 2) return showAllTrips();
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const answer = await searchTrips(wanted);
+      setFound({ query: answer.query, matches: answer.results });
+    } catch {
+      // the list stays as it was: a search that could not run has found nothing out
+      setSearchError("Search is not available right now. Try again in a moment.");
+    } finally {
+      setSearching(false);
+    }
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -389,13 +429,70 @@ export default function TripsPage() {
             </div>
           )
         ) : (
-          <ul className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {trips.map((trip) => (
-              <li key={trip.id}>
-                <TripCard trip={trip} />
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* Search (Phase 23): by what a trip is about, among the trips that have a plan */}
+            <form role="search" onSubmit={handleSearch} className="mt-8 flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" aria-hidden />
+                <input
+                  type="search"
+                  value={query}
+                  // emptying the box — by hand or with its own ✕ — goes back to every trip
+                  onChange={(e) => (e.target.value ? setQuery(e.target.value) : showAllTrips())}
+                  maxLength={200}
+                  aria-label="Search your trips"
+                  placeholder="Search your trips — “beaches”, “forts and palaces”…"
+                  className="input pl-10"
+                />
+              </div>
+              <button type="submit" disabled={searching} className="btn-secondary shrink-0">
+                {searching ? <Spinner /> : <Search className="h-4 w-4 sm:hidden" aria-hidden />}
+                <span className={searching ? "" : "sr-only sm:not-sr-only"}>{searching ? "Searching…" : "Search"}</span>
+              </button>
+            </form>
+            {searchError && (
+              <p role="alert" className="mt-3 rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad-ink">
+                {searchError}
+              </p>
+            )}
+
+            {found ? (
+              <section aria-label="Search results" className="mt-8">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p role="status" className="text-sm text-ink-600">
+                    {found.matches.length > 0
+                      ? `${plural(found.matches.length, "trip")} ${found.matches.length === 1 ? "matches" : "match"} “${found.query}”, the closest first.`
+                      : `No trips match “${found.query}”.`}
+                  </p>
+                  <button onClick={showAllTrips} className="btn-ghost px-3 py-1.5">
+                    <X className="h-4 w-4" aria-hidden />
+                    Show all trips
+                  </button>
+                </div>
+                {found.matches.length > 0 ? (
+                  <ul className="mt-4 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {found.matches.map((match) => (
+                      <li key={match.trip.id}>
+                        <TripCard trip={match.trip} match={match} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="card mt-4 px-6 py-10 text-center text-sm text-ink-600">
+                    It searches the trips that have a plan, by what they are about — try a place, or what you did there.
+                  </p>
+                )}
+              </section>
+            ) : (
+              <ul className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                {trips.map((trip) => (
+                  <li key={trip.id}>
+                    <TripCard trip={trip} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </main>
     </div>

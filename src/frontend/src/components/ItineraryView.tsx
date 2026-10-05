@@ -12,6 +12,7 @@ import DayCard from "./DayCard";
 import DownloadPdfButton from "./DownloadPdfButton";
 import type { MapFocus } from "./ItineraryMap";
 import LocalTips from "./LocalTips";
+import SimilarTrips from "./SimilarTrips";
 
 // Leaflet touches `window` at import time, so the map only ever loads in the browser.
 const ItineraryMap = dynamic(() => import("./ItineraryMap"), {
@@ -117,6 +118,9 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
       <div ref={mapRef} id="trip-map" className={`transition-opacity duration-300 ${section === "activities" ? "opacity-60" : ""}`}>
         <ItineraryMap days={data.days} focus={focus} />
       </div>
+
+      {/* Similar trips (Phase 23) — nothing at all when the traveller has none like this one. */}
+      <SimilarTrips tripId={itinerary.trip_id} itineraryId={itinerary.id} />
     </section>
   );
 }
