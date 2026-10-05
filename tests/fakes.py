@@ -11,11 +11,16 @@ import asyncio
 import io
 import json
 import re
+import threading
+import time
 import uuid
-from contextlib import contextmanager
+from collections import Counter
+from collections.abc import Callable
+from contextlib import asynccontextmanager, contextmanager
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 from PIL import Image
 
 from app import search
@@ -60,7 +65,13 @@ def duffel_response(*offers: dict) -> MagicMock:
 def liteapi_response(*hotels: tuple[str, float], stars: int = 4) -> MagicMock:
     """Stand-in for the httpx.Response of POST /hotels/rates; each hotel is (name, total price for the stay in INR)."""
     response = MagicMock()
-    response.json.return_value = {
+    response.json.return_value = liteapi_body(*hotels, stars=stars)
+    return response
+
+
+def liteapi_body(*hotels: tuple[str, float], stars: int = 4) -> dict:
+    """What POST /hotels/rates answers with; each hotel is (name, total price for the stay in INR)."""
+    return {
         "hotels": [
             {
                 "id": f"h{i}",
@@ -79,7 +90,6 @@ def liteapi_response(*hotels: tuple[str, float], stars: int = 4) -> MagicMock:
             for i, (_, total) in enumerate(hotels)
         ],
     }
-    return response
 
 
 # ── Whole-pipeline stubs ───────────────────────────────────────────────────
@@ -296,20 +306,24 @@ async def fake_intelligence_llm(_system: str, user_prompt: str) -> str:
 
 @contextmanager
 def network_stubs(flight_tool, hotel_tool=None):
-    """Patch every network seam; yields the three MCP tool mocks keyed flight / hotel / activities.
+    """Patch every network seam; yields the MCP tool mocks keyed flight / hotel / activities / warm.
 
     `flight_tool` / `hotel_tool` are called as tool(name, params) and return what
-    the MCP client would: a list of results or a ToolError.
+    the MCP client would: a list of results or a ToolError. "warm" is every call
+    cache warming makes (Phase 24) — its own mock, so that warming a trip never
+    counts as one of the plan's searches.
     """
     tools = {
         "flight": AsyncMock(side_effect=flight_tool),
         "hotel": AsyncMock(side_effect=hotel_tool or (lambda *_: HOTELS)),
         "activities": AsyncMock(return_value=ATTRACTIONS),
+        "warm": AsyncMock(return_value=[]),
     }
     with (
         patch("src.ai.agents.flight_agent.call_tool", tools["flight"]),
         patch("src.ai.agents.hotel_agent.call_tool", tools["hotel"]),
         patch("src.ai.agents.activities_agent.call_tool", tools["activities"]),
+        patch("src.ai.orchestrator.warming.call_tool", tools["warm"]),
         patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={})),
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
         patch("src.ai.agents.destination_intelligence._call_llm", fake_intelligence_llm),
@@ -325,3 +339,160 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch.object(settings, "MAP_TILE_URL", STUB_TILE_URL),
     ):
         yield tools
+
+
+# ── The providers themselves, behind the real tools (Phase 24) ─────────────
+#
+# network_stubs() replaces the tools. These replace only what the tools talk to — httpx.get and
+# httpx.post — so that the real MCP server, its threads, its cache keys, its rate limits and its
+# backoff are what a test runs.
+
+
+def provider_answer(status: int, body=None, headers: dict | None = None, url: str = "https://provider.test/"):
+    """A real httpx.Response: its raise_for_status() raises exactly as a provider's error would."""
+    return httpx.Response(status, json={} if body is None else body, headers=headers, request=httpx.Request("GET", url))
+
+
+class FakeProviders:
+    """Stand-ins for httpx.get / httpx.post that answer as the five providers do. Safe to call from threads.
+
+    requests      the provider of every request received, in order
+    answers       (provider, status) of every answer given
+    turn_away     {provider: [statuses]} — answered first, one per request: {"duffel": [429, 429]}
+    limits        {provider: (calls, seconds)} — the provider then counts as a real one does, in real
+                  time, and answers 429 past its limit
+    on_request    called with the provider's name while a request is "at the provider" — a place to
+                  hold it (an Event, a Barrier) or to slow it down
+    """
+
+    HOSTS = {
+        "api.duffel.com": "duffel",
+        "api.liteapi.travel": "liteapi",
+        "api.opentripmap.com": "opentripmap",
+        "api.openweathermap.org": "openweather",
+        "nominatim.openstreetmap.org": "nominatim",
+    }
+
+    def __init__(self) -> None:
+        self.requests: list[str] = []
+        self.answers: list[tuple[str, int]] = []
+        self.turn_away: dict[str, list[int]] = {}
+        self.limits: dict[str, tuple[int, float]] = {}
+        self.on_request: Callable[[str], None] | None = None
+        self.offers = [duffel_offer(amount="4200.00"), duffel_offer(carrier="AI", number="101", amount="6100.00")]
+        self.hotels: list[tuple[str, float]] = [("Goa Grand", 18_000.0), ("Sea Breeze", 26_000.0)]  # for the stay
+        self._arrivals: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def get(self, url: str, **_request) -> httpx.Response:
+        return self._answer(url)
+
+    def post(self, url: str, **_request) -> httpx.Response:
+        return self._answer(url)
+
+    def counts(self) -> Counter:
+        """How many requests each provider has received."""
+        with self._lock:
+            return Counter(self.requests)
+
+    @property
+    def turned_away(self) -> list[tuple[str, int]]:
+        """Every answer that was a 429."""
+        with self._lock:
+            return [answer for answer in self.answers if answer[1] == 429]
+
+    def _answer(self, url: str) -> httpx.Response:
+        provider = self.HOSTS[httpx.URL(url).host]
+        with self._lock:
+            self.requests.append(provider)
+            status = 200
+            if self.turn_away.get(provider):
+                status = self.turn_away[provider].pop(0)
+            elif provider in self.limits:
+                calls, period = self.limits[provider]
+                now = time.monotonic()
+                recent = [at for at in self._arrivals.get(provider, []) if now - at < period]
+                if len(recent) >= calls:
+                    status = 429
+                else:
+                    recent.append(now)
+                self._arrivals[provider] = recent
+            self.answers.append((provider, status))
+        if self.on_request is not None:
+            self.on_request(provider)
+        return provider_answer(status, self._body(provider) if status == 200 else None, url=url)
+
+    def _body(self, provider: str):
+        if provider == "duffel":
+            return {"data": {"offers": self.offers}}
+        if provider == "liteapi":
+            return liteapi_body(*self.hotels)
+        if provider == "opentripmap":
+            return [
+                {
+                    "name": "Fort Aguada",
+                    "kinds": "historic,fortifications",
+                    "rate": 7,
+                    "point": {"lat": 15.49, "lon": 73.77},
+                },
+                {"name": "Baga Beach", "kinds": "beaches,natural", "rate": 2, "point": {"lat": 15.55, "lon": 73.75}},
+            ]
+        if provider == "nominatim":
+            place = {"class": "boundary", "importance": 0.7, "lat": "15.30", "lon": "74.08"}
+            return [{**place, "address": {"country_code": "in", "country": "India"}}]
+        reading = {"dt": int(time.time()), "weather": [{"main": "Clear"}], "main": {"temp_max": 31.0, "temp_min": 24.0}}
+        return {"list": [reading]}
+
+
+@contextmanager
+def memory_cache():
+    """The tools' Redis cache as a dict: yields {key: (value, ttl in seconds)}."""
+    store: dict[str, tuple] = {}
+
+    def read(key: str):
+        return json.loads(json.dumps(store[key][0])) if key in store else None
+
+    def write(key: str, value, ttl: int = 900) -> None:
+        store[key] = (json.loads(json.dumps(value, default=str)), ttl)
+
+    with (
+        patch("src.ai.mcp_server.tools.get_cached_sync", read),
+        patch("src.ai.mcp_server.tools.set_cached_sync", write),
+    ):
+        yield store
+
+
+@contextmanager
+def providers_faked(providers: FakeProviders):
+    """Every provider the tools reach is `providers`, and every API key is set."""
+    keys = MagicMock(DUFFEL_ACCESS_TOKEN="t", LITEAPI_API_KEY="k", OPENTRIPMAP_API_KEY="k", OPENWEATHER_API_KEY="k")
+    with (
+        patch("src.ai.mcp_server.tools.httpx.get", providers.get),
+        patch("src.ai.mcp_server.tools.httpx.post", providers.post),
+        patch("src.ai.mcp_server.tools.mcp_settings", keys),
+    ):
+        yield providers
+
+
+@asynccontextmanager
+async def tool_server(providers: FakeProviders | None = None):
+    """The real MCP server and the real client, in this process, in front of fake providers.
+
+    Inside it call_tool() — the agents' and the cache warmer's — runs the client's
+    own code against the real FastMCP server object: threaded tools, cache keys,
+    rate limits, backoff. Only the transport is in memory instead of a
+    subprocess's pipes, and only httpx.get / httpx.post are fakes.
+
+    Use it as `async with` inside the test itself, not as a fixture: the session
+    must be closed by the task that opened it.
+    """
+    from mcp.shared.memory import create_connected_server_and_client_session
+
+    from src.ai.mcp_server.server import mcp
+
+    async with create_connected_server_and_client_session(mcp) as session:
+        with (
+            providers_faked(providers or FakeProviders()) as faked,
+            patch("src.ai.mcp_client.client.get_session", AsyncMock(return_value=session)),
+        ):
+            yield faked

@@ -36,6 +36,32 @@ from src.ai.utils.tasks import spawn
 logger = logging.getLogger(__name__)
 
 
+# ── Logging ────────────────────────────────────────────────────────────────
+
+
+def _show_app_logs() -> None:
+    """Send the app's INFO lines to the console, as uvicorn does its own.
+
+    Uvicorn sets up the "uvicorn" loggers and nothing else, so a line logged at
+    INFO by the app ("app.…") or the planner ("src.ai.…") went nowhere:
+    "[CACHE WARM] flights: …" (Phase 24) and "[EMBEDDING RECOVERY] …" were
+    written and never seen. Warnings were shown already, by Python's handler of
+    last resort — which steps aside once a logger has a handler of its own.
+
+    Only when nothing handles the root logger: under pytest, or in a deployment
+    that brings its own logging config, this adds nothing.
+    """
+    if logging.getLogger().handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))  # uvicorn's own layout
+    for name in ("app", "src"):
+        app_logger = logging.getLogger(name)
+        if not app_logger.handlers:
+            app_logger.addHandler(handler)
+            app_logger.setLevel(logging.INFO)
+
+
 # ── Startup recovery ───────────────────────────────────────────────────────
 
 
@@ -92,6 +118,7 @@ async def _regenerate_embeddings(itinerary_ids: list) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _show_app_logs()
     redis = await init_redis()
     try:
         await redis.delete(EMBEDDINGS_PENDING_KEY)
@@ -109,7 +136,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.23.0",
+    version="0.24.0",
     lifespan=lifespan,
 )
 

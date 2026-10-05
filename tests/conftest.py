@@ -52,6 +52,37 @@ def no_embedding_calls():
 
 
 @pytest.fixture(autouse=True)
+def no_waiting():
+    """A rate limit or a backoff (Phase 24) waits in real time: a test gets the waits as a list, and no test sits through one.
+
+    Yields [("limit" | "backoff", seconds), …] in the order the waits were asked for.
+    The limiters also count from one call to the next — each test starts from
+    none, or the thirty-first flight search of a test run would be held a minute.
+    """
+    from src.ai.mcp_server import rate_limiter
+
+    rate_limiter.reset()
+    waits: list[tuple[str, float]] = []
+    with (
+        patch("src.ai.mcp_server.rate_limiter._sleep", lambda seconds: waits.append(("limit", seconds))),
+        patch("src.ai.mcp_server.outbound._sleep", lambda seconds: waits.append(("backoff", seconds))),
+    ):
+        yield waits
+    rate_limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def no_cache_warming():
+    """Creating a trip starts its searches in the background (Phase 24): a test that wants them starts them itself.
+
+    Left running, the task would outlive the test that created the trip — and
+    open a database session of its own, on whatever database is configured.
+    """
+    with patch("app.api.routes.trips.start_cache_warming") as start:
+        yield start
+
+
+@pytest.fixture(autouse=True)
 def no_tile_downloads():
     """The PDF export draws its map from tiles: a test stubs them (tests/fakes.fake_tile), it never fetches any."""
     refuse = AsyncMock(side_effect=RuntimeError("no tile server in tests"))

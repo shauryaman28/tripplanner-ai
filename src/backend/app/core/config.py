@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_SMALL_MODEL: str = "openai/gpt-oss-20b"  # stands in for Gemini when it is unavailable (src/ai/llm.py)
 
+    # Phase 24 — POST /trips starts the trip's opening searches in the background, so planning finds
+    # them cached (src/ai/orchestrator/warming.py). Each trip created costs one flight search, which
+    # the provider counts: turn this off where the quota is too tight to spend on trips never planned.
+    CACHE_WARMING_ENABLED: bool = True
+
     # Map tiles for the static map in the exported PDF (Phase 19) — the backend's counterpart of the
     # frontend's NEXT_PUBLIC_MAP_TILE_URL. OpenStreetMap's own server needs no key and is fine for
     # development; a deployment points this at a tile provider it has an account with. Empty = no map.

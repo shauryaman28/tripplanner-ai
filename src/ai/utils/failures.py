@@ -21,6 +21,8 @@ _WORDS = {
     "DUFFEL_ERROR": "The flight provider did not answer.",
     "LITEAPI_ERROR": "The hotel provider did not answer.",
     "OTM_ERROR": "The attractions provider did not answer.",
+    # Phase 24: asked too often, and still turned away after the waits and retries (mcp_server/outbound.py)
+    "RATE_LIMITED": "This search is busy right now. Try again in a minute.",
     "UNKNOWN_ERROR": "The search could not be completed.",
     "AGENT_EXCEPTION": "The search could not be completed.",
 }

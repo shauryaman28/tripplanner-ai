@@ -42,6 +42,7 @@ from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep, get_redis_or_none
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.agent_run import AgentRun
 from app.models.itinerary import Itinerary
@@ -68,6 +69,7 @@ from src.ai.agents.budget_decision import viable_budget
 from src.ai.agents.refinement_classifier import classify_refinement
 from src.ai.embeddings.embedder import EMBEDDING_MODEL, embed_query
 from src.ai.orchestrator.orchestrator import RETRY_REFINEMENTS, TRIP_FIELDS, OrchestratorAgent
+from src.ai.orchestrator.warming import start_cache_warming
 from src.ai.utils.conversation import (
     append_history,
     clear_current_run,
@@ -251,6 +253,10 @@ async def create_trip(
     db.add(trip)
     await db.commit()
     await db.refresh(trip)
+    if settings.CACHE_WARMING_ENABLED:
+        # Phase 24 — the searches planning opens with, started now: by the time the traveller has said
+        # what they want, the answers are cached. In the background: the trip is created either way.
+        start_cache_warming(_trip_state(trip), current_user.id)
     return trip
 
 

@@ -105,7 +105,8 @@ async def clarify_node(state: TripState) -> TripState:
     }
 
 
-async def search_flights_node(state: TripState) -> TripState:
+def flight_tool_params(state: TripState) -> dict:
+    """What `search_flights` is called with. Cache warming makes the same call (src/ai/orchestrator/warming.py)."""
     params = {
         "origin": state.get("origin", "DEL"),
         "destination": state["destination"],
@@ -117,8 +118,11 @@ async def search_flights_node(state: TripState) -> TripState:
     for optional in ("return_date", "preferred_airlines", "max_stops"):
         if state.get(optional):
             params[optional] = state[optional]
+    return params
 
-    result = await call_tool("search_flights", params)
+
+async def search_flights_node(state: TripState) -> TripState:
+    result = await call_tool("search_flights", flight_tool_params(state))
 
     if hasattr(result, "code"):
         return {**state, "error": result.model_dump(), "flights": []}

@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–23
+# How to Run & Verify — Phases 1–24
 
 ## What changed vs the original codebase?
 
@@ -22,6 +22,7 @@
 | 21 | `tools.py` + `models.py` (`estimate_budget`: destination, month, nights → a range and the season), `evaluator.py`, `orchestrator.py` (a conflict priced; a trip that fits goes ahead; a picked way out is gone ahead with), `trips.py` (`/replan` applies the option as offered; `/status` returns its estimate), `TripStages.tsx`, the trip page, `types.ts`, `tests/e2e/stub_backend.py` — see `docs/phase21_build_log.md` | `src/ai/pricing.py`, `src/ai/agents/budget_alternatives.py`, `tests/unit/test_phase21_budget.py`, `e2e/budget.spec.ts` |
 | 22 | `orchestrator.py` (the fourth agent beside the hotel and activities searches; tips carried by refinements), `builder.py` (tips attached to the checked draft), `itinerary.py`, `pdf/plan.py` + `document.py` (a Local tips page), `ItineraryView.tsx`, `lib/changes.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase22_build_log.md` | `src/ai/agents/destination_intelligence.py`, `prompts/destination_intelligence_v1.md`, `LocalTips.tsx`, `lib/tips.ts`, `tests/unit/test_phase22_intelligence.py`, `e2e/tips.spec.ts` |
 | 23 | `trips.py` (`GET /trips/{id}/similar` — was 501 — and `GET /trips/search`), `embedder.py` (the summary text, `kind`, task types), `models/embedding.py`, `main.py` (recovery one itinerary at a time), `schemas/trip.py`, `ItineraryView.tsx`, the trips list page, `lib/api.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase23_build_log.md` | `src/backend/app/search.py`, `migrations/versions/004_embedding_kind.py`, `scripts/embedding_experiment.py`, `scripts/seed_demo_trips.py`, `SimilarTrips.tsx`, `tests/unit/test_phase23_similarity.py`, `tests/integration/test_phase23_similarity_integration.py`, `e2e/similar.spec.ts` |
+| 24 | `tools.py` (every request through `send()`; flights and hotels cached by what the provider is asked; one search per cache key at a time; `RATE_LIMITED`), `cache.py` (`single_flight`), `server.py` (the tools run in threads), `orchestrator.py` + the three search agents (their search parameters as functions), `failures.py`, `trips.py` (`POST /trips` starts cache warming), `config.py` (`CACHE_WARMING_ENABLED`), `main.py` (the app's INFO log lines are shown), `tests/conftest.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, `polish.spec.ts`, `.env.example` — see `docs/phase24_build_log.md` | `src/ai/mcp_server/rate_limiter.py`, `src/ai/mcp_server/outbound.py`, `src/ai/orchestrator/warming.py`, `scripts/cache_ttls.py`, `tests/unit/test_phase24_rate_limits.py`, `tests/unit/test_phase24_caching.py`, `tests/integration/test_phase24_caching_integration.py` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -303,7 +304,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–23 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–24 check
 
 Run from the **project root**:
 
@@ -311,7 +312,8 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **696 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
+Expected: **786 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -319,7 +321,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **36 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **39 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -503,7 +505,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 55 passed
+npx playwright test                 # 56 passed
 ```
 
 Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
@@ -729,6 +731,102 @@ EMBEDDING_EXPERIMENT_CACHE=/tmp/vectors.json python scripts/embedding_experiment
 
 ---
 
+## Step 22 — Verify Phase 24: cache warming, rate limits, backoff
+
+Nothing to migrate. Restart the backend (Step 5) so that it runs this code, with the provider keys in `.env`.
+
+**Cache warming.** Create a trip — the form in the browser, or Step 8's `POST /trips` — with a destination
+that is a place ("Jodhpur") and some interests, and watch the backend's terminal:
+
+```
+INFO:     [CACHE WARM] weather: Jodhpur, 2026-11-19 to 2026-11-22 — 4 result(s) ready in 0.2 s
+INFO:     [CACHE WARM] hotels: Jodhpur, 2026-11-19 to 2026-11-22, 2 guest(s) — 5 result(s) ready in 1.9 s
+INFO:     [CACHE WARM] flights: DEL → Jodhpur on 2026-11-19, back 2026-11-22 — 1 result(s) ready in 2.0 s
+INFO:     [CACHE WARM] attractions: Jodhpur: history, food — 5 result(s) ready in 2.9 s
+```
+
+The request was answered before any of that (about 30 ms): the searches run behind it. Now plan the trip
+within five minutes — that is how long a flight search is kept — and read what each step took:
+
+```bash
+curl -s localhost:8000/trips/$TRIP_ID/runs -H "Authorization: Bearer $TOKEN" \
+  | python -c "import json, sys; [print(f\"{r['agent_name']:<26}{r['duration_ms']:>6} ms\") for r in json.load(sys.stdin)]"
+# flight_agent                  21 ms
+# hotel_agent                   79 ms
+# activities_agent              77 ms      ← seconds each, without the warm-up
+```
+
+The terminal shows three `[CACHE HIT]` lines for that plan and no `[CACHE MISS]`.
+
+**The TTLs, against the Phase 3 spec.** With something cached (the trip you just created will do):
+
+```bash
+python scripts/cache_ttls.py
+# cache         keys   expires in               spec
+# flights          1   280 s                    300 s          ok
+# hotels           1   880 s                    900 s          ok
+# attractions      2   9,750–21,581 s           21,600 s       ok
+# weather          1   3,579 s                  3,600 s        ok
+# geocode         14   2,346,213–2,591,980 s    2,592,000 s    ok   (not in the Phase 3 spec)
+```
+
+Or by hand, one family at a time. (`redis-cli TTL 'mcp:flights:*'` is not the way: `TTL` takes a key, not
+a pattern, and answers `-2` — "no such key" — whatever is cached.)
+
+```bash
+docker exec tripplanner_redis redis-cli --scan --pattern 'mcp:flights:*' \
+  | while read key; do echo "$(docker exec tripplanner_redis redis-cli ttl "$key")  $key"; done
+# 280  mcp:flights:336bc3b33afcce92035fb55a580ee190
+```
+
+**The rate limit, on a real provider.** The geocoder allows one request a second. Ask for three places
+nobody has looked up in the last thirty days, all at once (from the project root; no model is called):
+
+```bash
+python - <<'EOF'
+import asyncio, time
+from src.ai.mcp_client.client import call_tool, close_session
+
+async def main():
+    began = time.perf_counter()
+    async def look(place):
+        await call_tool("get_attractions", {"destination": place, "interests": ["history"], "limit": 5})
+        print(f"{place:<10} answered after {time.perf_counter() - began:4.1f} s")
+    await asyncio.gather(*(look(place) for place in ("Bundi", "Orchha", "Mandu")))
+    await close_session()
+
+asyncio.run(main())
+EOF
+# [RATE LIMIT] nominatim: limit of 1 per 1.1 s reached — waiting 1.10 s
+# [RATE LIMIT] nominatim: limit of 1 per 1.1 s reached — waiting 2.20 s
+# Bundi      answered after  1.9 s
+# Orchha     answered after  2.3 s
+# Mandu      answered after  4.3 s
+```
+
+The requests were spaced out, not turned away: there is no `[BACKOFF]` line. (Run it again and nothing
+waits — the places are cached now. Pick three others.)
+
+**Backoff, on a forced 429.** Provoking a real 429 means sending a provider more than it allows, so this
+one is shown on a fake that answers 429, 429, 429, 200:
+
+```bash
+pytest tests/unit/test_phase24_rate_limits.py -k roughly_double -o log_cli=true --log-cli-level=WARNING
+# [BACKOFF] duffel: HTTP 429 — waiting 1.30 s before attempt 2 of 4
+# [BACKOFF] duffel: HTTP 429 — waiting 2.85 s before attempt 3 of 4
+# [BACKOFF] duffel: HTTP 429 — waiting 4.45 s before attempt 4 of 4
+```
+
+Each wait is about twice the last, plus up to a second of jitter — different numbers on every run.
+`-k three_agents -v` is the roadmap's scenario: three agents at once on a provider that allows two
+requests a window, and not one 429.
+
+**In the browser.** `cd src/frontend && npx playwright test e2e/polish.spec.ts --headed`: for "Munnar" the
+stand-in flight provider says "asked too often" through every retry. The progress panel says "This search
+is busy right now. Try again in a minute." — not "HTTP 429" — and **Retry the flight search** finds the flights.
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -773,3 +871,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **21 (Budget)** | `estimate_budget(…, destination="Goa", month=7)` → `season='off-peak'`, a ±10% range and no off-season price: July is the off-season. A conflict's alternatives are worked out without searching: in the run's `agent_runs`, no `hotel_agent` or `activities_agent` row comes before `escalate`. `POST /replan {"choice": "off_peak"}` on a conflict that did not offer it → `409`. Pick the shorter trip → the second `budget_decision` row is `continue`, "going ahead with the shorter trip you chose", though the flights are the same share of the budget. `pytest tests/unit/test_phase21_budget.py -k misquoted` → a ₹4,000 quote for a ₹4,500 hotel is caught, though the total is inside a peak season's ±20%. |
 | **22 (Local tips)** | `cd src/frontend && npx playwright test e2e/tips.spec.ts --headed`: for "Pondicherry" the stand-in model never answers → the plan is complete, there is no Local tips section and no error anywhere on the page; for "Gokarna" it answers the second time → no tips with the plan, then they arrive with the first change and the assistant says "Local tips added". `pytest tests/unit/test_phase22_intelligence.py -k whatever_goes_wrong -v` → a rate limit, a timeout, a reply that is not JSON, a place the model does not know: each is no tips and a code, never an exception. In `GET /trips/{id}/runs` of a plan made that way, only the `destination_intelligence` row is `failed`; the trip is `completed`. `-k cannot_write` → a `local_intelligence` the plan's own model writes into its reply is dropped. |
 | **23 (Similar & search)** | Sign in as another account and ask for the demo account's trip: `GET /trips/{demo trip id}/similar` → `404`; its own `/trips/search?q=beach` → no results, though twelve beach-to-temple trips are in the table — only the caller's own are ever searched. `GET /trips/search?q=x` → `422`. Empty `GOOGLE_API_KEY` and restart → `/trips/search?q=beach` → `503` "Search is not available right now", and the page says so and keeps the list; `/similar` still works (it compares stored vectors and embeds nothing). Plan a trip with the key empty → `/similar` answers `"status": "pending"` and `/admin/embedding-health` is `degraded`; put the key back and restart → it is embedded and found. `alembic downgrade 003 && alembic upgrade head` → the vectors are gone and every trip is queued again. `RUN_INTEGRATION=1 pytest tests/integration/test_phase23_similarity_integration.py -k hnsw -v` → passes: with the table scan and the sort forbidden, the query plan uses `ix_embeddings_summary_hnsw`, and the traveller's three trips are still found behind seventy nearer ones of someone else's. |
+| **24 (Caching & rate limits)** | Create a trip whose destination is a sentence ("a relaxed week somewhere in Kerala") → the log says `[CACHE WARM] skipped`, and nothing is searched: where it goes is only known once planning has read it. Create a trip without interests → flights, hotels and weather are warmed, attractions are not. Set `CACHE_WARMING_ENABLED=false` and restart → creating a trip logs no `[CACHE WARM]` line. Create a trip and plan it six minutes later → the flight search is a `[CACHE MISS]` (kept 5 minutes), the hotels still a hit (15). `docker exec tripplanner_redis redis-cli SET mcp:flights:oops '[]'`, then `python scripts/cache_ttls.py` → `flights … NEVER (no TTL) … WRONG`, exit status 1 (`DEL` it again). In `src/ai/mcp_server/outbound.py` delete the line `limiter(provider).acquire()` → `pytest tests/unit/test_phase24_rate_limits.py -k three_agents` fails: the provider answered 429 to the third agent. In `server.py` register the tools without `threaded(...)` → `-k same_moment` fails after three seconds: tools run one after another never meet at their providers. In `tools.py` add the budget back to the flight cache key → `pytest tests/unit/test_phase24_caching.py -k another_budget` fails: the provider is asked twice for the same flights. |
