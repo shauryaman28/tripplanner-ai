@@ -18,6 +18,8 @@ drive one situation:
                                                  whose shorter trip and 3-star stay both fit (Phase 21)
     Hampi, Badami                                the hotel search is down; it answers when retried
     Kaza                                         no airport is known for it: the flight search fails, every time
+    Leh                                          the attractions are a lake, a monastery and a pass: a trip that is
+                                                 not like the others, for similar trips and search (Phase 23)
     Pondicherry                                  the local-tips model does not answer: a plan without tips (Phase 22)
     Gokarna                                      no local tips with the plan; they come with the first change to it
     Shimla, Manali                               every search is down; they answer when the trip is retried
@@ -43,7 +45,7 @@ sys.path.insert(0, "src/backend")
 
 from tests import fakes  # noqa: E402
 from tests.database import create_and_migrate, empty_all_tables, use_database  # noqa: E402
-from tests.fakes import ATTRACTIONS, HOTELS, flight, network_stubs  # noqa: E402
+from tests.fakes import ATTRACTIONS, HOTELS, MOUNTAIN_ATTRACTIONS, flight, network_stubs  # noqa: E402
 
 PORT = int(os.getenv("PORT", "8100"))
 
@@ -101,7 +103,7 @@ if __name__ == "__main__":
     def activities_tool(_name: str, params: dict):
         if params.get("destination") in ALL_DOWN and first_of_a_pair("activities", params, "destination"):
             return down("attraction")
-        return ATTRACTIONS
+        return MOUNTAIN_ATTRACTIONS if params.get("destination") == "Leh" else ATTRACTIONS
 
     TIPS_LATE = {"Gokarna"}
 

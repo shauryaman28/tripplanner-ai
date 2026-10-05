@@ -97,13 +97,14 @@ async def test_write_embedding_rows_inserts_two_rows(db_session):
             itinerary_id=itinerary.id,
             structured_data=_STRUCTURED_DATA,
             destination=destination,
-            total_cost=itinerary.total_cost,
+            interests=["beach"],
             db=db_session,
         )
 
     rows = (await db_session.execute(select(Embedding).where(Embedding.itinerary_id == itinerary.id))).scalars().all()
 
     assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}"
+    assert {row.kind for row in rows} == {"full_text", "summary"}  # Phase 23: the two are told apart
     for row in rows:
         assert row.embedding_model == "gemini-embedding-001"
         assert row.vector is not None
@@ -126,7 +127,7 @@ async def test_write_embedding_rows_failure_writes_pending_retry(db_session):
             itinerary_id=itinerary_id,
             structured_data=_STRUCTURED_DATA,
             destination=destination,
-            total_cost=12_700.0,
+            interests=["beach"],
             db=db_session,
         )
 
@@ -181,7 +182,7 @@ async def test_pending_retry_cleanup_on_recovery(db_session):
             itinerary_id=itinerary.id,
             structured_data=_STRUCTURED_DATA,
             destination=destination,
-            total_cost=itinerary.total_cost,
+            interests=["beach"],
             db=db_session,
         )
 

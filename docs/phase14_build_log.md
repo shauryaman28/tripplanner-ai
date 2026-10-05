@@ -69,6 +69,11 @@ On next app startup, `_recover_after_restart()` in `main.py` queries for `pendin
 - Empty itinerary → `"No itinerary data available."`
 
 ### `build_summary_text`
+
+> Phase 23 replaced this text. Embedded as below, a Goa beach trip came out nearer a Ladakh trek than
+> the Andaman beaches: the summary now says what kind of trip it is and nothing about its size
+> (DECISIONS #140, `docs/phase23_build_log.md`). What follows is the Phase 14 text, for the record.
+
 - Excludes `"Explore the area"` — it's a builder fallback, not a real activity
 - Budget label: `< ₹30k` → budget / `₹30–80k` → mid-range / `> ₹80k` → luxury
 - Top 5 unique activities (deduped across days)

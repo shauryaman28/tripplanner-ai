@@ -48,7 +48,9 @@ async def _recover_after_restart() -> None:
         it can be planned again instead of answering 409 forever — or completed
         if it has an itinerary: an interrupted refinement leaves that plan standing;
       • the in-flight embedding counter is stale → reset it;
-      • embeddings that fell back to "pending_retry" → generate them again (Phase 14).
+      • embeddings that fell back to "pending_retry" → generate them again (Phase 14),
+        one itinerary after another: after migration 004 that is every trip, and the
+        embedding API's free tier answers a burst with 429s.
 
     Failures are logged, never raised — the app must boot even if the database
     is unreachable (GET /ping reports that in its body).
@@ -74,10 +76,15 @@ async def _recover_after_restart() -> None:
 
         if pending:
             logger.info("[EMBEDDING RECOVERY] Re-queuing %d pending embedding(s)", len(pending))
-        for itinerary_id in pending:
-            spawn(generate_embeddings(itinerary_id))
+            spawn(_regenerate_embeddings(pending))
     except Exception as exc:
         logger.warning("[STARTUP RECOVERY] skipped: %s", exc)
+
+
+async def _regenerate_embeddings(itinerary_ids: list) -> None:
+    """Background task: the pending embeddings, one itinerary at a time. generate_embeddings never raises."""
+    for itinerary_id in itinerary_ids:
+        await generate_embeddings(itinerary_id)
 
 
 # ── Lifespan ───────────────────────────────────────────────────────────────
@@ -102,7 +109,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.22.0",
+    version="0.23.0",
     lifespan=lifespan,
 )
 

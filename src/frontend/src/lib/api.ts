@@ -11,7 +11,9 @@ import type {
   Itinerary,
   ReplanChoice,
   TokenResponse,
+  SimilarTripsResponse,
   Trip,
+  TripSearchResponse,
   TripStatus,
   TripStatusResponse,
   UserRead,
@@ -223,6 +225,20 @@ export async function getItinerary(tripId: string): Promise<Itinerary> {
 
 export async function getTripStatus(tripId: string): Promise<TripStatusResponse> {
   return request<TripStatusResponse>(`/trips/${tripId}/status`);
+}
+
+// ---------------------------------------------------------------------------
+// Similar trips and search (Phase 23)
+// ---------------------------------------------------------------------------
+
+/** The traveller's other trips most like this one, most alike first — at most five. */
+export async function getSimilarTrips(tripId: string): Promise<SimilarTripsResponse> {
+  return request<SimilarTripsResponse>(`/trips/${tripId}/similar`);
+}
+
+/** The traveller's planned trips that match what was typed, best first. An empty list is an answer. */
+export async function searchTrips(query: string): Promise<TripSearchResponse> {
+  return request<TripSearchResponse>(`/trips/search?q=${encodeURIComponent(query)}`);
 }
 
 // ---------------------------------------------------------------------------

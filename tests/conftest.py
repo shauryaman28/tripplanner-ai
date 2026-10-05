@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, patch  # noqa: E402
 
 import pytest  # noqa: E402
 
+from src.ai.embeddings.embedder import EmbeddingNotConfigured  # noqa: E402
+
 
 @pytest.fixture(autouse=True)
 def no_fallback_llm():
@@ -34,6 +36,19 @@ def no_destination_intelligence_llm():
     refuse = AsyncMock(side_effect=RuntimeError("no model in tests"))
     with patch("src.ai.agents.destination_intelligence._call_llm", refuse) as llm:
         yield llm
+
+
+@pytest.fixture(autouse=True)
+def no_embedding_calls():
+    """Embeddings (Phases 14, 23) come from a model: a test stubs it (tests/fakes.fake_embed), it never calls one.
+
+    `_embed_once` is the one function that reaches the network, behind both a
+    stored text (`_call_embed`, which would retry for a minute) and a typed
+    query (`embed_query`).
+    """
+    refuse = AsyncMock(side_effect=EmbeddingNotConfigured("no embedding model in tests"))
+    with patch("src.ai.embeddings.embedder._embed_once", refuse) as embed:
+        yield embed
 
 
 @pytest.fixture(autouse=True)

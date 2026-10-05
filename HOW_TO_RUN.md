@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–22
+# How to Run & Verify — Phases 1–23
 
 ## What changed vs the original codebase?
 
@@ -21,6 +21,7 @@
 | 20 | `builder.py` (streams), `orchestrator.py` (`builder_token`, `retry_search`), `conversation.py`, `trips.py` (`POST /trips/{id}/retry`; `/status` gains `errors`, `retryable`, `run`; `filename*`), `requirements.txt` (`reportlab[shaping]`), `document.py`, `flowables.py`, `build_fonts.py`, the trip page and its components, `tests/e2e/stub_backend.py` — see `docs/phase20_build_log.md` | `src/ai/utils/failures.py`, `src/backend/app/pdf/scripts.py`, `pdf/fonts/noto/`, `LiveDraft.tsx`, `ProgressSheet.tsx`, `TripStages.tsx`, `lib/draft.ts`, `lib/useWideScreen.ts`, `tests/unit/test_phase20_streaming.py`, `tests/unit/test_phase20_scripts.py`, `e2e/draft.spec.ts`, `e2e/polish.spec.ts` |
 | 21 | `tools.py` + `models.py` (`estimate_budget`: destination, month, nights → a range and the season), `evaluator.py`, `orchestrator.py` (a conflict priced; a trip that fits goes ahead; a picked way out is gone ahead with), `trips.py` (`/replan` applies the option as offered; `/status` returns its estimate), `TripStages.tsx`, the trip page, `types.ts`, `tests/e2e/stub_backend.py` — see `docs/phase21_build_log.md` | `src/ai/pricing.py`, `src/ai/agents/budget_alternatives.py`, `tests/unit/test_phase21_budget.py`, `e2e/budget.spec.ts` |
 | 22 | `orchestrator.py` (the fourth agent beside the hotel and activities searches; tips carried by refinements), `builder.py` (tips attached to the checked draft), `itinerary.py`, `pdf/plan.py` + `document.py` (a Local tips page), `ItineraryView.tsx`, `lib/changes.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase22_build_log.md` | `src/ai/agents/destination_intelligence.py`, `prompts/destination_intelligence_v1.md`, `LocalTips.tsx`, `lib/tips.ts`, `tests/unit/test_phase22_intelligence.py`, `e2e/tips.spec.ts` |
+| 23 | `trips.py` (`GET /trips/{id}/similar` — was 501 — and `GET /trips/search`), `embedder.py` (the summary text, `kind`, task types), `models/embedding.py`, `main.py` (recovery one itinerary at a time), `schemas/trip.py`, `ItineraryView.tsx`, the trips list page, `lib/api.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase23_build_log.md` | `src/backend/app/search.py`, `migrations/versions/004_embedding_kind.py`, `scripts/embedding_experiment.py`, `scripts/seed_demo_trips.py`, `SimilarTrips.tsx`, `tests/unit/test_phase23_similarity.py`, `tests/integration/test_phase23_similarity_integration.py`, `e2e/similar.spec.ts` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -143,6 +144,7 @@ Expected output:
 INFO  [alembic.runtime.migration] Running upgrade  -> 001, Initial schema — users, trips, itineraries, agent_runs, embeddings
 INFO  [alembic.runtime.migration] Running upgrade 001 -> 002, Add turn column to agent_runs — Phase 15 multi-turn refinement
 INFO  [alembic.runtime.migration] Running upgrade 002 -> 003, Add user_preferences table — Phase 16 personalisation
+INFO  [alembic.runtime.migration] Running upgrade 003 -> 004, Embeddings told apart by kind, and made again — Phase 23 similarity search
 ```
 
 Verify the tables exist (via the container — no local `psql` install needed):
@@ -301,7 +303,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–22 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–23 check
 
 Run from the **project root**:
 
@@ -309,7 +311,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **675 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
+Expected: **696 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back.
 
 Integration tests (need Docker Postgres + Redis running):
 
@@ -317,7 +319,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **23 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **36 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -501,7 +503,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 47 passed
+npx playwright test                 # 55 passed
 ```
 
 Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
@@ -669,6 +671,64 @@ Ask for a change ("a cheaper hotel"): the tips stay, and `runs` shows no second
 
 ---
 
+## Step 21 — Verify Phase 23: similar trips and search
+
+**Migrate first** — Phase 23 adds a column and re-queues every trip's embeddings:
+
+```bash
+alembic upgrade head        # 003 → 004
+```
+
+The next time the backend starts, it makes those embeddings again by itself, one trip after another
+(`GET /admin/embedding-health` → `pending_retry` counts down to 0).
+
+**Trips to compare.** Similar trips need trips to be similar to. This gives a demo account twelve — four
+beach trips, two in the mountains, three heritage, two spiritual, one nature — embedded by the real
+model (it needs `GOOGLE_API_KEY`, and waits out the embedding API's rate limit if it has to):
+
+```bash
+python scripts/seed_demo_trips.py        # then sign in as demo@example.com / demo-trips-123
+```
+
+**In the browser** (backend and frontend running): open **Goa** → under the map, **Similar trips**: South
+Goa, Kovalam, Havelock Island — the other beach trips, not Leh. Click one: that trip opens, with similar
+trips of its own. On the trips list, type into the search box and press Enter: "forts and palaces" →
+Udaipur and Jaipur; "trekking in the mountains" → Leh and Manali; "quarterly tax return" → no trips match.
+Empty the box and every trip is back.
+
+**From the API** (`$TOKEN` of the demo account — Step 7's login with its email and password):
+
+```bash
+GOA=$(curl -s localhost:8000/trips -H "Authorization: Bearer $TOKEN" \
+  | python -c "import json, sys; print(next(t['id'] for t in json.load(sys.stdin) if t['destination'] == 'Goa'))")
+
+curl -s "localhost:8000/trips/$GOA/similar" -H "Authorization: Bearer $TOKEN" \
+  | python -c "import json, sys; [print(r['similarity'], r['trip']['destination'], '—', r['highlight']) for r in json.load(sys.stdin)['results']]"
+# 0.9057 South Goa — Palolem Beach
+# 0.8566 Kovalam — Kovalam Beach
+# 0.8565 Havelock Island — Radhanagar Beach
+
+curl -s -G "localhost:8000/trips/search" --data-urlencode "q=temples and ghats" -H "Authorization: Bearer $TOKEN" \
+  | python -c "import json, sys; [print(r['similarity'], r['trip']['destination']) for r in json.load(sys.stdin)['results']]"
+# 0.7297 Varanasi
+# 0.699 Rishikesh
+```
+
+The same search again is answered from the cache in a few milliseconds: the query is embedded once a day.
+
+Plan a trip of your own while signed in as the demo account (say Kochi, "beach, food"): about a second
+after the plan appears, so does its Similar trips section — the page asks again until the new plan has
+been embedded.
+
+**The experiment** behind the summary text and the cut-offs (optional; about 230 embedding calls, which
+the free tier makes it wait for — give it a cache file and it can be stopped and resumed):
+
+```bash
+EMBEDDING_EXPERIMENT_CACHE=/tmp/vectors.json python scripts/embedding_experiment.py
+```
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -691,7 +751,7 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **2** | Call `search_flights` with a past date → `ToolError PAST_DATE`. Budget < ₹2000 → `BUDGET_TOO_LOW`. Both are validated before any network call. |
 | **3** | Call any tool with keys missing → `API_NOT_CONFIGURED`, server alive. Call `get_weather` with a date 30 days out → climate estimate (OWM only has 5-day window). Call twice → second call shows `[CACHE HIT]` in logs. |
 | **4** | Run `alembic downgrade base` → all tables dropped. Run `alembic upgrade head` → all tables recreated. The `vector` column in `embeddings` is a pgvector type — `\d embeddings` in psql confirms it. `alembic check` reports no drift between models and migrations. |
-| **5** | Omit the JWT → `401`. Use an expired/tampered JWT → `401`. Call `POST /trips` with `end_date` before `start_date` → `422`. Call `GET /trips/{id}/similar` → `501`. Publish a Redis message → it appears in the SSE stream within milliseconds. `GET /trips` → `200 []` before any trips exist, then the list after creating one. |
+| **5** | Omit the JWT → `401`. Use an expired/tampered JWT → `401`. Call `POST /trips` with `end_date` before `start_date` → `422`. `GET /trips/{id}/similar` answered `501` until Phase 23 (Step 21). Publish a Redis message → it appears in the SSE stream within milliseconds. `GET /trips` → `200 []` before any trips exist, then the list after creating one. |
 | **6 (Dev A)** | Mock `call_tool` to return a `ToolError` → `search_flights_node` sets `state["error"]` and `state["flights"] == []`, never raises. Omit `passengers` from input → defaults to `1`. |
 | **6 (Dev B)** | Kill the MCP server subprocess mid-call → `call_tool` returns `ToolError(code="MCP_CLIENT_ERROR")`, never raises. A tool that returns a list comes back as the whole list, not its first item. `log_agent_run` writes a row with non-null `duration_ms` for every run, success or failure. |
 | **7 (Router)** | Pass state with `destination=None` → `router()` returns `"clarify"`, not `"search"`. Pass state with all fields → returns `"search"`. The router is a pure Python function — zero LLM calls, fully deterministic. |
@@ -712,3 +772,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **20 (Polish)** | Reload the page while the itinerary is being written → no draft (a page that joins late waits for the next build's `seq` 0), and the checked plan still arrives. A streamed reply that fails its checks is never saved — `test_a_streamed_reply_that_is_not_valid_is_never_saved` makes every reply invalid. Delete the trip's saved state (`docker exec tripplanner_redis redis-cli DEL trip:$TRIP_ID:planning_state`) and `POST /retry {"agent": "hotel_agent"}` → `409` "This plan is too old to retry a single search". Retry a search while a run is in flight → `409`. At 375 px open the progress sheet → "Ask for a change" hides until it is closed. Uninstall `uharfbuzz` (`pip uninstall uharfbuzz`) and export a Devanagari trip → the letters print unjoined, and `pytest tests/unit/test_phase20_scripts.py` fails on "HarfBuzz is installed". |
 | **21 (Budget)** | `estimate_budget(…, destination="Goa", month=7)` → `season='off-peak'`, a ±10% range and no off-season price: July is the off-season. A conflict's alternatives are worked out without searching: in the run's `agent_runs`, no `hotel_agent` or `activities_agent` row comes before `escalate`. `POST /replan {"choice": "off_peak"}` on a conflict that did not offer it → `409`. Pick the shorter trip → the second `budget_decision` row is `continue`, "going ahead with the shorter trip you chose", though the flights are the same share of the budget. `pytest tests/unit/test_phase21_budget.py -k misquoted` → a ₹4,000 quote for a ₹4,500 hotel is caught, though the total is inside a peak season's ±20%. |
 | **22 (Local tips)** | `cd src/frontend && npx playwright test e2e/tips.spec.ts --headed`: for "Pondicherry" the stand-in model never answers → the plan is complete, there is no Local tips section and no error anywhere on the page; for "Gokarna" it answers the second time → no tips with the plan, then they arrive with the first change and the assistant says "Local tips added". `pytest tests/unit/test_phase22_intelligence.py -k whatever_goes_wrong -v` → a rate limit, a timeout, a reply that is not JSON, a place the model does not know: each is no tips and a code, never an exception. In `GET /trips/{id}/runs` of a plan made that way, only the `destination_intelligence` row is `failed`; the trip is `completed`. `-k cannot_write` → a `local_intelligence` the plan's own model writes into its reply is dropped. |
+| **23 (Similar & search)** | Sign in as another account and ask for the demo account's trip: `GET /trips/{demo trip id}/similar` → `404`; its own `/trips/search?q=beach` → no results, though twelve beach-to-temple trips are in the table — only the caller's own are ever searched. `GET /trips/search?q=x` → `422`. Empty `GOOGLE_API_KEY` and restart → `/trips/search?q=beach` → `503` "Search is not available right now", and the page says so and keeps the list; `/similar` still works (it compares stored vectors and embeds nothing). Plan a trip with the key empty → `/similar` answers `"status": "pending"` and `/admin/embedding-health` is `degraded`; put the key back and restart → it is embedded and found. `alembic downgrade 003 && alembic upgrade head` → the vectors are gone and every trip is queued again. `RUN_INTEGRATION=1 pytest tests/integration/test_phase23_similarity_integration.py -k hnsw -v` → passes: with the table scan and the sort forbidden, the query plan uses `ix_embeddings_summary_hnsw`, and the traveller's three trips are still found behind seventy nearer ones of someone else's. |

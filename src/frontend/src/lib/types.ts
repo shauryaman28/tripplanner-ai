@@ -108,6 +108,27 @@ export interface Itinerary {
   created_at: string;
 }
 
+// ── Similar trips and search (Phase 23) ───────────────────────────────────
+
+/** One of the traveller's trips found by similarity: enough to show it as a card, and how close it came. */
+export interface TripMatch {
+  trip: Trip;
+  itinerary_id: string;
+  total_cost: number | null;
+  highlight: string | null;   // one place to name the trip by: its most popular stop
+  similarity: number;         // cosine similarity of the two embeddings; 1 is the same
+}
+
+export interface SimilarTripsResponse {
+  status: "ready" | "pending"; // pending: this trip's own embedding is still being made
+  results: TripMatch[];
+}
+
+export interface TripSearchResponse {
+  query: string;
+  results: TripMatch[];
+}
+
 // ── SSE event shapes ───────────────────────────────────────────────────────
 
 export interface SSEConnectedEvent {

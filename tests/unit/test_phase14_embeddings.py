@@ -123,39 +123,38 @@ def test_build_full_text_none_slots_are_skipped():
 # ── build_summary_text ────────────────────────────────────────────────────────
 
 
-def test_build_summary_text_contains_destination_and_days():
-    text = build_summary_text("Goa", 7, 50_000, _STRUCTURED_DATA)
-    assert "Goa" in text
-    assert "7 days" in text
+def test_build_summary_text_says_what_kind_of_trip_it_is():
+    """Phase 23: interests, kinds of places, places — and nothing about the trip's length or cost."""
+    data = {
+        "days": [
+            {
+                "day": 1,
+                "morning": {"activity": "Fort Aguada", "category": "history"},
+                "afternoon": {"activity": "Baga Beach", "category": "beach"},
+                "evening": {"activity": "Explore the area"},
+            },
+            {"day": 2, "morning": {"activity": "Anjuna Beach", "category": "beach"}},
+        ]
+    }
+    text = build_summary_text("Goa", ["beach", "food"], data)
+    assert text == (
+        "beach and food trip to Goa. Kinds of places: beach, history. Places: Fort Aguada, Baga Beach, Anjuna Beach."
+    )
 
 
-def test_build_summary_text_budget_label_budget():
-    text = build_summary_text("Goa", 5, 15_000, _STRUCTURED_DATA)
-    assert "budget" in text.lower()
-
-
-def test_build_summary_text_budget_label_mid_range():
-    text = build_summary_text("Goa", 5, 50_000, _STRUCTURED_DATA)
-    assert "mid-range" in text.lower()
-
-
-def test_build_summary_text_budget_label_luxury():
-    text = build_summary_text("Goa", 10, 120_000, _STRUCTURED_DATA)
-    assert "luxury" in text.lower()
-
-
-def test_build_summary_text_top_5_activities_included():
-    text = build_summary_text("Goa", 2, 12_700, _STRUCTURED_DATA)
+def test_build_summary_text_names_six_places_and_never_free_time():
+    text = build_summary_text("Goa", [], _STRUCTURED_DATA)
     # "Explore the area" is excluded from the summary (it's a fallback phrase)
-    assert "Fort Aguada" in text
-    assert "Baga Beach" in text
-    assert "Anjuna Flea Market" in text
-    assert "Explore the area" not in text
+    assert text == "Trip to Goa. Places: Fort Aguada, Baga Beach, Anjuna Flea Market."
+    many = {"days": [{"morning": {"activity": f"Place {n}"}} for n in range(1, 10)]}
+    assert build_summary_text("Goa", None, many).endswith(
+        "Places: Place 1, Place 2, Place 3, Place 4, Place 5, Place 6."
+    )
 
 
-def test_build_summary_text_no_total_cost_shows_unknown():
-    text = build_summary_text("Goa", 5, None, _STRUCTURED_DATA)
-    assert "unknown" in text.lower()
+def test_build_summary_text_of_an_empty_itinerary_is_still_a_sentence():
+    assert build_summary_text("Goa", ["beach"], {}) == "beach trip to Goa."
+    assert build_summary_text("Goa", None, {"days": None}) == "Trip to Goa."
 
 
 # ── write_embedding_rows (success path) ───────────────────────────────────────
@@ -174,7 +173,7 @@ async def test_write_embedding_rows_success_adds_two_rows():
             itinerary_id=itinerary_id,
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=12_700.0,
+            interests=["beach", "food"],
             db=db,
         )
 
@@ -196,7 +195,7 @@ async def test_write_embedding_rows_success_uses_correct_model():
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=12_700.0,
+            interests=["beach", "food"],
             db=db,
         )
 
@@ -218,7 +217,7 @@ async def test_write_embedding_rows_success_stores_vector():
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=12_700.0,
+            interests=["beach", "food"],
             db=db,
         )
 
@@ -240,7 +239,7 @@ async def test_write_embedding_rows_calls_openai_twice():
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=12_700.0,
+            interests=["beach", "food"],
             db=db,
         )
 
@@ -263,7 +262,7 @@ async def test_write_embedding_rows_openai_failure_writes_pending_retry():
             itinerary_id=itinerary_id,
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=12_700.0,
+            interests=["beach", "food"],
             db=db,
         )
 
@@ -289,7 +288,7 @@ async def test_write_embedding_rows_failure_calls_rollback():
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=None,
+            interests=None,
             db=db,
         )
 
@@ -319,7 +318,7 @@ async def test_write_embedding_rows_deletes_stale_pending_retry_rows():
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
             destination="Goa",
-            total_cost=12_700.0,
+            interests=["beach", "food"],
             db=db,
         )
 
