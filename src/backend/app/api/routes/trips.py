@@ -753,7 +753,7 @@ async def export_trip_pdf(
     db: AsyncSession = Depends(get_db),
     tile_cache: aioredis.Redis | None = Depends(get_redis_or_none),
 ) -> Response:
-    """Phase 19 — the latest itinerary as a PDF: cover, day by day, cost breakdown, map.
+    """Phase 19 — the latest itinerary as a PDF: cover, day by day, local tips (Phase 22), cost breakdown, map.
 
     Answers with `Content-Disposition: attachment; filename="trip-<destination>-<start date>.pdf"` —
     plus `filename*=UTF-8''…` (RFC 6266) when the destination is not written in ASCII, so that

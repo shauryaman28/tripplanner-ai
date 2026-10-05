@@ -25,6 +25,18 @@ def no_fallback_llm():
 
 
 @pytest.fixture(autouse=True)
+def no_destination_intelligence_llm():
+    """The DestinationIntelligenceAgent (Phase 22) runs in every plan: a test that wants local tips stubs its model.
+
+    Without this, any test that drives the orchestrator would ask a real model.
+    Failing here is the agent's quiet path — the plan is made without tips.
+    """
+    refuse = AsyncMock(side_effect=RuntimeError("no model in tests"))
+    with patch("src.ai.agents.destination_intelligence._call_llm", refuse) as llm:
+        yield llm
+
+
+@pytest.fixture(autouse=True)
 def no_tile_downloads():
     """The PDF export draws its map from tiles: a test stubs them (tests/fakes.fake_tile), it never fetches any."""
     refuse = AsyncMock(side_effect=RuntimeError("no tile server in tests"))

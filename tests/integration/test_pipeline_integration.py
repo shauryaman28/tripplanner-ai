@@ -1,4 +1,4 @@
-"""End-to-end backend test — Phases 5–20 through the public HTTP API.
+"""End-to-end backend test — Phases 5–22 through the public HTTP API.
 
 Real Postgres (Alembic schema), real Redis, the real LangGraph orchestrator,
 real background tasks. Only the external network seams are stubbed: the MCP
@@ -14,7 +14,7 @@ import io
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -25,8 +25,9 @@ from sqlmodel import select
 
 from app.core.config import settings
 from app.models.embedding import Embedding
+from src.ai.agents.destination_intelligence import coerce_intelligence
 from src.ai.agents.refinement_classifier import RefinementClassification
-from tests.fakes import STUB_TILE_URL, flight, network_stubs
+from tests.fakes import ATTRACTIONS, HOTELS, LOCAL_TIPS, STUB_TILE_URL, fake_intelligence_llm, flight, network_stubs
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("RUN_INTEGRATION"),
@@ -139,8 +140,9 @@ async def test_plan_then_refine_end_to_end(db_session):
         # ── Phases 9 + 13: every decision node logged, in order, with a duration ──
         names = [r["agent_name"] for r in runs]
         assert names[:4] == ["intent_parsing", "preferences", "flight_agent", "budget_decision"]
-        assert set(names[4:6]) == {"hotel_agent", "activities_agent"}  # fanned out concurrently
-        assert names[6:] == ["itinerary_builder", "evaluator", "persist", "preference_extractor", "orchestrator"]
+        # fanned out concurrently — with the fourth agent beside them since Phase 22
+        assert set(names[4:7]) == {"hotel_agent", "activities_agent", "destination_intelligence"}
+        assert names[7:] == ["itinerary_builder", "evaluator", "persist", "preference_extractor", "orchestrator"]
         assert all(r["duration_ms"] is not None and r["turn"] == 1 for r in runs)
         assert all(r["status"] == "completed" for r in runs)
 
@@ -206,12 +208,13 @@ async def test_plan_then_refine_end_to_end(db_session):
         assert exported.status_code == 200 and exported.headers["content-type"] == "application/pdf"
         assert exported.headers["content-disposition"] == f'attachment; filename="trip-goa-{START}.pdf"'
         assert exported.headers["x-itinerary-map"] == "included"
-        cover, days, costs, on_the_map = _pdf_pages(exported.content)
+        cover, days, tips, costs, on_the_map = _pdf_pages(exported.content)  # local tips since Phase 22
+        assert "Local tips" in tips and "GETTING AROUND" in tips
         assert "Goa" in cover and "ESTIMATED TOTAL ₹17,200" in cover and "2 travellers" in cover
         assert "Fort Aguada" in days and "STAY Goa Grand" in days and "FLIGHT DEL → GOI" in days
         assert "Flights DEL → GOI · return · 2 travellers ₹8,200" in costs and "Estimated total ₹17,200" in costs
         assert "Fort Aguada — Day 1, morning" in on_the_map
-        assert [len(page.images) for page in PdfReader(io.BytesIO(exported.content)).pages] == [0, 0, 0, 1]
+        assert [len(page.images) for page in PdfReader(io.BytesIO(exported.content)).pages] == [0, 0, 0, 0, 1]
 
         # the map's tiles are in Redis for a week, under the stub tile server's keys — never the real one's
         cached = await cache.keys(tile_keys)
@@ -289,7 +292,7 @@ async def test_pdf_export_is_private_and_survives_a_dead_tile_server(db_session)
             exported = await client.get(f"/trips/{trip_id}/export/pdf")
         assert exported.status_code == 200 and exported.headers["x-itinerary-map"] == "unavailable"
         pages = _pdf_pages(exported.content)
-        assert len(pages) == 3 and "Cost breakdown" in pages[2] and "On the map" not in " ".join(pages)
+        assert len(pages) == 4 and "Cost breakdown" in pages[3] and "On the map" not in " ".join(pages)
 
 
 @pytest.mark.asyncio
@@ -412,6 +415,111 @@ async def test_a_shorter_trip_picked_in_a_conflict_goes_ahead_on_the_same_flight
         days = (await client.get(f"/trips/{trip_id}/itinerary")).json()["structured_data"]["days"]
         assert len(days) == 2
         assert (await client.get(f"/trips/{trip_id}/status")).json()["budget_conflict"] is None
+
+
+@pytest.mark.asyncio
+async def test_local_tips_come_from_a_fourth_agent_running_beside_the_searches(db_session):
+    """Phase 22 acceptance: the agent runs in parallel (its agent_runs row overlaps the searches'), its
+    output is in structured_data under "local_intelligence", and it makes no MCP tool call."""
+
+    def slowly(answer):  # the stubs answer at once; real providers take a while — long enough to see who waited
+        async def tool(*_):
+            await asyncio.sleep(0.25)
+            return answer
+
+        return tool
+
+    async def tips_model(system: str, user: str) -> str:
+        await asyncio.sleep(0.25)
+        return await fake_intelligence_llm(system, user)
+
+    async with _stack(lambda *_: [flight(8_200.0)], hotel_tool=slowly(HOTELS)) as (client, events, tools):
+        tools["activities"].side_effect = slowly(ATTRACTIONS)
+        await _login(client)
+        trip_id = await _create_trip(client)
+        with patch("src.ai.agents.destination_intelligence._call_llm", tips_model):
+            assert (await client.post(f"/trips/{trip_id}/plan")).status_code == 202
+            runs = await _run_finished(client, trip_id, orchestrator_rows=1)
+
+        # ── in parallel: all three were in flight at the same time ──
+        def in_flight(name: str) -> tuple[datetime, datetime]:
+            row = next(r for r in runs if r["agent_name"] == name)
+            ended = datetime.fromisoformat(row["created_at"])  # the row is written when the agent is done
+            return ended - timedelta(milliseconds=row["duration_ms"]), ended
+
+        spans = [in_flight(name) for name in ("hotel_agent", "activities_agent", "destination_intelligence")]
+        assert max(start for start, _ in spans) < min(end for _, end in spans)
+        assert all(end - start >= timedelta(milliseconds=200) for start, end in spans)
+        # …and none of them held up the flights, which go first because of the budget check
+        assert in_flight("flight_agent")[1] <= min(start for start, _ in spans) + timedelta(milliseconds=50)
+
+        # ── no tool: it is asked what it knows ──
+        tips_run = next(r for r in runs if r["agent_name"] == "destination_intelligence")
+        assert tips_run["status"] == "completed" and tips_run["output"]["tool_calls"] == 0
+        assert set(tips_run["input"]) == {"destination", "month", "days", "travellers", "interests", "model"}
+        assert (tips_run["input"]["destination"], tips_run["input"]["days"]) == ("Goa", 3)
+        assert [tools[name].await_count for name in ("flight", "hotel", "activities")] == [1, 1, 1]
+
+        # ── in the itinerary, as the agent's output was kept ──
+        expected = coerce_intelligence(LOCAL_TIPS).model_dump()
+        itinerary = (await client.get(f"/trips/{trip_id}/itinerary")).json()
+        assert (
+            itinerary["structured_data"]["local_intelligence"] == expected == tips_run["output"]["local_intelligence"]
+        )
+        assert len(expected["safety_tips"]) == 5 and "sponsored_by" not in expected
+
+        # ── the page's progress is still the three searches: the fourth agent says nothing on the stream ──
+        assert "destination_intelligence" not in [e.get("agent") for e in events]
+        progress = (await client.get(f"/trips/{trip_id}/status")).json()["progress"]
+        assert (progress["agents_done"], progress["agents_total"]) == (3, 3)
+
+        # ── a change to the plan keeps the tips without asking again, and the PDF prints them ──
+        assert (await client.post(f"/trips/{trip_id}/refine", json={"message": "a nicer hotel"})).status_code == 200
+        runs = await _run_finished(client, trip_id, orchestrator_rows=2)
+        assert "destination_intelligence" not in [r["agent_name"] for r in runs if r["turn"] == 2]
+        refined = (await client.get(f"/trips/{trip_id}/itinerary")).json()
+        assert refined["id"] != itinerary["id"] and refined["structured_data"]["local_intelligence"] == expected
+        pages = _pdf_pages((await client.get(f"/trips/{trip_id}/export/pdf")).content)
+        assert len(pages) == 5 and "Local tips" in pages[2] and "Fort Aguada — Early morning, before 9 am" in pages[2]
+
+
+@pytest.mark.asyncio
+async def test_a_plan_is_whole_without_local_tips_and_gets_them_with_its_next_change(db_session):
+    """Phase 22: the agent failing costs the tips and nothing else — no error anywhere a traveller looks."""
+    async with _stack(lambda *_: [flight(8_200.0)]) as (client, events, _):
+        await _login(client)
+        trip_id = await _create_trip(client, destination="Pondicherry")  # the stand-in model does not answer for it
+        await client.post(f"/trips/{trip_id}/plan")
+        runs = await _run_finished(client, trip_id, orchestrator_rows=1)
+
+        tips_run = next(r for r in runs if r["agent_name"] == "destination_intelligence")
+        assert tips_run["status"] == "failed" and tips_run["output"]["error"]["code"] == "LLM_ERROR"
+        assert [r["status"] for r in runs if r["agent_name"] != "destination_intelligence"] == ["completed"] * (
+            len(runs) - 1
+        )
+
+        itinerary = (await client.get(f"/trips/{trip_id}/itinerary")).json()
+        assert (
+            itinerary["structured_data"]["local_intelligence"] is None
+            and len(itinerary["structured_data"]["days"]) == 3
+        )
+        status = (await client.get(f"/trips/{trip_id}/status")).json()
+        assert status["status"] == "completed" and status["failure_reason"] is None
+        assert status["progress"]["errors"] == {} and status["progress"]["agents_done"] == 3
+        assert [e.get("event") for e in events if e.get("event") in ("planning_complete", "planning_failed")] == [
+            "planning_complete"
+        ]
+        pages = _pdf_pages((await client.get(f"/trips/{trip_id}/export/pdf")).content)
+        assert len(pages) == 4 and "Local tips" not in " ".join(pages)
+
+        # the model answers again: the next change to the plan fetches the tips beside its search
+        with patch("src.ai.agents.destination_intelligence._call_llm", AsyncMock(return_value=json.dumps(LOCAL_TIPS))):
+            assert (await client.post(f"/trips/{trip_id}/refine", json={"message": "a nicer hotel"})).status_code == 200
+            runs = await _run_finished(client, trip_id, orchestrator_rows=2)
+        turn_2 = [r["agent_name"] for r in runs if r["turn"] == 2]
+        assert set(turn_2[:2]) == {"hotel_agent", "destination_intelligence"} and turn_2[2] == "itinerary_builder"
+        refined = (await client.get(f"/trips/{trip_id}/itinerary")).json()
+        assert refined["structured_data"]["local_intelligence"] == coerce_intelligence(LOCAL_TIPS).model_dump()
 
 
 @pytest.mark.asyncio

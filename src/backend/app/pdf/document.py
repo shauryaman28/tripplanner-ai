@@ -1,4 +1,4 @@
-"""The PDF itself: cover, day by day, cost breakdown, map — laid out with ReportLab.
+"""The PDF itself: cover, day by day, local tips, cost breakdown, map — laid out with ReportLab.
 
 ReportLab rather than WeasyPrint (DECISIONS #100): WeasyPrint draws through
 Pango and GObject, which have to be installed on the machine — it would not
@@ -60,8 +60,10 @@ from app.pdf.flowables import (
 from app.pdf.formatting import format_date, format_date_range, format_inr, format_weekday, plural
 from app.pdf.plan import (
     SLOT_LABELS,
+    TIP_SECTIONS,
     Day,
     Flight,
+    LocalTips,
     MapFeatures,
     Stay,
     Stop,
@@ -90,6 +92,11 @@ COVER_TOP, COVER_BOTTOM = 20 * mm, 30 * mm
 
 FINE_PRINT = (
     "Prices are the ones found when this trip was planned and can change. Nothing in this plan has been booked."
+)
+# Local tips come from a model's knowledge, not from a search (Phase 22): said wherever they are shown.
+TIPS_NOTE = (
+    "General advice from the assistant's own knowledge of the place, not from a live source. "
+    "Prices and timings change — check locally."
 )
 
 
@@ -138,6 +145,7 @@ def _amount(value: float, note: str = "") -> list[Paragraph]:
 # A card or a table row cannot run on to the next page, so one absurdly long name in an itinerary
 # would make the whole document impossible to lay out. Names and detail lines are cut to these.
 NAME_LIMIT, DETAIL_LIMIT, MAX_CHIPS = 140, 240, 12
+TIP_LIMIT = 320  # one local tip
 
 
 # ── Cover ──────────────────────────────────────────────────────────────────
@@ -322,6 +330,59 @@ def _days(plan: TripPlan, with_map: bool) -> list[Flowable]:
     story: list[Flowable] = [Bookmark("Day by day"), _p("Day by day", H2), _p(lead, LEAD), Spacer(1, 12)]
     for day in plan.days:
         story += [_day_card(day), Spacer(1, 9)]
+    return story
+
+
+# ── Local tips ─────────────────────────────────────────────────────────────
+
+
+def _named(name: str, words: str, style: ParagraphStyle) -> Paragraph:
+    """A name in strong type and what is said about it. Both are text from a plan, so neither is markup."""
+    name_xml, name_shaped = scripts.markup(scripts.shorten(name, 80), theme.MEDIUM)
+    words_xml, words_shaped = scripts.markup(scripts.shorten(words, TIP_LIMIT), style.fontName)
+    strong = f'<font name="{theme.MEDIUM}" color="{theme.INK_900}">{name_xml}</font>'
+    return scripts.paragraph(f"{strong} — {words_xml}", style, name_shaped or words_shaped)
+
+
+def _tips_card(label: str, items: list[Paragraph]) -> Card:
+    """One kind of tip — its heading, then each tip on a line of its own."""
+    rows = [[_p(label, EYEBROW)], *([item] for item in items)]
+    table = Table(
+        rows,
+        colWidths=[CONTENT_WIDTH],
+        style=TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 14),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+                # close-set: five sections of three or four tips each are one page, not one and a bit
+                ("TOPPADDING", (0, 0), (-1, -1), 4.5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4.5),
+                ("TOPPADDING", (0, 0), (-1, 0), 10),
+                ("BOTTOMPADDING", (0, -1), (-1, -1), 10),
+                ("LINEABOVE", (0, 2), (-1, -1), HAIRLINE, INK_100),
+            ]
+        ),
+    )
+    return Card(table, CONTENT_WIDTH)
+
+
+def _tips(tips: LocalTips) -> list[Flowable]:
+    """The page's "Local tips" section: getting around, customs, traps, best times, safety — those there are."""
+
+    def lines(items: tuple[str, ...]) -> list[Paragraph]:
+        return [_p(scripts.shorten(item, TIP_LIMIT), BODY) for item in items]
+
+    by_section = {
+        "local_transport": lines((tips.transport,) if tips.transport else ()),
+        "cultural_norms": lines(tips.customs),
+        "tourist_traps": lines(tips.traps),
+        "best_times": [_named(place, when, BODY) for place, when in tips.best_times],
+        "safety_tips": lines(tips.safety),
+    }
+    story: list[Flowable] = [Bookmark("Local tips"), _p("Local tips", H2), _p(TIPS_NOTE, LEAD), Spacer(1, 12)]
+    for key, label in TIP_SECTIONS:
+        if by_section[key]:
+            story += [_tips_card(label, by_section[key]), Spacer(1, 8)]
     return story
 
 
@@ -634,7 +695,10 @@ def _render(plan: TripPlan, map_image: bytes | None, prepared_on: date, pages: i
     )
 
     story: list[Flowable] = [*_cover(plan), NextPageTemplate("body"), PageBreak()]
-    story += [*_days(plan, with_map=map_image is not None), PageBreak(), *_costs(plan)]
+    story += _days(plan, with_map=map_image is not None)
+    if plan.tips:  # Phase 22 — after the days, as on the page
+        story += [PageBreak(), *_tips(plan.tips)]
+    story += [PageBreak(), *_costs(plan)]
     if map_image is not None:
         story += [PageBreak(), *_map(map_features(plan), map_image)]
 
@@ -643,7 +707,8 @@ def _render(plan: TripPlan, map_image: bytes | None, prepared_on: date, pages: i
 
 
 def build_pdf(plan: TripPlan, map_image: bytes | None = None, prepared_on: date | None = None) -> bytes:
-    """The itinerary as a PDF: cover, day by day, cost breakdown and — when there is a picture — the map.
+    """The itinerary as a PDF: cover, day by day, local tips when the plan has them, cost breakdown and — when
+    there is a picture — the map.
 
     Laid out twice: the foot of each page says "Page 2 of 5", and the 5 is only
     known once the first pass has run. A flowable cannot be drawn twice, so

@@ -204,6 +204,41 @@ async def fake_builder_llm(_system: str, user_prompt: str, on_token=None) -> str
     return await stream_reply(reply, on_token) if on_token else reply
 
 
+# What the stand-in DestinationIntelligenceAgent model knows (Phase 22). Written the way a model
+# writes: markdown it was told not to use, a list longer than asked for, a key nobody asked for.
+# One of the best_times places is in ATTRACTIONS, so a plan made from the stubs has a tip for one of its stops.
+LOCAL_TIPS = {
+    "local_transport": "Rent a scooter for about ₹400 a day — the beaches are too far apart to walk between.",
+    "cultural_norms": [
+        "**Dress modestly** in churches and temples: shoulders and knees covered.",
+        "Bargaining is expected at the flea markets, never in shops with price tags.",
+    ],
+    "tourist_traps": [
+        "Skip the restaurants with menus in ten languages near Calangute; eat where the taxi drivers eat.",
+        "Agree the taxi fare before you get in — there are no meters.",
+    ],
+    "best_times": {
+        "Fort Aguada": "Early morning, before 9 am — it is deserted and the light is at its best.",
+        "Anjuna Flea Market": "Wednesday afternoon, the only day it is held.",
+    },
+    "safety_tips": [f"Tip number {n}: do not leave valuables on the beach." for n in range(1, 9)],
+    "sponsored_by": "nobody",
+}
+# Destinations the stand-in model has nothing for: no answer at all, or "I do not know this place".
+TIPS_DOWN = {"Pondicherry"}
+TIPS_UNKNOWN = {"Xyzzypur"}
+
+
+async def fake_intelligence_llm(_system: str, user_prompt: str) -> str:
+    """Stand-in for the DestinationIntelligenceAgent's Groq call: tips about the destination in the prompt."""
+    destination = json.loads(user_prompt)["destination"]
+    if destination in TIPS_DOWN:
+        raise RuntimeError("Error code: 503 - the model is not answering")
+    if destination in TIPS_UNKNOWN:
+        return '{"unknown": true}'
+    return "```json\n" + json.dumps(LOCAL_TIPS, ensure_ascii=False) + "\n```"  # fenced, as models like to
+
+
 @contextmanager
 def network_stubs(flight_tool, hotel_tool=None):
     """Patch every network seam; yields the three MCP tool mocks keyed flight / hotel / activities.
@@ -222,6 +257,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.agents.activities_agent.call_tool", tools["activities"]),
         patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={})),
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
+        patch("src.ai.agents.destination_intelligence._call_llm", fake_intelligence_llm),
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
         patch("src.ai.embeddings.embedder._call_embed", AsyncMock(return_value=[0.01] * 1536)),
         patch("app.api.routes.trips.classify_refinement", AsyncMock(return_value=_TARGETED_HOTEL)),
