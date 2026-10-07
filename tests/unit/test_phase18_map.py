@@ -248,7 +248,10 @@ def test_attraction_rating_is_the_source_rate_or_zero_never_invented():
 
 
 def test_attractions_cached_before_phase_18_are_not_served():
-    """Their categories and ratings mean something else — the cache key changed with the meaning."""
+    """Their categories and ratings mean something else — the cache key changed with the meaning.
+
+    And again in Phase 25 ("v3"): a search returns other places, and each says which interest it is for.
+    """
     lookups: list[str] = []
     places = MagicMock()
     places.json.return_value = [
@@ -263,7 +266,7 @@ def test_attractions_cached_before_phase_18_are_not_served():
     ):
         get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=5))
 
-    assert lookups and all(key.startswith("mcp:attractions:v2:") for key in lookups)
+    assert lookups and all(key.startswith("mcp:attractions:v3:") for key in lookups)
     assert store.call_args.args[0] == lookups[0]  # written where it will be read
 
 

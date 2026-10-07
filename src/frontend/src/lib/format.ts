@@ -50,6 +50,13 @@ export function formatDuration(minutes?: number | null): string | null {
   return rest ? `${hours}h ${rest}m` : `${hours}h`;
 }
 
+/** ["Asha", "Ben", "Dev"] → "Asha, Ben and Dev" (the PDF says it the same way — pdf/formatting.py) */
+export function namesInWords(names: string[]): string {
+  const said = names.filter(Boolean);
+  if (said.length <= 1) return said.join("");
+  return `${said.slice(0, -1).join(", ")} and ${said[said.length - 1]}`;
+}
+
 /** plural(1, "night") → "1 night"; plural(3, "night") → "3 nights" */
 export function plural(count: number, one: string, many: string = `${one}s`): string {
   return `${count} ${count === 1 ? one : many}`;

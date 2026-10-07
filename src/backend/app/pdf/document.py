@@ -161,6 +161,8 @@ def _cost_card(plan: TripPlan) -> Card:
     """The trip's one headline number, and how it sits against the budget."""
     note = budget_note(plan.costs.total, plan.budget)
     headline = [_p("Estimated total", EYEBROW), _p(format_inr(plan.costs.total), TOTAL)]
+    if plan.per_traveller is not None:  # Phase 25: each traveller's share, beside the total — as on the page
+        headline.append(_p(f"{format_inr(plan.per_traveller)} per traveller", BODY_STRONG))
     left = CONTENT_WIDTH * 0.52
     rows: list[list] = [[headline, BudgetPill(note) if note else ""]]
     commands = [
@@ -477,8 +479,8 @@ def _ledger(plan: TripPlan) -> Table:
             [_p(words, BODY), "", _p(format_inr(abs(plan.budget - costs.total)), gap_style)],
         ]
         commands.append(("LINEBELOW", (0, total_row), (-1, total_row), HAIRLINE, INK_200))
-    if plan.travellers > 1 and costs.total > 0:
-        share = _p(format_inr(costs.total / plan.travellers), FIGURE)
+    if plan.per_traveller is not None:
+        share = _p(format_inr(plan.per_traveller), FIGURE)
         rows.append([_p("Per traveller", BODY), _p(f"{format_inr(costs.total)} ÷ {plan.travellers}", BODY), share])
 
     return Table(rows, colWidths=[104, CONTENT_WIDTH - 104 - 96, 96], style=TableStyle(commands))

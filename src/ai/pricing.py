@@ -339,6 +339,40 @@ def typical_trip(
     )
 
 
+# ── Each traveller's share (Phase 25) ──────────────────────────────────────
+
+
+def per_person(
+    *,
+    total: float,
+    flights: float,
+    stay: float,
+    activities: float,
+    travellers: int,
+    names: list[str] | None = None,
+) -> dict:
+    """A trip's cost split equally between its travellers (the shape of itinerary.PerPersonBreakdown).
+
+    Equally, whoever a stop is for: the group goes to the fort together, and
+    shares the rooms. `flights`, `stay`, `activities` and `total` are one
+    traveller's part, to the paisa. `shares` are whole rupees that add up to the
+    rounded total exactly — when it does not divide, the first travellers named
+    carry the odd rupee. Travellers without a name are "Traveller 3", "Traveller 4".
+    """
+    count = max(1, travellers)
+    named = [name for name in names or [] if name][:count]
+    labels = named + [f"Traveller {number}" for number in range(len(named) + 1, count + 1)]
+    each, odd = divmod(int(round(total)), count)
+    return {
+        "travellers": count,
+        "flights": round(flights / count, 2),
+        "stay": round(stay / count, 2),
+        "activities": round(activities / count, 2),
+        "total": round(total / count, 2),
+        "shares": [{"name": label, "amount": each + (1 if place < odd else 0)} for place, label in enumerate(labels)],
+    }
+
+
 def round_inr(amount: float, step: int = 100) -> int:
     """An estimate is said in round numbers: ₹38,520 → ₹38,500."""
     return int(round(amount / step) * step)

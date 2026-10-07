@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 24 / 50 — Caching & Rate Limit Handling**
+**Status: Phase 25 / 50 — Group Trip Intelligence**
 
 ---
 
@@ -92,16 +92,16 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 786 tests
+# Unit + contract tests (no Docker, no network) — 855 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 39 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 43 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 
-# Browser tests (Playwright) — 56 tests: 5 end-to-end flows, 8 for Phase 23's similar trips and search, 10 for
-# Phase 22's local tips, 3 for Phase 21's priced
+# Browser tests (Playwright) — 60 tests: 5 end-to-end flows, 4 for Phase 25's group trips, 8 for Phase 23's
+# similar trips and search, 10 for Phase 22's local tips, 3 for Phase 21's priced
 # budget conflict, 5 for Phase 20's polish (live draft, refinement marks, retry, 375 px), 1 for Phase 24's
 # rate-limited search, 16 for the live draft's reader, 8 for the change summary. Starts its own stack: a stub backend
 # (real app, DB, Redis and graph; external APIs faked) on :8100 with its own
@@ -134,6 +134,7 @@ tripplanner-ai/
 │   │   ├── e2e/budget.spec.ts           ← Phase 21: a budget conflict priced, and each way out planned
 │   │   ├── e2e/tips.spec.ts             ← Phase 22: the Local tips accordion; no section when there are no tips
 │   │   ├── e2e/similar.spec.ts          ← Phase 23: similar trips on the trip page; search on the trips list
+│   │   ├── e2e/group.spec.ts            ← Phase 25: four travellers, a stop for each, and each one's share
 │   │   ├── e2e/changes.spec.ts          ← what the assistant says changed (pure function tests)
 │   │   ├── e2e/draft.spec.ts            ← the live draft's partial-JSON reader (pure function tests)
 │   │   └── src/
@@ -143,12 +144,12 @@ tripplanner-ai/
 │   │       │   ├── page.tsx             ← redirects → /trips
 │   │       │   ├── login/page.tsx       ← sign in / create account
 │   │       │   └── trips/
-│   │       │       ├── page.tsx         ← trip cards, new-trip form, search (Phase 23)
+│   │       │       ├── page.tsx         ← trip cards, new-trip form with "Who is going" (Phase 25), search (Phase 23)
 │   │       │       └── [id]/page.tsx    ← the plan, the assistant, live progress
 │   │       ├── components/              ← ItineraryView, CostSummary, DayCard, ItineraryMap (Phase 18),
 │   │       │                              DownloadPdfButton + Toast (Phase 19), LiveDraft, ProgressSheet,
 │   │       │                              TripStages (Phase 20), LocalTips (Phase 22), SimilarTrips (Phase 23),
-│   │       │                              AgentProgressPanel,
+│   │       │                              GroupPanel (Phase 25), AgentProgressPanel,
 │   │       │                              MessageThread, ChatInput, AppHeader, Brand, ui
 │   │       └── lib/                     ← api.ts, sse.ts (reconnecting EventSource), map.ts (pins, routes,
 │   │                                      day colours), changes.ts (what a change request changed, and
@@ -189,7 +190,10 @@ tripplanner-ai/
 │   │                                      with the script that builds them
 │   └── ai/
 │       ├── llm.py                       ← model IDs + tolerant JSON parsing of LLM replies
-│       ├── pricing.py                   ← Phase 21: seasons by destination, typical costs, the estimate arithmetic
+│       ├── pricing.py                   ← Phase 21: seasons by destination, typical costs, the estimate arithmetic;
+│       │                                  Phase 25: each traveller's share
+│       ├── group.py                     ← Phase 25: who a place suits, the group score, taking places in turns,
+│       │                                  repairing a plan so every two days hold a stop for each traveller
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache; Phase 24: rate_limiter.py (each
 │       │                                  provider's limit, a queue for the request over it), outbound.py (backoff
 │       │                                  on 429 / 5xx), the tools in threads, one search per cache key at a time
@@ -224,22 +228,25 @@ tripplanner-ai/
 │       ├── 001_initial_schema.py        ← All 5 tables + pgvector
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       ├── 003_add_user_preferences.py  ← Phase 16: user_preferences table
-│       └── 004_embedding_kind.py        ← Phase 23: embeddings.kind, HNSW index over summaries, re-embedding queued
+│       ├── 004_embedding_kind.py        ← Phase 23: embeddings.kind, HNSW index over summaries, re-embedding queued
+│       └── 005_trip_group_members.py    ← Phase 25: trips.group_members
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (778 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (847 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 39 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 43 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
-│                                          fake providers behind the real MCP tools (Phase 24)
+│                                          fake providers behind the real MCP tools (Phase 24), with an
+│                                          attractions catalogue that answers by kind and popularity (Phase 25)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
 │                                          seed_demo_trips.py (a demo account with twelve embedded trips),
-│                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec)
+│                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec),
+│                                          group_experiment.py (Phase 25: four travellers against the real search)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–24) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–25) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -281,10 +288,10 @@ tripplanner-ai/
 | 22 | Destination Intelligence Agent — local tips from what a model knows, in an accordion and in the PDF ([docs/phase22_build_log.md](docs/phase22_build_log.md)) | ✅ Done | 51 unit + 2 integration + 10 Playwright E2E |
 | 23 | pgvector similarity search — similar trips, search, the embedding experiment ([docs/phase23_build_log.md](docs/phase23_build_log.md)) | ✅ Done | 24 unit + 13 integration + 8 Playwright E2E |
 | 24 | Caching & rate limits — cache warming on trip creation, a rate limit per provider, backoff on 429, the tools side by side ([docs/phase24_build_log.md](docs/phase24_build_log.md)) | ✅ Done | 90 unit + 3 integration + 1 Playwright E2E |
-| 25 | Group Trip Intelligence | ⏳ | |
+| 25 | Group trips — each traveller's interests searched on their own, a plan with a stop for everyone in every two days, each one's share of the cost ([docs/phase25_build_log.md](docs/phase25_build_log.md)) | ✅ Done | 69 unit + 4 integration + 4 Playwright E2E |
 | 26–50 | Production & Polish | ⏳ | |
 
-**Total: 786 unit + contract, 39 integration, 56 browser — all passing.** Zero network calls in CI.
+**Total: 855 unit + contract, 43 integration, 60 browser — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -307,6 +314,11 @@ at another tile server; with the tiles unreachable the PDF simply comes without 
 
 Gemini's free tier allows about 20 requests a day per model. When it runs out, the short prompts go
 to Groq's small model (`GROQ_SMALL_MODEL`) instead, so planning keeps working.
+
+**Group trips:** name the travellers and what each enjoys, and each one's interests are searched on their
+own; the plan then has a stop for everyone in every two days — checked and, if need be, repaired by code —
+says who each stop is for, and splits the cost equally. What the attractions provider does not have is said,
+not substituted: it lists no spas, so "spa" finds nothing.
 
 **Scope:** trips within India, up to 14 nights. A destination abroad ("London") is refused with a
 clear message rather than planned as its nearest namesake.

@@ -109,7 +109,7 @@ def _events_channel(trip_id: uuid.UUID) -> str:
 
 def _trip_state(trip: Trip) -> dict:
     """The orchestrator's initial state for a trip row."""
-    return {
+    state = {
         "destination": trip.destination,
         "start_date": str(trip.start_date),
         "end_date": str(trip.end_date),
@@ -117,6 +117,9 @@ def _trip_state(trip: Trip) -> dict:
         "group_size": trip.group_size,
         "interests": trip.interests or [],
     }
+    if trip.group_members:  # Phase 25: a group whose travellers were named
+        state["group_members"] = trip.group_members
+    return state
 
 
 async def _run_orchestrator(

@@ -2,15 +2,45 @@ import uuid
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
 from app.schemas.types import UTCDateTime
+from src.ai import group
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 # The searches return at most ten attractions and the builder writes every day in one reply:
 # past two weeks a plan is mostly empty days, and a year-long one came back as a single day.
 MAX_TRIP_NIGHTS = 14
+
+
+class GroupMember(BaseModel):
+    """One traveller of a group trip (Phase 25): a name, and what they enjoy.
+
+    Both are a few plain words — they are shown to the model that writes the
+    plan, so nothing that could pass for an instruction or break out of a line
+    is let in. No interests means "happy with whatever the others choose".
+    """
+
+    name: NonBlank
+    interests: list[NonBlank] = Field(default_factory=list, max_length=group.MAX_INTERESTS)
+
+    @field_validator("name")
+    @classmethod
+    def name_is_a_name(cls, v: str) -> str:
+        if not group.is_words(v, group.MAX_NAME_CHARS):
+            raise ValueError(f"a name is at most {group.MAX_NAME_CHARS} letters, digits, spaces or simple punctuation")
+        return v
+
+    @field_validator("interests")
+    @classmethod
+    def interests_are_words(cls, v: list[str]) -> list[str]:
+        for interest in v:
+            if not group.is_words(interest, group.MAX_INTEREST_CHARS):
+                raise ValueError(
+                    f"an interest is at most {group.MAX_INTEREST_CHARS} letters, digits, spaces or simple punctuation"
+                )
+        return list(dict.fromkeys(v))  # each once, in the order given
 
 
 class TripCreate(BaseModel):
@@ -20,6 +50,27 @@ class TripCreate(BaseModel):
     budget: float = Field(gt=0)
     group_size: int = Field(default=1, ge=1, le=9)  # 9 = the flight search's passenger limit
     interests: list[NonBlank] | None = None
+    # Phase 25: the travellers, told apart. Left out, the trip is planned as before — for
+    # `group_size` people who all enjoy `interests`.
+    group_members: list[GroupMember] | None = Field(
+        default=None, min_length=group.MIN_MEMBERS, max_length=group.MAX_MEMBERS
+    )
+
+    @model_validator(mode="after")
+    def the_group_adds_up(self) -> "TripCreate":
+        """Named travellers are counted, and what they enjoy is what the trip is about."""
+        if not self.group_members:
+            return self
+        names = [member.name.casefold() for member in self.group_members]
+        if len(set(names)) != len(names):
+            raise ValueError("group_members: two travellers have the same name")
+        if "group_size" not in self.model_fields_set:
+            self.group_size = len(self.group_members)  # nobody said how many: as many as were named
+        elif self.group_size < len(self.group_members):
+            raise ValueError(f"group_size is {self.group_size}, but {len(self.group_members)} travellers are named")
+        everyones = [interest for member in self.group_members for interest in member.interests]
+        self.interests = list(dict.fromkeys([*(self.interests or []), *everyones])) or None
+        return self
 
     @field_validator("start_date")
     @classmethod
@@ -47,6 +98,7 @@ class TripRead(BaseModel):
     budget: float
     group_size: int
     interests: list[str] | None
+    group_members: list[GroupMember] | None = None  # Phase 25
     status: str
     created_at: UTCDateTime
 

@@ -207,7 +207,7 @@ async def test_a_trip_is_created_at_once_warmed_behind_it_and_planned_from_the_c
                 if record.name == "src.ai.mcp_server.cache"
             ]
             assert sorted(lookup.rsplit(":", 1)[0] for lookup in lookups) == [
-                "[CACHE HIT]  mcp:attractions:v2",
+                "[CACHE HIT]  mcp:attractions:v3",
                 "[CACHE HIT]  mcp:flights",
                 "[CACHE HIT]  mcp:hotels",
             ]  # three lookups, three hits, not one miss

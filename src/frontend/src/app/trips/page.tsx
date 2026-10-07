@@ -10,10 +10,11 @@ import { LogoMark } from "@/components/Brand";
 import { Spinner, TripStatusBadge } from "@/components/ui";
 import { createTrip, getToken, listTrips, searchTrips } from "@/lib/api";
 import { formatDateRange, formatINR, nightsBetween, plural } from "@/lib/format";
-import type { Trip, TripMatch } from "@/lib/types";
+import type { GroupMember, Trip, TripMatch } from "@/lib/types";
 
-// What the attractions search understands best — one tap adds it to the list.
-const INTEREST_IDEAS = ["beach", "history", "food", "nature", "culture", "adventure", "shopping", "nightlife", "wellness"];
+// What the attractions search understands best — one tap adds it to the list. ("wellness" was here
+// until Phase 25: the provider lists no spas, so it found nothing. "relaxation" finds beaches and gardens.)
+const INTEREST_IDEAS = ["beach", "history", "food", "nature", "culture", "adventure", "shopping", "nightlife", "relaxation"];
 
 // A cover per trip, picked from the destination's name so it never changes between visits.
 const COVERS = [
@@ -42,6 +43,30 @@ function dayAfter(iso: string, days: number = 1): string {
 
 function parseInterests(text: string): string[] {
   return text.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/** The backend's limits for a group (src/ai/group.py): two to nine travellers told apart. */
+const MIN_MEMBERS = 2;
+const MAX_MEMBERS = 9;
+
+/** A row of the "Who is going" form: both as typed. */
+interface MemberRow {
+  name: string;
+  interests: string;
+}
+
+/**
+ * The rows as the API wants them, or why not. Rows left wholly empty are dropped — a form opened
+ * for four travellers and filled in for three is a group of three.
+ */
+function readMembers(rows: MemberRow[]): GroupMember[] | string {
+  const filled = rows
+    .map((row) => ({ name: row.name.trim(), interests: parseInterests(row.interests) }))
+    .filter((member) => member.name || member.interests.length);
+  if (filled.some((member) => !member.name)) return "Every traveller needs a name — it is how the plan says who each stop is for.";
+  if (filled.length < MIN_MEMBERS) return "Name at least two travellers, or go back to interests everyone shares.";
+  if (new Set(filled.map((member) => member.name.toLowerCase())).size !== filled.length) return "Two travellers have the same name.";
+  return filled;
 }
 
 /** A trip as a card. `match` — a search result: the card also says what the plan came to and one place in it. */
@@ -125,6 +150,8 @@ export default function TripsPage() {
   const [budget, setBudget] = useState("");
   const [groupSize, setGroupSize] = useState(2);
   const [interests, setInterests] = useState("");
+  // Phase 25 — the travellers told apart: a name and what each enjoys. Empty: everyone shares `interests`.
+  const [members, setMembers] = useState<MemberRow[]>([]);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -151,6 +178,20 @@ export default function TripsPage() {
   function toggleInterest(idea: string) {
     const next = chosen.includes(idea) ? chosen.filter((i) => i !== idea) : [...chosen, idea];
     setInterests(next.join(", "));
+  }
+
+  function startGroup() {
+    setMembers(Array.from({ length: Math.max(MIN_MEMBERS, groupSize) }, () => ({ name: "", interests: "" })));
+  }
+
+  function changeMember(index: number, change: Partial<MemberRow>) {
+    setMembers((rows) => rows.map((row, at) => (at === index ? { ...row, ...change } : row)));
+  }
+
+  function addMember() {
+    if (members.length >= MAX_MEMBERS) return;
+    setGroupSize((count) => Math.max(count, members.length + 1));
+    setMembers((rows) => [...rows, { name: "", interests: "" }]);
   }
 
   function showAllTrips() {
@@ -188,6 +229,15 @@ export default function TripsPage() {
       setFormError(`A trip can be up to ${MAX_TRIP_NIGHTS} nights long — this one is ${nights}.`);
       return;
     }
+    let group: GroupMember[] | undefined;
+    if (members.length > 0) {
+      const read = readMembers(members);
+      if (typeof read === "string") {
+        setFormError(read);
+        return;
+      }
+      group = read;
+    }
     setCreating(true);
     try {
       const trip = await createTrip({
@@ -195,8 +245,10 @@ export default function TripsPage() {
         start_date: startDate,
         end_date: endDate,
         budget: parseFloat(budget),
-        group_size: groupSize,
-        interests: chosen.length ? chosen : undefined,
+        group_size: group ? Math.max(groupSize, group.length) : groupSize,
+        // a group's interests are its travellers': the backend puts them together
+        interests: group ? undefined : chosen.length ? chosen : undefined,
+        group_members: group,
       });
       router.push(`/trips/${trip.id}`);
     } catch (err: unknown) {
@@ -349,36 +401,92 @@ export default function TripsPage() {
                 </div>
               </div>
 
-              <div className="sm:col-span-2 lg:col-span-4">
-                <label htmlFor="interests" className="label">
-                  Interests <span className="font-normal text-ink-500">· optional, comma-separated</span>
-                </label>
-                <input
-                  id="interests"
-                  value={interests}
-                  onChange={(e) => setInterests(e.target.value)}
-                  placeholder="beach, history, food"
-                  className="input"
-                />
-                <div className="mt-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggestions">
-                  {INTEREST_IDEAS.map((idea) => {
-                    const on = chosen.includes(idea);
-                    return (
-                      <button
-                        key={idea}
-                        type="button"
-                        onClick={() => toggleInterest(idea)}
-                        aria-pressed={on}
-                        className={`focus-ring rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                          on ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:bg-ink-50"
-                        }`}
-                      >
-                        {idea}
-                      </button>
-                    );
-                  })}
+              {members.length === 0 ? (
+                <div className="sm:col-span-2 lg:col-span-4">
+                  <label htmlFor="interests" className="label">
+                    Interests <span className="font-normal text-ink-500">· optional, comma-separated</span>
+                  </label>
+                  <input
+                    id="interests"
+                    value={interests}
+                    onChange={(e) => setInterests(e.target.value)}
+                    placeholder="beach, history, food"
+                    className="input"
+                  />
+                  <div className="mt-2.5 flex flex-wrap gap-1.5" role="group" aria-label="Suggestions">
+                    {INTEREST_IDEAS.map((idea) => {
+                      const on = chosen.includes(idea);
+                      return (
+                        <button
+                          key={idea}
+                          type="button"
+                          onClick={() => toggleInterest(idea)}
+                          aria-pressed={on}
+                          className={`focus-ring rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                            on ? "border-ink-900 bg-ink-900 text-white" : "border-ink-200 bg-white text-ink-600 hover:border-ink-300 hover:bg-ink-50"
+                          }`}
+                        >
+                          {idea}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {groupSize >= MIN_MEMBERS && (
+                    <button type="button" onClick={startGroup} className="btn-ghost -ml-2 mt-2 px-2 py-1.5 text-sm">
+                      <Users className="h-4 w-4" aria-hidden />
+                      Do they want different things? Say what each traveller enjoys
+                    </button>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <fieldset className="rounded-2xl border border-ink-200 p-4 sm:col-span-2 sm:p-5 lg:col-span-4">
+                  <legend className="label mb-0 px-1.5">
+                    Who is going <span className="font-normal text-ink-500">· a name, and what each enjoys</span>
+                  </legend>
+                  <ul className="space-y-2.5">
+                    {members.map((member, index) => (
+                      <li key={index} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+                        <input
+                          aria-label={`Traveller ${index + 1} name`}
+                          maxLength={40}
+                          value={member.name}
+                          onChange={(e) => changeMember(index, { name: e.target.value })}
+                          placeholder={`Traveller ${index + 1}`}
+                          className="input"
+                        />
+                        <input
+                          aria-label={`Traveller ${index + 1} interests`}
+                          value={member.interests}
+                          onChange={(e) => changeMember(index, { interests: e.target.value })}
+                          placeholder="beach, food"
+                          className="input col-span-2 row-start-2 sm:col-span-1 sm:row-start-auto"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMembers((rows) => rows.filter((_, at) => at !== index))}
+                          disabled={members.length <= MIN_MEMBERS}
+                          aria-label={`Remove traveller ${index + 1}`}
+                          className="btn-ghost h-[42px] w-[42px] shrink-0 p-0"
+                        >
+                          <X className="h-4 w-4" aria-hidden />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <button type="button" onClick={addMember} disabled={members.length >= MAX_MEMBERS} className="btn-secondary px-3 py-2 text-sm">
+                      <Plus className="h-4 w-4" aria-hidden />
+                      Add a traveller
+                    </button>
+                    <button type="button" onClick={() => setMembers([])} className="btn-ghost px-2 py-2 text-sm">
+                      Everyone shares the same interests
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-ink-500">
+                    The plan gives each of them a stop in every two days, says who each stop is for, and splits the cost equally.
+                  </p>
+                </fieldset>
+              )}
 
               {formError && (
                 <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm text-bad-ink sm:col-span-2 lg:col-span-4">

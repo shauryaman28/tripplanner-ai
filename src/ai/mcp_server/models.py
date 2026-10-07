@@ -7,6 +7,8 @@ Phase 18 also puts coordinates on Hotel and the two airports on Flight.
 
 from pydantic import BaseModel, Field
 
+from src.ai.itinerary import PerPersonBreakdown
+
 # ── Inputs ─────────────────────────────────────────────────────────────────
 
 
@@ -49,6 +51,10 @@ class BudgetInput(BaseModel):
     daily_spend: float = Field(..., description="Estimated daily spend in INR")
     # Phase 21 — the season, and what the range is
     nights: int | None = Field(None, ge=0, description="Hotel nights; defaults to days")
+    # Phase 25 — the costs above are the whole party's; this is how many people share them
+    group_size: int = Field(
+        1, ge=1, le=9, description="Travellers sharing the cost; flights, hotels and spend are for all of them"
+    )
     destination: str | None = Field(None, description="Where the trip goes, e.g. Goa — sets its seasons")
     month: int | None = Field(None, ge=1, le=12, description="Month of travel, 1–12: the prices are this month's")
 
@@ -92,6 +98,9 @@ class Attraction(BaseModel):
     description: str
     lat: float | None = None  # Phase 3 — used by Phase 18 map view
     lng: float | None = None
+    # Phase 25 — which of the interests asked for this place was found under. A group's
+    # attractions are told apart by it: whose interests each one answers.
+    interests: list[str] = Field(default_factory=list)
 
 
 class DayForecast(BaseModel):
@@ -106,7 +115,10 @@ class BudgetEstimate(BaseModel):
     hotels: float
     activities_estimate: float
     total: float
-    per_person: float
+    per_person: float  # total / group_size
+    # Phase 25: each traveller's part of the flights, the stay and the activities, and their shares
+    # in whole rupees. None for one traveller — there is nothing to split.
+    per_person_breakdown: PerPersonBreakdown | None = None
     notes: str
     # Phase 21: where the total will likely land once booked (±10–20% by season), and the season itself
     total_min: float

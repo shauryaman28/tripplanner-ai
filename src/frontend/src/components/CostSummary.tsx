@@ -15,6 +15,8 @@ interface Props {
   activities: number;
   nights: number;
   travellers: number | null;
+  /** One traveller's share of the total (Phase 25); null for a trip of one. */
+  perPerson?: number | null;
   /** The section a run is working on right now: its tile shows it, the others stay as they are. */
   updating?: PlanSection | null;
   /** The parts that came back different from the last change (lib/changes.ts) — marked for a few seconds. */
@@ -92,6 +94,7 @@ export default function CostSummary({
   activities,
   nights,
   travellers,
+  perPerson = null,
   updating = null,
   changed = NOTHING_CHANGED,
 }: Props) {
@@ -110,6 +113,13 @@ export default function CostSummary({
           <p className={`-mx-2 mt-1 rounded-xl px-2 text-5xl font-semibold tracking-tight text-ink-900 ${partClass(false, changed.has(totalPart))}`}>
             {formatINR(total)}
           </p>
+          {perPerson !== null && (
+            <p data-part="per-person" className="mt-1.5 text-xl font-semibold tracking-tight text-ink-700">
+              {formatINR(perPerson)}
+              <span className="font-medium text-ink-500"> / person</span>
+              {travellers ? <span className="ml-2 text-sm font-normal text-ink-500">shared equally by {plural(travellers, "traveller")}</span> : null}
+            </p>
+          )}
         </div>
         {budget !== null && <BudgetNote state={state} total={total} budget={budget} />}
       </div>

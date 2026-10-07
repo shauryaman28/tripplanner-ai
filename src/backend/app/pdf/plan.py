@@ -28,6 +28,7 @@ from app.pdf.formatting import (
     format_duration,
     format_inr,
     format_number,
+    names_in_words,
     plural,
 )
 from src.ai.itinerary import FREE_TIME, SLOTS
@@ -55,6 +56,7 @@ class Stop:
     lng: float | None
     free_time: bool
     order: int | None  # the number on its map pin, 1-based within the day; None when it has no pin
+    suits: tuple[str, ...] = ()  # Phase 25, a group trip: the travellers this stop is for
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,19 @@ class TripPlan:
         return max(0, (self.end_date - self.start_date).days)
 
     @property
+    def per_traveller(self) -> float | None:
+        """One traveller's share of the total, split equally; None for a trip of one, or one that costs nothing.
+
+        The same sum an itinerary carries as `per_person_cost` since Phase 25
+        (pricing.per_person) — worked out here, so that a plan saved before it
+        prints its share too, and the cost page's "total ÷ travellers" is what
+        the cover says.
+        """
+        if self.travellers < 2 or self.costs.total <= 0:
+            return None
+        return self.costs.total / self.travellers
+
+    @property
     def flight(self) -> Flight | None:
         return next((day.flight for day in self.days if day.flight), None)
 
@@ -185,6 +200,15 @@ def _amount(value: object) -> float:
 
 def _text(value: object) -> str | None:
     return (value.strip() or None) if isinstance(value, str) else None
+
+
+def _names(value: object) -> tuple[str, ...]:
+    """A stored list of traveller names, read as forgivingly as the rest of an itinerary."""
+    return (
+        tuple(name.strip() for name in value if isinstance(name, str) and name.strip())
+        if isinstance(value, list)
+        else ()
+    )
 
 
 def _position(lat: object, lng: object) -> tuple[float, float] | tuple[None, None]:
@@ -262,6 +286,7 @@ def _read_day(raw: dict, index: int) -> Day:
                 lng=lng,
                 free_time=free_time,
                 order=order if lat is not None else None,
+                suits=() if free_time else _names(entry.get("suits")),
             )
         )
 
@@ -538,4 +563,6 @@ def stop_facts(stop: Stop) -> list[str]:
         facts += [label, "Heritage site" if heritage else None]
     if stop.order is None:
         facts.append("No map location for this place")
+    if stop.suits:  # Phase 25: on a group trip, whose interests this stop answers
+        facts.append(f"For {names_in_words(stop.suits)}")
     return [fact for fact in facts if fact]

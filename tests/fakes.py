@@ -363,6 +363,11 @@ class FakeProviders:
                   time, and answers 429 past its limit
     on_request    called with the provider's name while a request is "at the provider" — a place to
                   hold it (an Event, a Barrier) or to slow it down
+    catalogue     the attractions provider's places, as (name, kinds, rate). Left None, every search
+                  finds the same two places. Set (GOA_PLACES), a search finds the places of the kinds
+                  it asks for that are at least as popular as it asks, nearest — first listed — first,
+                  and a kind the provider does not know is answered 400, as the real one answers
+    searches      the (kinds, rate, limit) of every attraction search received
     """
 
     HOSTS = {
@@ -381,14 +386,16 @@ class FakeProviders:
         self.on_request: Callable[[str], None] | None = None
         self.offers = [duffel_offer(amount="4200.00"), duffel_offer(carrier="AI", number="101", amount="6100.00")]
         self.hotels: list[tuple[str, float]] = [("Goa Grand", 18_000.0), ("Sea Breeze", 26_000.0)]  # for the stay
+        self.catalogue: list[tuple[str, str, int]] | None = None
+        self.searches: list[tuple[str, int, int]] = []
         self._arrivals: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
-    def get(self, url: str, **_request) -> httpx.Response:
-        return self._answer(url)
+    def get(self, url: str, **request) -> httpx.Response:
+        return self._answer(url, request.get("params") or {})
 
     def post(self, url: str, **_request) -> httpx.Response:
-        return self._answer(url)
+        return self._answer(url, {})
 
     def counts(self) -> Counter:
         """How many requests each provider has received."""
@@ -401,7 +408,7 @@ class FakeProviders:
         with self._lock:
             return [answer for answer in self.answers if answer[1] == 429]
 
-    def _answer(self, url: str) -> httpx.Response:
+    def _answer(self, url: str, params: dict) -> httpx.Response:
         provider = self.HOSTS[httpx.URL(url).host]
         with self._lock:
             self.requests.append(provider)
@@ -420,7 +427,24 @@ class FakeProviders:
             self.answers.append((provider, status))
         if self.on_request is not None:
             self.on_request(provider)
+        if status == 200 and provider == "opentripmap" and self.catalogue is not None:
+            return self._places(url, params)
         return provider_answer(status, self._body(provider) if status == 200 else None, url=url)
+
+    def _places(self, url: str, params: dict) -> httpx.Response:
+        """A search of the catalogue: by kind, by popularity, nearest first, cut at the limit."""
+        asked = set(str(params.get("kinds", "")).split(","))
+        rate, limit = int(params.get("rate", 1)), int(params.get("limit", 10))
+        with self._lock:
+            self.searches.append((params.get("kinds", ""), rate, limit))
+        if unknown := asked - OTM_KINDS:
+            return provider_answer(400, {"error": f"Unknown category name: {sorted(unknown)[0]} (400)"}, url=url)
+        found = [
+            {"name": name, "kinds": kinds, "rate": popularity, "point": {"lat": 15.0 + n / 100, "lon": 74.0}}
+            for n, (name, kinds, popularity) in enumerate(self.catalogue or [])
+            if asked & set(kinds.split(",")) and popularity % 4 >= rate
+        ]
+        return provider_answer(200, found[:limit], url=url)
 
     def _body(self, provider: str):
         if provider == "duffel":
@@ -496,3 +520,94 @@ async def tool_server(providers: FakeProviders | None = None):
             patch("src.ai.mcp_client.client.get_session", AsyncMock(return_value=session)),
         ):
             yield faked
+
+
+# ── A place with something for everyone, and something for nobody (Phase 25) ──
+
+# The kinds the attractions provider knows, of those the tools ask for — each checked against the
+# live catalogue on 2026-10-05 (scripts/group_experiment.py's probes). "spas" is not one: the real
+# provider answers HTTP 400 to it, and so does the fake.
+OTM_KINDS = frozenset(
+    "interesting_places historic museums cultural foods restaurants cafes beaches natural national_parks "
+    "geological_formations waterfalls nature_reserves climbing diving surfing kitesurfing winter_sports "
+    "amusements nightclubs shops religion architecture gardens_and_parks water view_points".split()
+)
+
+# What the fake attractions provider has near "Goa", as (name, kinds, rate) — nearest first. Shaped like
+# the real answers: plenty of well-known history, a few beaches, one well-known waterfall, restaurants
+# that are all rated 1, gardens for a quiet afternoon, and no spa of any kind.
+GOA_PLACES = [
+    ("Fort Aguada", "historic,fortifications,cultural,interesting_places", 7),
+    ("Basilica of Bom Jesus", "historic,religion,cultural,interesting_places", 7),
+    ("Baga Beach", "beaches,natural", 3),
+    ("Chapora Fort", "historic,fortifications,interesting_places", 3),
+    ("Goa State Museum", "museums,cultural,interesting_places", 2),
+    ("Palolem Beach", "beaches,natural", 2),
+    ("Reis Magos Fort", "historic,fortifications,interesting_places", 2),
+    ("Dudhsagar Falls", "waterfalls,natural", 3),
+    ("Fontainhas", "historic,cultural,interesting_places", 2),
+    ("Anjuna Beach", "beaches,natural", 2),
+    ("Viva Panjim", "restaurants,foods", 1),
+    ("Arvalem Caves", "geological_formations,natural", 2),
+    ("Miramar Garden", "gardens_and_parks", 2),
+    ("Fisherman's Wharf", "restaurants,foods", 1),
+    ("Mollem National Park", "nature_reserves,national_parks,natural", 2),
+    ("Kala Academy", "cultural,interesting_places", 1),
+    ("Joggers Park", "gardens_and_parks", 1),
+    ("Ritz Classic", "restaurants,foods", 1),
+]
+
+# The roadmap's four travellers (Phase 25's acceptance).
+ROADMAP_GROUP = [
+    {"name": "Asha", "interests": ["beach", "food"]},
+    {"name": "Ben", "interests": ["history", "culture"]},
+    {"name": "Chitra", "interests": ["adventure"]},
+    {"name": "Dev", "interests": ["spa", "relaxation"]},
+]
+
+# What the stubbed attraction search (network_stubs) finds for an interest. Each place says what it
+# was found under, as the real tool's results do.
+_STUB_PLACES = {
+    "beach": [("Baga Beach", "beach", 3.0, 15.556, 73.752), ("Palolem Beach", "beach", 2.0, 15.010, 74.023)],
+    "food": [("Viva Panjim", "food", 1.0, 15.497, 73.830), ("Fisherman's Wharf", "food", 1.0, 15.158, 73.946)],
+    "history": [("Fort Aguada", "history", 7.0, 15.492, 73.773), ("Chapora Fort", "history", 3.0, 15.606, 73.736)],
+    "culture": [("Goa State Museum", "museum", 2.0, 15.494, 73.833), ("Fort Aguada", "history", 7.0, 15.492, 73.773)],
+    "adventure": [("Dudhsagar Falls", "nature", 3.0, 15.314, 74.314), ("Arvalem Caves", "nature", 2.0, 15.567, 74.022)],
+    "relaxation": [("Miramar Garden", "nature", 2.0, 15.482, 73.808), ("Baga Beach", "beach", 3.0, 15.556, 73.752)],
+}
+
+
+def stub_attractions(_name: str, params: dict):
+    """The attraction search for a trip that names interests the stub knows — tagged, like the real tool's results.
+
+    Anything else (a solo trip's "history", a member's "spa") is answered as
+    before: ATTRACTIONS for an interest it has no places for, and nothing at
+    all — the real tool's NO_RESULTS — for "spa" and "wellness".
+    """
+    from src.ai.mcp_server.models import ToolError
+
+    interests = [str(interest).lower() for interest in params.get("interests") or []]
+    if interests and all(interest in ("spa", "wellness") for interest in interests):
+        return ToolError(
+            error=f"No attractions found for {interests} in {params.get('destination')}.", code="NO_RESULTS"
+        )
+    known = [interest for interest in interests if interest in _STUB_PLACES]
+    if not known or len(known) < len([i for i in interests if i not in ("spa", "wellness")]):
+        return ATTRACTIONS
+    found: dict[str, dict] = {}
+    for interest in known:
+        for name, category, rating, lat, lng in _STUB_PLACES[interest]:
+            place = found.setdefault(
+                name,
+                {
+                    "name": name,
+                    "category": category,
+                    "rating": rating,
+                    "description": f"{category}.",
+                    "lat": lat,
+                    "lng": lng,
+                    "interests": [],
+                },
+            )
+            place["interests"].append(interest)
+    return list(found.values())[: params.get("limit", 10)]

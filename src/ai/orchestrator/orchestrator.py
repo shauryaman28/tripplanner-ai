@@ -38,6 +38,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
+from src.ai import group
 from src.ai.agents.activities_agent import ActivitiesAgent
 from src.ai.agents.budget_alternatives import conflict_alternatives, plain_options
 from src.ai.agents.budget_decision import BudgetDecision, make_budget_decision, replan_flight_budget
@@ -79,7 +80,16 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-TRIP_FIELDS = ("destination", "origin", "start_date", "end_date", "budget", "group_size", "interests")
+TRIP_FIELDS = (
+    "destination",
+    "origin",
+    "start_date",
+    "end_date",
+    "budget",
+    "group_size",
+    "interests",
+    "group_members",  # Phase 25
+)
 _RUNTIME_KEYS = ("db", "trip_id", "publish_fn", "on_complete")  # live objects — never logged, saved or returned
 
 # "Ask vs. assume" defaults (prompts/orchestrator_v3.md): these are assumed, never asked for.
@@ -105,6 +115,10 @@ class OrchestratorState(TypedDict, total=False):
     budget: float | None
     group_size: int | None
     interests: list[str] | None
+    # Phase 25: who travels and what each enjoys — [{"name", "interests"}]; and, once the attractions
+    # have been searched, what each member's own search found (src/ai/group.py)
+    group_members: list[dict] | None
+    group_searches: list[dict] | None
 
     flights: list[dict]
     hotels: list[dict]
@@ -288,11 +302,12 @@ def _travel_month(state: OrchestratorState) -> int | None:
 
 async def _run_agent(
     state: OrchestratorState, agent: Any, name: str, input_state: dict, result_key: str, noun: str, note: str = ""
-) -> tuple[list[dict], dict | None]:
-    """Run one sub-agent and publish its SSE status. Returns (items, error) — never raises.
+) -> tuple[list[dict], dict | None, dict]:
+    """Run one sub-agent and publish its SSE status. Returns (items, error, the agent's whole result) — never raises.
 
     `noun` (plural) and `note` word the summary: "Found 3 flights (re-plan attempt 1)".
     """
+    result: dict = {}
     try:
         result = await agent.run(
             input_state, db=state.get("db"), trip_id=state.get("trip_id"), turn=state.get("turn", 1)
@@ -312,7 +327,7 @@ async def _run_agent(
     else:
         update = {"agent": name, "status": "completed", "summary": found}
     await _publish(state, update)
-    return ([], error) if error else (items, None)
+    return ([], error, result) if error else (items, None, result)
 
 
 # What each search agent is given. Functions of the state alone, so that cache warming (warming.py,
@@ -349,17 +364,20 @@ def hotel_search_input(state: OrchestratorState) -> dict:
 
 
 def activities_search_input(state: OrchestratorState) -> dict:
-    """The activities agent's input."""
-    return {
+    """The activities agent's input. For a group (Phase 25): its members too, and how many days there are to fill."""
+    search = {
         "destination": state.get("destination", ""),
         "interests": state.get("interests") or DEFAULT_INTERESTS,
         "limit": ATTRACTIONS_LIMIT,
     }
+    if group.is_group(state.get("group_members")):
+        search.update(group_members=group.clean_members(state["group_members"]), days=_nights(state) + 1)
+    return search
 
 
 async def _search_flights(state: OrchestratorState, attempt: int = 0) -> dict:
     """Flight search → state updates. `attempt` > 0 is a re-plan: tighter budget cap, one more stop."""
-    flights, error = await _run_agent(
+    flights, error, _ = await _run_agent(
         state,
         FlightAgent(),
         "flight_agent",
@@ -372,7 +390,7 @@ async def _search_flights(state: OrchestratorState, attempt: int = 0) -> dict:
 
 
 async def _search_hotels(state: OrchestratorState) -> dict:
-    hotels, error = await _run_agent(
+    hotels, error, _ = await _run_agent(
         state,
         HotelAgent(),
         "hotel_agent",
@@ -384,7 +402,7 @@ async def _search_hotels(state: OrchestratorState) -> dict:
 
 
 async def _search_activities(state: OrchestratorState) -> dict:
-    attractions, error = await _run_agent(
+    attractions, error, result = await _run_agent(
         state,
         ActivitiesAgent(),
         "activities_agent",
@@ -392,11 +410,14 @@ async def _search_activities(state: OrchestratorState) -> dict:
         "attractions",
         "attractions",
     )
-    return {
+    updates = {
         "attractions": attractions,
         "activities_error": error,
         "activities_status": "failed" if error else "completed",
     }
+    if not error and result.get("group_searches") is not None:  # a failed search keeps what the last one said
+        updates["group_searches"] = result["group_searches"]
+    return updates
 
 
 def _wants_local_tips(state: OrchestratorState) -> bool:
@@ -738,6 +759,9 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         trip_meta["request"] = state["refinement_request"]
         if state.get("previous_plan"):
             trip_meta["previous_plan"] = state["previous_plan"]
+    if state.get("group_members"):  # Phase 25: who the plan is for, and whose interests found nothing
+        trip_meta["group_members"] = group.clean_members(state["group_members"])
+        trip_meta["group_searches"] = state.get("group_searches") or []
 
     stream = _TokenStream(state) if state.get("publish_fn") is not None else None  # nobody listening → no streaming
     result = await ItineraryBuilder().run(
@@ -785,6 +809,7 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
         turn=state.get("turn", 1),
         budget_range=(estimate.total_min, estimate.total_max),
         hotels=state.get("hotels", []),
+        group_members=state.get("group_members"),
     )
     return {**state, "evaluator_verdict": verdict.model_dump()}
 
@@ -1324,6 +1349,7 @@ class OrchestratorAgent:
                 if found:
                     state.update(updates)
             else:  # targeted_activities
+                new_interests = None
                 if retry_of is None:  # the traveller's message usually names the new interests
                     try:
                         new_interests = (await _extract_intent(request)).get("interests")
@@ -1331,7 +1357,13 @@ class OrchestratorAgent:
                         new_interests = None
                     if new_interests:
                         state["interests"] = new_interests
-                updates = await search(_search_activities)
+                if new_interests and group.is_group(state.get("group_members")):
+                    # Phase 25: the request names what to look for, so that is searched — as one search,
+                    # not member by member — and every find says which of the group it suits.
+                    updates = await search(lambda s: _search_activities({**s, "group_members": None}))
+                    group.tag_for_group(updates["attractions"], group.clean_members(state["group_members"]))
+                else:
+                    updates = await search(_search_activities)
                 found, error = bool(updates["attractions"]), updates["activities_error"]
                 if found:
                     # the new finds join the places already in the plan: "add a food stop" must not
