@@ -2,6 +2,8 @@
 
 status lifecycle:  pending → planning → completed | failed
 interests stored as JSONB list of strings.
+group_members (Phase 25) stored as a JSONB list of {"name", "interests"}; NULL unless
+the travellers were named — see src/ai/group.py.
 """
 
 import uuid
@@ -32,5 +34,6 @@ class Trip(SQLModel, table=True):
     budget: float = Field(gt=0)
     group_size: int = Field(default=1, ge=1)
     interests: list | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
+    group_members: list | None = Field(default=None, sa_column=Column(JSONB, nullable=True))
     status: str = Field(default=TripStatus.PENDING, max_length=20)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

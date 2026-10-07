@@ -6,10 +6,12 @@ import { useRef, useState } from "react";
 
 import type { PlanSection } from "@/lib/changes";
 import { nightsBetween } from "@/lib/format";
+import { perPersonCost } from "@/lib/group";
 import type { Itinerary, Trip } from "@/lib/types";
 import CostSummary from "./CostSummary";
 import DayCard from "./DayCard";
 import DownloadPdfButton from "./DownloadPdfButton";
+import GroupPanel from "./GroupPanel";
 import type { MapFocus } from "./ItineraryMap";
 import LocalTips from "./LocalTips";
 import SimilarTrips from "./SimilarTrips";
@@ -83,9 +85,13 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
         activities={activities}
         nights={data.days.filter((d) => d.hotel).length || (trip ? nightsBetween(trip.start_date, trip.end_date) : 0)}
         travellers={trip?.group_size ?? null}
+        perPerson={perPersonCost(data.total_cost, trip?.group_size ?? null)}
         updating={section}
         changed={changed}
       />
+
+      {/* Group trips (Phase 25) — nothing at all unless the travellers were told apart. */}
+      <GroupPanel group={data.group} destination={trip?.destination ?? null} />
 
       {/* on a narrow screen the two actions drop under the heading instead of squeezing it */}
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3 pt-2">

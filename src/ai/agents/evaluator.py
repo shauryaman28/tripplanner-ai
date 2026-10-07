@@ -18,6 +18,11 @@ categories of correctness failure:
   3. duplicate_activity    — the same activity appears twice on the same day
   4. hallucinated_activity — an activity name that wasn't in ActivitiesAgent's
                               get_attractions results
+  5. unbalanced_group      — Phase 25, a group trip: two days of the plan have
+                              no stop for one of the travellers, though a place
+                              that suits them was found and is not in the plan
+                              (src/ai/group.py — the builder repairs this itself,
+                              so a failure here means the repair was bypassed)
 
 Design decision (DECISIONS.md #21): all the checks are pure, deterministic
 functions — not an LLM call. These are objectively verifiable conditions
@@ -30,7 +35,8 @@ subjective quality judgments (see Phase 33's eval-suite grader in the roadmap).
 Retry loop:
   - next_agent_for_failures() maps failure types to the sub-agent whose
     output should be regenerated:
-        date_out_of_range, duplicate_activity, hallucinated_activity
+        date_out_of_range, duplicate_activity, hallucinated_activity,
+        unbalanced_group
             → "activities_agent"
         budget_mismatch
             → "flight_agent"   (budget_mismatch takes priority if present —
@@ -52,7 +58,7 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai import pricing
+from src.ai import group, pricing
 from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
@@ -76,6 +82,7 @@ class EvaluatorFailure(BaseModel):
         "budget_mismatch",
         "duplicate_activity",
         "hallucinated_activity",
+        "unbalanced_group",
     ]
     detail: str
 
@@ -309,6 +316,29 @@ def check_hallucinated_activities(draft: dict, attractions: list[dict]) -> Evalu
     return None
 
 
+# ── Check 5: a group trip gives everyone something (Phase 25) ─────────────
+
+
+def check_group_balance(
+    draft: dict, attractions: list[dict], group_members: list[dict] | None
+) -> EvaluatorFailure | None:
+    """In every two days, a stop for each traveller — as far as the places found allow.
+
+    A traveller nothing was found for, or whose places are all in the plan
+    already, is not a failure: nothing here could do better. A failure is a gap
+    that an unused place would fill.
+    """
+    if not group.is_group(group_members):
+        return None
+    gaps = group.fixable_gaps(draft, attractions, group_members)
+    if not gaps:
+        return None
+    return EvaluatorFailure(
+        check="unbalanced_group",
+        detail=f"Someone in the group is left out of two days though a place for them was found: {'; '.join(gaps[:3])}.",
+    )
+
+
 # ── Combined pure evaluation ────────────────────────────────────────────────
 
 
@@ -321,6 +351,7 @@ def evaluate_itinerary(
     retry_count: int = 0,
     budget_range: tuple[float, float] | None = None,
     hotels: list[dict] | None = None,
+    group_members: list[dict] | None = None,
 ) -> EvaluatorVerdict:
     """Run every check and return a single EvaluatorVerdict.
 
@@ -341,6 +372,7 @@ def evaluate_itinerary(
         check_source_prices(draft, hotels or []),
         check_duplicate_activities(draft),
         check_hallucinated_activities(draft, attractions),
+        check_group_balance(draft, attractions, group_members),
     ):
         if failure is not None:
             failures.append(failure)
@@ -356,6 +388,7 @@ _FAILURE_TO_AGENT: dict[str, str] = {
     "missing_days": "activities_agent",
     "duplicate_activity": "activities_agent",
     "hallucinated_activity": "activities_agent",
+    "unbalanced_group": "activities_agent",
     "budget_mismatch": "flight_agent",
 }
 
@@ -408,6 +441,7 @@ class EvaluatorAgent:
         turn: int = 1,
         budget_range: tuple[float, float] | None = None,
         hotels: list[dict] | None = None,
+        group_members: list[dict] | None = None,
     ) -> EvaluatorVerdict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
@@ -420,6 +454,7 @@ class EvaluatorAgent:
                 retry_count=retry_count,
                 budget_range=budget_range,
                 hotels=hotels,
+                group_members=group_members,
             )
 
         if db is not None and trip_id is not None:

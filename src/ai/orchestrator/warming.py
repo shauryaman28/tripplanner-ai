@@ -16,7 +16,8 @@ any other key would be a request to a rate-limited provider, wasted.
     hotels        possible because the cache key leaves the nightly budget out
     weather       the roadmap's pair with flights; nothing reads it before Phase 38
     attractions   only when the trip names its interests. With none, planning asks the
-                  traveller for them or reads them from the request: the search is not known yet
+                  traveller for them or reads them from the request: the search is not known yet.
+                  A group (Phase 25) is searched member by member, and warmed the same way
 
 A trip whose destination is a sentence ("a relaxed week somewhere in Kerala")
 is not warmed at all — where it goes is known only once planning has read it.
@@ -34,7 +35,8 @@ import logging
 import time
 import uuid
 
-from src.ai.agents.activities_agent import attraction_tool_params
+from src.ai import group
+from src.ai.agents.activities_agent import attraction_searches
 from src.ai.agents.flight_agent import flight_tool_params
 from src.ai.agents.hotel_agent import hotel_tool_params
 from src.ai.mcp_client.client import call_tool
@@ -93,12 +95,17 @@ async def warm_trip_caches(trip: dict, preferences: dict | None = None) -> dict[
         ("hotels", "search_hotels", hotels, f"{destination}, {start} to {end}, {hotels['guests']} guest(s)"),
         ("weather", "get_weather", weather, f"{destination}, {start} to {end}"),
     ]
-    if trip.get("interests"):
-        attractions = attraction_tool_params(activities_search_input(state))
-        about = f"{destination}: {', '.join(map(str, attractions['interests']))}"
-        searches.append(("attractions", "get_attractions", attractions, about))
+    if trip.get("interests") or group.is_group(trip.get("group_members")):
+        for attractions in attraction_searches(activities_search_input(state)):  # one — or one per member
+            about = f"{destination}: {', '.join(map(str, attractions['interests']))}"
+            searches.append(("attractions", "get_attractions", attractions, about))
 
-    return dict(await asyncio.gather(*(_warm(*search) for search in searches)))
+    outcomes: dict[str, str] = {}
+    for cache, outcome in await asyncio.gather(*(_warm(*search) for search in searches)):
+        # a group's attractions are several searches: "warmed" only if every one of them was
+        if outcomes.get(cache, WARMED) == WARMED:
+            outcomes[cache] = outcome
+    return outcomes
 
 
 async def _saved_preferences(user_id: uuid.UUID) -> dict | None:

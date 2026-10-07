@@ -298,7 +298,8 @@ def test_get_attractions_valid():
         patch("src.ai.mcp_server.tools.set_cached_sync"),
         patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
     ):
-        mock_httpx.get.side_effect = [geo_response, radius_response]
+        # the place lookup, the well-known places, and — one being too few — the lesser-known ones (Phase 25)
+        mock_httpx.get.side_effect = [geo_response, radius_response, radius_response]
         result = get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=3))
 
     assert isinstance(result, list)
@@ -335,7 +336,7 @@ def test_get_attractions_no_matching_interests_returns_results():
         patch("src.ai.mcp_server.tools.set_cached_sync"),
         patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
     ):
-        mock_httpx.get.side_effect = [geo_response, radius_response]
+        mock_httpx.get.side_effect = [geo_response, radius_response, radius_response]
         result = get_attractions(AttractionInput(destination="Goa", interests=["nonexistent_interest"], limit=5))
 
     assert isinstance(result, list)
@@ -497,12 +498,19 @@ def test_get_attractions_searches_each_interest_and_skips_unnamed_places():
         patch("src.ai.mcp_server.tools._geocode", return_value=(15.3, 74.1)),
         patch(
             "src.ai.mcp_server.tools.httpx.get",
-            side_effect=[places("Baga Beach", ""), places("Fort Aguada", "Baga Beach")],
+            side_effect=[
+                places("Baga Beach", "", "Palolem Beach", "Agonda Beach"),  # three with a name: enough
+                places("Fort Aguada", "Baga Beach", "Chapora Fort"),
+            ],
         ) as mock_get,
     ):
         result = get_attractions(AttractionInput(destination="Goa", interests=["beaches", "history"], limit=6))
 
-    assert [a.name for a in result] == ["Baga Beach", "Fort Aguada"]  # unnamed dropped, duplicate kept once
+    # unnamed dropped, duplicate kept once; one from each interest in turn
+    assert [a.name for a in result] == ["Baga Beach", "Fort Aguada", "Palolem Beach", "Chapora Fort", "Agonda Beach"]
     kinds = [call.kwargs["params"]["kinds"] for call in mock_get.call_args_list]
     assert kinds == ["beaches", "historic,museums,cultural"]  # "beaches" matched via its singular
     assert all(call.kwargs["params"]["limit"] == 3 for call in mock_get.call_args_list)
+    # Phase 25: every place says which of the interests asked for it was found under
+    assert {a.name: a.interests for a in result}["Baga Beach"] == ["beaches", "history"]
+    assert {a.name: a.interests for a in result}["Chapora Fort"] == ["history"]

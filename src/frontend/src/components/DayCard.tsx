@@ -1,10 +1,10 @@
 "use client";
 
-import { BedDouble, Footprints, Landmark, Moon, PlaneLanding, Sun, Sunrise, type LucideIcon } from "lucide-react";
+import { BedDouble, Footprints, Landmark, Moon, PlaneLanding, Sun, Sunrise, Users, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { flightPart, stayPart, stopPart, type PlanSection } from "@/lib/changes";
-import { formatClock, formatDuration, formatINR, formatWeekday } from "@/lib/format";
+import { formatClock, formatDuration, formatINR, formatWeekday, namesInWords } from "@/lib/format";
 import { HOTEL_STYLE, SLOT_LABELS, dayStops, dayStyle, hotelPinId, type DayStop, type PinStyle, type SlotName } from "@/lib/map";
 import { categoryMeta, describeRating } from "@/lib/places";
 import type { DaySchedule } from "@/lib/types";
@@ -165,6 +165,13 @@ function ActivityRow({
         )}
         {activity.cost > 0 && <span>{formatINR(activity.cost)}</span>}
         {stop.order === null && <span className="text-ink-500">No map location for this place</span>}
+        {/* Phase 25, a group trip: whose interests this stop answers */}
+        {activity.suits && activity.suits.length > 0 && (
+          <span data-suits={activity.suits.join("|")} className="flex items-center gap-1 font-medium text-ink-700">
+            <Users className="h-3.5 w-3.5 text-ink-400" aria-hidden />
+            For {namesInWords(activity.suits)}
+          </span>
+        )}
       </div>
     </Row>
   );

@@ -20,6 +20,8 @@ drive one situation:
     Kaza                                         no airport is known for it: the flight search fails, every time
     Munnar                                       the flight provider says "asked too often" (429) through every
                                                  retry; the search answers when retried from the page (Phase 24)
+    Coorg                                        the attractions are found by interest, each saying what it was found
+                                                 under, and nothing is found for "spa": a group trip (Phase 25)
     Leh                                          the attractions are a lake, a monastery and a pass: a trip that is
                                                  not like the others, for similar trips and search (Phase 23)
     Pondicherry                                  the local-tips model does not answer: a plan without tips (Phase 22)
@@ -106,9 +108,13 @@ if __name__ == "__main__":
             return HOTELS
         return [{**HOTELS[0], "name": "Baga Beach House", "stars": 5, "rating": 9.1}, *HOTELS]
 
+    BY_INTEREST = {"Coorg"}
+
     def activities_tool(_name: str, params: dict):
         if params.get("destination") in ALL_DOWN and first_of_a_pair("activities", params, "destination"):
             return down("attraction")
+        if params.get("destination") in BY_INTEREST:  # a group's members are searched one by one (Phase 25)
+            return fakes.stub_attractions(_name, params)
         return MOUNTAIN_ATTRACTIONS if params.get("destination") == "Leh" else ATTRACTIONS
 
     TIPS_LATE = {"Gokarna"}

@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–24
+# How to Run & Verify — Phases 1–25
 
 ## What changed vs the original codebase?
 
@@ -23,6 +23,7 @@
 | 22 | `orchestrator.py` (the fourth agent beside the hotel and activities searches; tips carried by refinements), `builder.py` (tips attached to the checked draft), `itinerary.py`, `pdf/plan.py` + `document.py` (a Local tips page), `ItineraryView.tsx`, `lib/changes.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase22_build_log.md` | `src/ai/agents/destination_intelligence.py`, `prompts/destination_intelligence_v1.md`, `LocalTips.tsx`, `lib/tips.ts`, `tests/unit/test_phase22_intelligence.py`, `e2e/tips.spec.ts` |
 | 23 | `trips.py` (`GET /trips/{id}/similar` — was 501 — and `GET /trips/search`), `embedder.py` (the summary text, `kind`, task types), `models/embedding.py`, `main.py` (recovery one itinerary at a time), `schemas/trip.py`, `ItineraryView.tsx`, the trips list page, `lib/api.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase23_build_log.md` | `src/backend/app/search.py`, `migrations/versions/004_embedding_kind.py`, `scripts/embedding_experiment.py`, `scripts/seed_demo_trips.py`, `SimilarTrips.tsx`, `tests/unit/test_phase23_similarity.py`, `tests/integration/test_phase23_similarity_integration.py`, `e2e/similar.spec.ts` |
 | 24 | `tools.py` (every request through `send()`; flights and hotels cached by what the provider is asked; one search per cache key at a time; `RATE_LIMITED`), `cache.py` (`single_flight`), `server.py` (the tools run in threads), `orchestrator.py` + the three search agents (their search parameters as functions), `failures.py`, `trips.py` (`POST /trips` starts cache warming), `config.py` (`CACHE_WARMING_ENABLED`), `main.py` (the app's INFO log lines are shown), `tests/conftest.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, `polish.spec.ts`, `.env.example` — see `docs/phase24_build_log.md` | `src/ai/mcp_server/rate_limiter.py`, `src/ai/mcp_server/outbound.py`, `src/ai/orchestrator/warming.py`, `scripts/cache_ttls.py`, `tests/unit/test_phase24_rate_limits.py`, `tests/unit/test_phase24_caching.py`, `tests/integration/test_phase24_caching_integration.py` |
+| 25 | `tools.py` (every attraction says which interest it was found under; lesser-known places fill up a thin interest; "spa" searched as nothing; `estimate_budget` per person), `models.py`, `activities_agent.py` (a group searched member by member), `builder.py` (the group in the prompt, the plan repaired, the shares), `evaluator.py` (`unbalanced_group`), `orchestrator.py`, `warming.py`, `pricing.py`, `itinerary.py`, `models/trip.py` + `schemas/trip.py` + `trips.py` (`group_members`), `pdf/plan.py` + `document.py` + `formatting.py`, `main.py`, the new-trip form, `CostSummary.tsx`, `DayCard.tsx`, `ItineraryView.tsx`, `lib/types.ts` + `api.ts` + `format.ts`, `tests/fakes.py`, `tests/e2e/stub_backend.py` — see `docs/phase25_build_log.md` | `src/ai/group.py`, `migrations/versions/005_trip_group_members.py`, `GroupPanel.tsx`, `lib/group.ts`, `prompts/itinerary_builder_v9.md`, `scripts/group_experiment.py`, `tests/unit/test_phase25_group.py`, `tests/integration/test_phase25_group_integration.py`, `src/frontend/e2e/group.spec.ts` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -304,7 +305,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–24 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–25 check
 
 Run from the **project root**:
 
@@ -312,7 +313,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **786 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **855 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -321,7 +322,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **39 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **43 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -505,7 +506,7 @@ database, Next.js on :3100), so it can run while the dev servers are up:
 ```bash
 cd src/frontend
 npx playwright install chromium     # once
-npx playwright test                 # 56 passed
+npx playwright test                 # 60 passed
 ```
 
 Static checks, from the same directory: `npx tsc --noEmit && npm run lint` — both clean.
@@ -827,6 +828,89 @@ is busy right now. Try again in a minute." — not "HTTP 429" — and **Retry th
 
 ---
 
+## Step 23 — Verify Phase 25: a group trip
+
+**Migrate first** — Phase 25 adds a column:
+
+```bash
+alembic upgrade head        # 004 → 005: trips.group_members
+```
+
+**In the browser** (backend and frontend running, the provider keys in `.env`): **Plan a trip** → a destination
+("Goa"), four days, a budget, **Travellers: 4** → **Do they want different things? Say what each traveller
+enjoys**. A row appears for each traveller. The roadmap's four:
+
+| Name | Interests |
+|---|---|
+| Asha | beach, food |
+| Ben | history, culture |
+| Chitra | adventure |
+| Dev | spa, relaxation |
+
+**Create & plan**, then say what you want in the chat ("a relaxed few days for the four of us"). When the
+plan is there:
+
+- under the total: **₹16,834 / person · shared equally by 4 travellers** (your numbers will differ);
+- **Who it is for**: each traveller, their interests and how many stops are theirs — and, under Dev,
+  "Nothing was found in Goa for: spa". The provider lists no spas; the plan says so instead of pretending;
+- on every stop: **For Asha and Dev**, **For Ben**…  Count them: in days 1–2 and again in days 3–4, every
+  one of the four has at least one;
+- **Download PDF**: the share is on the cover under the total, and "For …" is among each stop's facts.
+
+**From the API** (`$TOKEN` from Step 7):
+
+```bash
+TRIP_ID=$(curl -s -X POST localhost:8000/trips -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{
+  "destination": "Goa", "start_date": "2026-12-10", "end_date": "2026-12-13", "budget": 120000,
+  "group_members": [
+    {"name": "Asha",   "interests": ["beach", "food"]},
+    {"name": "Ben",    "interests": ["history", "culture"]},
+    {"name": "Chitra", "interests": ["adventure"]},
+    {"name": "Dev",    "interests": ["spa", "relaxation"]}]}' | python -c "import json, sys; print(json.load(sys.stdin)['id'])")
+# the backend's terminal: four "[CACHE WARM] attractions: Goa: …" lines — one search per traveller
+
+curl -s -X POST localhost:8000/trips/$TRIP_ID/plan -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"raw_input": "A relaxed few days for the four of us"}'
+# …wait for GET /trips/$TRIP_ID to say "completed", then:
+
+curl -s localhost:8000/trips/$TRIP_ID/itinerary -H "Authorization: Bearer $TOKEN" | python -c "
+import json, sys
+plan = json.load(sys.stdin)['structured_data']
+for day in plan['days']:
+    for slot in ('morning', 'afternoon', 'evening'):
+        if day.get(slot): print(day['day'], slot.ljust(9), day[slot]['activity'][:36].ljust(36), 'for', ', '.join(day[slot]['suits'] or []))
+print('total', plan['total_cost'], '· per person', plan['per_person_cost'])
+print([(m['name'], m['stops'], m['nothing_for']) for m in plan['group']['members']], 'balanced:', plan['group']['balanced'])"
+# 1 morning   Arossim Beach                        for Asha, Dev
+# 1 afternoon Goa Chitra museum                    for Ben
+# 1 evening   Dudhsagar Falls                      for Chitra, Dev
+# …
+# total 67336.74 · per person 16834.19
+# [('Asha', 5, []), ('Ben', 5, []), ('Chitra', 4, []), ('Dev', 8, ['spa'])] balanced: True
+```
+
+`group_size` was not sent: four travellers were named, so it is 4. The per-person figure is the total
+divided by it; `per_person_breakdown.shares` are whole rupees that add up to the total exactly.
+
+**The search behind it**, without a model or a trip — the same four travellers against the real attraction
+search in five destinations, as one traveller and one by one (needs `OPENTRIPMAP_API_KEY`):
+
+```bash
+python scripts/group_experiment.py
+# == Goa, 4 days ==
+#   together      9 places:  Asha 4   Ben 4   Chitra 2   Dev 2
+#   one by one   Asha    found 10
+#   one by one   Dev     found 10   nothing for: spa
+#                12 places:  Asha 5   Ben 5   Chitra 4   Dev 8
+#   a plan       days 1–2: Asha 2   Ben 2   Chitra 2   Dev 4
+#   a plan       days 3–4: Asha 2   Ben 1   Chitra 1   Dev 3
+#                balanced: True
+```
+
+**In the browser, on the stub stack**: `cd src/frontend && npx playwright test e2e/group.spec.ts --headed`.
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -872,3 +956,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **22 (Local tips)** | `cd src/frontend && npx playwright test e2e/tips.spec.ts --headed`: for "Pondicherry" the stand-in model never answers → the plan is complete, there is no Local tips section and no error anywhere on the page; for "Gokarna" it answers the second time → no tips with the plan, then they arrive with the first change and the assistant says "Local tips added". `pytest tests/unit/test_phase22_intelligence.py -k whatever_goes_wrong -v` → a rate limit, a timeout, a reply that is not JSON, a place the model does not know: each is no tips and a code, never an exception. In `GET /trips/{id}/runs` of a plan made that way, only the `destination_intelligence` row is `failed`; the trip is `completed`. `-k cannot_write` → a `local_intelligence` the plan's own model writes into its reply is dropped. |
 | **23 (Similar & search)** | Sign in as another account and ask for the demo account's trip: `GET /trips/{demo trip id}/similar` → `404`; its own `/trips/search?q=beach` → no results, though twelve beach-to-temple trips are in the table — only the caller's own are ever searched. `GET /trips/search?q=x` → `422`. Empty `GOOGLE_API_KEY` and restart → `/trips/search?q=beach` → `503` "Search is not available right now", and the page says so and keeps the list; `/similar` still works (it compares stored vectors and embeds nothing). Plan a trip with the key empty → `/similar` answers `"status": "pending"` and `/admin/embedding-health` is `degraded`; put the key back and restart → it is embedded and found. `alembic downgrade 003 && alembic upgrade head` → the vectors are gone and every trip is queued again. `RUN_INTEGRATION=1 pytest tests/integration/test_phase23_similarity_integration.py -k hnsw -v` → passes: with the table scan and the sort forbidden, the query plan uses `ix_embeddings_summary_hnsw`, and the traveller's three trips are still found behind seventy nearer ones of someone else's. |
 | **24 (Caching & rate limits)** | Create a trip whose destination is a sentence ("a relaxed week somewhere in Kerala") → the log says `[CACHE WARM] skipped`, and nothing is searched: where it goes is only known once planning has read it. Create a trip without interests → flights, hotels and weather are warmed, attractions are not. Set `CACHE_WARMING_ENABLED=false` and restart → creating a trip logs no `[CACHE WARM]` line. Create a trip and plan it six minutes later → the flight search is a `[CACHE MISS]` (kept 5 minutes), the hotels still a hit (15). `docker exec tripplanner_redis redis-cli SET mcp:flights:oops '[]'`, then `python scripts/cache_ttls.py` → `flights … NEVER (no TTL) … WRONG`, exit status 1 (`DEL` it again). In `src/ai/mcp_server/outbound.py` delete the line `limiter(provider).acquire()` → `pytest tests/unit/test_phase24_rate_limits.py -k three_agents` fails: the provider answered 429 to the third agent. In `server.py` register the tools without `threaded(...)` → `-k same_moment` fails after three seconds: tools run one after another never meet at their providers. In `tools.py` add the budget back to the flight cache key → `pytest tests/unit/test_phase24_caching.py -k another_budget` fails: the provider is asked twice for the same flights. |
+| **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |

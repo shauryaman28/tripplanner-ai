@@ -16,8 +16,15 @@ export interface Trip {
   budget: number;
   group_size: number;
   interests: string[] | null;
+  group_members?: GroupMember[] | null;   // Phase 25 — the travellers, when they were told apart
   status: TripStatus;
   created_at: string;
+}
+
+/** One traveller of a group trip: a name, and what they enjoy. */
+export interface GroupMember {
+  name: string;
+  interests: string[];
 }
 
 export interface AgentRun {
@@ -41,6 +48,7 @@ export interface ActivitySlot {
   lng?: number | null;
   category?: string | null;   // Phase 18 — attached from the attraction search
   rating?: number | null;     // OpenTripMap popularity rate — see lib/places.ts
+  suits?: string[] | null;    // Phase 25, a group trip — the travellers this stop is for
 }
 
 export interface HotelSlot {
@@ -97,6 +105,20 @@ export interface StructuredItinerary {
   total_cost: number;
   currency: string;
   local_intelligence?: LocalIntelligence | null;   // absent on older itineraries, null when the agent had nothing
+  // Phase 25 — absent on older itineraries
+  per_person_cost?: number | null;                 // one traveller's share of total_cost
+  per_person_breakdown?: PerPersonBreakdown | null; // what it is made of; null for one traveller
+  group?: unknown;                                 // who got how many stops — read by lib/group.ts
+}
+
+/** A trip's cost split equally between its travellers. flights / stay / activities / total are one traveller's part. */
+export interface PerPersonBreakdown {
+  travellers: number;
+  flights: number;
+  stay: number;
+  activities: number;
+  total: number;
+  shares: { name: string; amount: number }[];      // whole rupees, adding up to the total
 }
 
 export interface Itinerary {

@@ -140,7 +140,8 @@ class TestAttractionContract:
             patch("src.ai.mcp_server.tools.set_cached_sync"),
             patch("src.ai.mcp_server.tools.httpx") as mock_httpx,
         ):
-            mock_httpx.get.side_effect = [geo_response, radius_response]
+            # the place lookup, the well-known places, then the lesser-known ones that fill up (Phase 25)
+            mock_httpx.get.side_effect = [geo_response, radius_response, radius_response]
             result = get_attractions(AttractionInput(destination="Goa", interests=["history"], limit=3))
 
         assert isinstance(result, list)

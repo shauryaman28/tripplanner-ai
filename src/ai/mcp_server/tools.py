@@ -26,11 +26,22 @@ Phase 24 — how a request reaches a provider:
 - Every request goes out through outbound.send(): in the provider's rate limit's
   turn, and again after a backoff when it is answered 429 or 5xx. A provider that
   still says 429 after that is ToolError(code="RATE_LIMITED").
+
+Phase 25 — what an attraction search finds, and for which interest:
+- Every attraction says which of the interests asked for it was found under
+  (`interests`). A group's searches are told apart by it.
+- An interest with fewer well-known places than asked for is topped up with the
+  lesser-known ones: for food, the provider rates almost nothing as well known.
+- The results are cut to the limit one interest at a time, so no interest is cut
+  out by the ones before it.
+- "spa" and "wellness" are searched as nothing: the provider has no such places,
+  and no category by that name (asking for one fails the whole request).
 """
 
 import logging
 import re
 from datetime import date, datetime, timedelta
+from itertools import zip_longest
 
 import httpx
 
@@ -65,6 +76,9 @@ TTL_HOTELS = 900  # 15 min
 TTL_ATTRACTIONS = 21_600  # 6 hr
 TTL_WEATHER = 3_600  # 1 hr
 ATTRACTION_RADIUS_M = 30_000  # wide enough to reach the coast from a region's centre ("Goa")
+# OpenTripMap's `rate` — the least popularity a place returned may have: 1 to 3, and the same scale
+# again as 5 to 7 for a heritage site. 2 and up is what is searched first.
+WELL_KNOWN, ANY_RATED = 2, 1
 TTL_GEOCODE = 2_592_000  # 30 days — places don't move, and Nominatim asks clients to cache
 
 COUNTRY_CODE = "IN"  # the planner covers trips within India (INR budgets, Indian airports)
@@ -160,8 +174,9 @@ _OTM_KIND_MAP: dict[str, str] = {
     "cinemas": "culture",
     "theatres_and_entertainments": "culture",
     "shops": "shopping",
-    "spas": "wellness",
     "amusements": "adventure",
+    "climbing": "adventure",
+    "winter_sports": "adventure",
     "sport": "sports",
     "gardens_and_parks": "nature",
     "natural": "nature",
@@ -169,15 +184,26 @@ _OTM_KIND_MAP: dict[str, str] = {
     "cultural": "culture",
 }
 
+# The outdoors an adventure is made of, as far as the provider knows it: peaks and caves, waterfalls,
+# reserves to trek or go on safari in, climbing, the water sports, the slopes, and water and amusement parks.
+_OUTDOORS = "geological_formations,waterfalls,nature_reserves"
+
+# Interest → the OpenTripMap kinds it is searched as. Every kind here was checked against the live
+# catalogue (2026-10-05): a kind the provider does not know fails the whole request with HTTP 400,
+# which is what "wellness": "spas" did until Phase 25. An interest mapped to "" is one the provider
+# has no places for — it is searched as nothing, and said to have found nothing.
 _INTEREST_TO_OTM_KIND: dict[str, str] = {
     "history": "historic,museums,cultural",
+    "heritage": "historic,museums,cultural",
     "food": "foods,restaurants,cafes",
     "beach": "beaches",
     "nature": "natural,national_parks",
-    "adventure": "amusements,sport",
+    # was "amusements,sport" — near Goa and Jaipur that is cricket stadiums
+    "adventure": f"{_OUTDOORS},climbing,diving,surfing,kitesurfing,winter_sports,amusements",
+    "trekking": _OUTDOORS,
+    "hiking": _OUTDOORS,
     "nightlife": "nightclubs",
     "shopping": "shops",
-    "wellness": "spas",
     "sightseeing": "interesting_places",
     "culture": "cultural,museums",
     "museum": "museums",
@@ -186,7 +212,11 @@ _INTEREST_TO_OTM_KIND: dict[str, str] = {
     "spiritual": "religion",
     "architecture": "architecture",
     "wildlife": "natural,national_parks",
-    "relaxation": "beaches,natural",
+    # was "beaches,natural" — "natural" is every cave, peak and reserve: an adventure, not a rest
+    "relaxation": "beaches,gardens_and_parks,water,view_points",
+    # No spas, baths, saunas or springs near any destination tried, and no kind called "spas".
+    "wellness": "",
+    "spa": "",
 }
 
 # Monthly climate fallback for dates beyond OWM's 5-day window.
@@ -384,7 +414,10 @@ def _parse_iso_duration(duration: str) -> int:
 
 
 def _interest_to_otm_kinds(interest: str) -> str:
-    """OpenTripMap kinds for one interest; plurals match too ("beaches" → beach)."""
+    """OpenTripMap kinds for one interest; plurals match too ("beaches" → beach).
+
+    "" for an interest the provider has no places for; the general sights for one nobody listed.
+    """
     key = interest.strip().lower()
     for candidate in (key, key.removesuffix("es"), key.removesuffix("s")):
         if candidate in _INTEREST_TO_OTM_KIND:
@@ -725,9 +758,10 @@ def get_attractions(input: AttractionInput) -> list[Attraction] | ToolError:
             code="API_NOT_CONFIGURED",
         )
 
-    # "v2": Phase 18 changed what `category` and `rating` mean. Entries cached before it would
-    # otherwise be served for another 6 hours as if they were current; under a new key they just expire.
-    cache_key = make_cache_key("attractions:v2", input.model_dump())
+    # "v3": Phase 25 changed what a search returns (lesser-known places fill up an interest, every
+    # place says which interest it was found under). Entries cached before it would otherwise be
+    # served for another 6 hours as if they were current; under a new key they just expire.
+    cache_key = make_cache_key("attractions:v3", input.model_dump())
     try:
         with single_flight(cache_key):
             return _find_attractions(input, cache_key)
@@ -750,68 +784,104 @@ def _find_attractions(input: AttractionInput, cache_key: str) -> list[Attraction
     if cached is not None:
         return [Attraction(**a) for a in cached]
 
-    # Step 1 — geocode destination name to lat/lon
+    # Step 1 — one search per interest. Results come back nearest-first, so a
+    # single combined query would fill up with whatever is closest to the
+    # centre and crowd out the other interests.
+    searches: dict[str, list[str]] = {}  # kinds → the interests asked for that are searched as them
+    for interest in input.interests:
+        if kinds := _interest_to_otm_kinds(interest):
+            searches.setdefault(kinds, []).append(interest)
+    if not searches:
+        if input.interests:  # every one of them is something the provider has no places for
+            return ToolError(
+                error=(
+                    f"No attractions found for {input.interests} in {input.destination}: "
+                    "the attractions provider lists no places of this kind."
+                ),
+                code="NO_RESULTS",
+            )
+        searches = {"interesting_places": []}
+    per_search = -(-input.limit // len(searches))  # ceil
+
+    # Step 2 — geocode destination name to lat/lon
     coords = _geocode(input.destination)
     if coords is None:
         return ToolError(error=f"Could not find a place called {input.destination}.", code="NOT_FOUND")
     lat, lon = coords
 
-    # Step 2 — one search per interest. Results come back nearest-first, so a
-    # single combined query would fill up with whatever is closest to the
-    # centre and crowd out the other interests.
-    searches = list(dict.fromkeys(_interest_to_otm_kinds(i) for i in input.interests)) or ["interesting_places"]
-    per_search = -(-input.limit // len(searches))  # ceil
+    by_name: dict[str, Attraction] = {}  # the same place can match two interests
+    columns: list[list[Attraction]] = []  # what each search added, in its own order
+    for kinds, interests in searches.items():
+        places = _places_near(lat, lon, kinds, per_search, WELL_KNOWN)
+        if len(places) < per_search:
+            # Phase 25: too few well-known ones — fill up with lesser-known ones, after them.
+            names = {name for name, _ in places}
+            more = _places_near(lat, lon, kinds, per_search + len(places), ANY_RATED)
+            places += [(name, place) for name, place in more if name not in names][: per_search - len(places)]
 
-    attractions: dict[str, Attraction] = {}  # by name — the same place can match two interests
-    for kinds in searches:
-        radius_resp = send(
-            "opentripmap",
-            lambda kinds=kinds: httpx.get(
-                "https://api.opentripmap.com/0.1/en/places/radius",
-                params={
-                    "radius": ATTRACTION_RADIUS_M,
-                    "lon": lon,
-                    "lat": lat,
-                    "kinds": kinds,
-                    "limit": per_search,
-                    "rate": 2,
-                    "format": "json",
-                    "apikey": mcp_settings.OPENTRIPMAP_API_KEY,
-                },
-                timeout=10,
-            ),
-        )
-        for place in radius_resp.json():
-            name = (place.get("name") or "").strip()
-            point = place.get("point") or {}
-            # The builder can only schedule places it can name, and the map (Phase 18)
-            # can only pin places with coordinates — every attraction returned has both.
-            if not name or point.get("lat") is None or point.get("lon") is None:
-                continue
-            category = _otm_kind_to_category(place.get("kinds", ""))
-            attractions.setdefault(
-                name,
-                Attraction(
+        column: list[Attraction] = []
+        for name, place in places:
+            attraction = by_name.get(name)
+            if attraction is None:
+                category = _otm_kind_to_category(place.get("kinds", ""))
+                # OpenTripMap's popularity rate: 1–3, or 5–7 for the same scale on a
+                # heritage site. 0 = unrated — never a made-up score.
+                rating = float(place.get("rate") or 0)
+                known = "A popular" if rating % 4 >= WELL_KNOWN else "A lesser-known"  # 5 is a heritage site's 1
+                attraction = by_name[name] = Attraction(
                     name=name,
                     category=category,
-                    # OpenTripMap's popularity rate: 1–3, or 5–7 for the same scale on a
-                    # heritage site. 0 = unrated — never a made-up score.
-                    rating=float(place.get("rate") or 0),
-                    description=f"A popular {category} attraction in {input.destination}.",
-                    lat=point["lat"],
-                    lng=point["lon"],
-                ),
-            )
+                    rating=rating,
+                    description=f"{known} {category} attraction in {input.destination}.",
+                    lat=place["point"]["lat"],
+                    lng=place["point"]["lon"],
+                )
+                column.append(attraction)
+            attraction.interests.extend(i for i in interests if i not in attraction.interests)
+        columns.append(column)
 
-    if not attractions:
+    if not by_name:
         return ToolError(
             error=f"No attractions found for {input.interests} in {input.destination}.",
             code="NO_RESULTS",
         )
 
-    attractions = list(attractions.values())[: input.limit]
+    # One from each interest in turn, so the cut at `limit` falls on all of them alike.
+    attractions = [a for row in zip_longest(*columns) for a in row if a is not None][: input.limit]
     set_cached_sync(cache_key, [a.model_dump() for a in attractions], TTL_ATTRACTIONS)
     return attractions
+
+
+def _places_near(lat: float, lon: float, kinds: str, limit: int, rate: int) -> list[tuple[str, dict]]:
+    """(name, place) of up to `limit` places of these kinds around a point. Raises httpx errors and RateLimited.
+
+    The builder can only schedule places it can name, and the map (Phase 18)
+    can only pin places with coordinates — every place returned has both.
+    """
+    resp = send(
+        "opentripmap",
+        lambda: httpx.get(
+            "https://api.opentripmap.com/0.1/en/places/radius",
+            params={
+                "radius": ATTRACTION_RADIUS_M,
+                "lon": lon,
+                "lat": lat,
+                "kinds": kinds,
+                "limit": limit,
+                "rate": rate,
+                "format": "json",
+                "apikey": mcp_settings.OPENTRIPMAP_API_KEY,
+            },
+            timeout=10,
+        ),
+    )
+    found: dict[str, dict] = {}
+    for place in resp.json():
+        name = (place.get("name") or "").strip()
+        point = place.get("point") or {}
+        if name and point.get("lat") is not None and point.get("lon") is not None:
+            found.setdefault(name, place)
+    return list(found.items())
 
 
 # ── Tool: get_weather ──────────────────────────────────────────────────────
@@ -933,6 +1003,8 @@ def estimate_budget(input: BudgetInput) -> BudgetEstimate | ToolError:
     Phase 21: given a destination and a month, the estimate knows the season —
     how far the prices may move before they are booked (total_min / total_max)
     and what the same trip costs in the off-season (src/ai/pricing.py).
+    Phase 25: `group_size` travellers share it — `per_person` is one share, and
+    for more than one traveller `per_person_breakdown` says what it is made of.
     """
     if input.flights < 0:
         return ToolError(error="flights must be ≥ 0.", code="INVALID_INPUT")
@@ -959,12 +1031,20 @@ def estimate_budget(input: BudgetInput) -> BudgetEstimate | ToolError:
     if season is not None:
         notes = f"{notes} {season.describe(input.destination or '')}"
 
+    split = pricing.per_person(
+        total=estimate.total,
+        flights=estimate.flights,
+        stay=estimate.stay,
+        activities=estimate.activities,
+        travellers=input.group_size,
+    )
     return BudgetEstimate(
         flights=input.flights,
         hotels=estimate.stay,
         activities_estimate=estimate.activities,
         total=estimate.total,
-        per_person=estimate.total,  # Phase 25 makes this per-person aware
+        per_person=split["total"],
+        per_person_breakdown=split if input.group_size > 1 else None,
         notes=notes,
         total_min=estimate.total_min,
         total_max=estimate.total_max,

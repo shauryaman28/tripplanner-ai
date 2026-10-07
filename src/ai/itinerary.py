@@ -9,6 +9,30 @@ SLOTS = ("morning", "afternoon", "evening")
 # counted as a top activity.
 FREE_TIME = "Explore the area"
 
+# ── Each traveller's share (Phase 25) ──────────────────────────────────────
+
+
+class Share(BaseModel):
+    name: str
+    amount: int  # whole rupees; the shares of a trip add up to its total exactly
+
+
+class PerPersonBreakdown(BaseModel):
+    """A trip's cost split equally between its travellers — src/ai/pricing.per_person.
+
+    Saved in an itinerary's `structured_data` under "per_person_breakdown", and
+    returned by the `estimate_budget` tool, when more than one person travels.
+    `flights`, `stay`, `activities` and `total` are one traveller's part.
+    """
+
+    travellers: int
+    flights: float
+    stay: float
+    activities: float
+    total: float
+    shares: list[Share]
+
+
 # ── Local intelligence (Phase 22) ──────────────────────────────────────────
 
 # How much of it a plan carries. A model asked for "2 to 4 items" may write ten, or a paragraph

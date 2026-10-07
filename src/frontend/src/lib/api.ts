@@ -8,10 +8,11 @@
 
 import type {
   ApiErrorBody,
+  GroupMember,
   Itinerary,
   ReplanChoice,
-  TokenResponse,
   SimilarTripsResponse,
+  TokenResponse,
   Trip,
   TripSearchResponse,
   TripStatus,
@@ -143,6 +144,7 @@ export interface CreateTripPayload {
   budget: number;
   group_size?: number;
   interests?: string[];
+  group_members?: GroupMember[];   // Phase 25 — at least two, each with a name
 }
 
 export async function createTrip(payload: CreateTripPayload): Promise<Trip> {

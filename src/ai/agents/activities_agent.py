@@ -1,16 +1,24 @@
 """
 Phase 8 Dev B — ActivitiesAgent: intent parsing, routing, and attraction search.
 Phase 15: run() gains a `turn` parameter forwarded to log_agent_run.
+Phase 25: a group is searched member by member. Each member who said what they
+          enjoy gets a search of their own, at the same time as the others; the
+          finds are merged, each place says who it suits and scores as the share
+          of the group that is, and the places the plan is made from are taken
+          in turns so that nobody's interests crowd out anybody else's
+          (src/ai/group.py).
 """
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 
 from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
+from src.ai import group
 from src.ai.llm import ask, parse_json_object
 from src.ai.mcp_client.client import call_tool
 from src.ai.utils.run_logger import log_agent_run, timed_run
@@ -27,6 +35,10 @@ class ActivitiesState(TypedDict, total=False):
     raw_input: str | None
     clarification_question: str | None
     conversation_history: list[dict]
+    # Phase 25 — a group: who travels and what each enjoys, and how long the trip is
+    group_members: list[dict]
+    days: int
+    group_searches: list[dict]  # what each member's own search found
 
 
 # ── Prompt ────────────────────────────────────────────────────────────────
@@ -81,7 +93,7 @@ def router(state: ActivitiesState) -> str:
     if not state.get("destination"):
         return "clarify"
     interests = state.get("interests")
-    if not interests:
+    if not interests and not group.is_group(state.get("group_members")):
         return "clarify"
     return "search"
 
@@ -104,13 +116,69 @@ def attraction_tool_params(state: ActivitiesState) -> dict:
     }
 
 
+def attraction_searches(state: ActivitiesState) -> list[dict]:
+    """Every `get_attractions` call a search makes: one — or, for a group, one for each member with interests.
+
+    Cache warming makes the same calls (src/ai/orchestrator/warming.py).
+    """
+    if not group.is_group(state.get("group_members")):
+        return [attraction_tool_params(state)]
+    return [
+        {"destination": state["destination"], "interests": member["interests"], "limit": group.MEMBER_SEARCH_LIMIT}
+        for member in group.profiles(state["group_members"])
+    ]
+
+
 async def get_attractions_node(state: ActivitiesState) -> ActivitiesState:
+    if group.is_group(state.get("group_members")):
+        return await _search_for_group(state)
+
     result = await call_tool("get_attractions", attraction_tool_params(state))
 
     if hasattr(result, "code"):
         return {**state, "error": result.model_dump(), "attractions": []}
 
     return {**state, "attractions": result, "error": None}
+
+
+async def _search_for_group(state: ActivitiesState) -> ActivitiesState:
+    """One search per member, all at once; then one list with everyone's share in it.
+
+    A member whose interests find nothing is not a failed search — the others
+    still have theirs, and the plan says whose came up empty. A search that
+    fails for any other reason fails the whole search: half a group's places
+    would be a plan that looks balanced and is not, and the page offers a retry.
+    """
+    members = group.profiles(state["group_members"])
+    results = await asyncio.gather(*(call_tool("get_attractions", params) for params in attraction_searches(state)))
+
+    found: list[tuple[dict, list[dict]]] = []
+    searches: list[dict] = []
+    for member, result in zip(members, results):
+        if hasattr(result, "code") and result.code != "NO_RESULTS":
+            return {**state, "error": result.model_dump(), "attractions": [], "group_searches": []}
+        attractions = [] if hasattr(result, "code") else list(result)
+        found.append((member, attractions))
+        searches.append(
+            {
+                "name": member["name"],
+                "interests": member["interests"],
+                "found": len(attractions),
+                "nothing_for": group.nothing_for(member, attractions),
+            }
+        )
+
+    pool = group.merge_for_group(found, group.clean_members(state["group_members"]))
+    if not pool:
+        error = {
+            "error": f"No attractions found for anyone in the group in {state['destination']}.",
+            "code": "NO_RESULTS",
+        }
+        return {**state, "error": error, "attractions": [], "group_searches": searches}
+
+    count = group.attraction_count(members, state.get("days") or 1)
+    picked = group.pick_for_group(pool, members, count)
+    return {**state, "attractions": picked, "group_searches": searches, "error": None}
 
 
 # ── Graph ─────────────────────────────────────────────────────────────────
@@ -161,7 +229,11 @@ class ActivitiesAgent:
                 trip_id=trip_id,
                 agent_name="activities_agent",
                 input=input_state,
-                output={"attractions": result.get("attractions", []), "error": result.get("error")},
+                output={
+                    "attractions": result.get("attractions", []),
+                    "error": result.get("error"),
+                    **({"group_searches": result["group_searches"]} if result.get("group_searches") else {}),
+                },
                 duration_ms=timer.duration_ms,
                 status="failed" if result.get("error") is not None else "completed",
                 turn=turn,

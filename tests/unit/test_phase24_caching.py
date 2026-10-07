@@ -649,4 +649,4 @@ def test_the_apps_info_lines_are_shown_when_nothing_else_shows_them():
         app_log.setLevel(before[3])
         planner_log.setLevel(before[4])
 
-    assert app.version == "0.24.0"
+    assert app.version >= "0.24.0"  # the phase this arrived in; each phase's own tests say which it is now

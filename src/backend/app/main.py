@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.24.0",
+    version="0.25.0",
     lifespan=lifespan,
 )
 

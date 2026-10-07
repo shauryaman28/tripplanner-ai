@@ -72,6 +72,14 @@ def format_duration(minutes: float | None) -> str | None:
     return f"{hours}h {rest}m" if rest else f"{hours}h"
 
 
+def names_in_words(names: tuple[str, ...] | list[str]) -> str:
+    """["Asha", "Ben", "Dev"] → "Asha, Ben and Dev" (lib/format.ts namesInWords — the page says it the same way)."""
+    names = [name for name in names if name]
+    if len(names) <= 1:
+        return "".join(names)
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def plural(count: int, one: str, many: str | None = None) -> str:
     """plural(1, "night") → "1 night"; plural(3, "night") → "3 nights" """
     return f"{count} {one if count == 1 else many or one + 's'}"
