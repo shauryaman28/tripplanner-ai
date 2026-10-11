@@ -94,7 +94,7 @@ async def test_a_plan_writes_what_each_model_call_cost_and_its_trace_says_the_sa
     dollars = sum(run["cost_usd"] or 0 for run in runs)
 
     # ── the trace: the same run, the same tokens, tagged with the trip and its owner ──
-    assert trace.name == "plan trip"
+    assert trace.name == "plan trip" and trace.project == "tests"
     assert trace.tokens == tokens
     assert trace.metadata["trip_id"] == trip_id
     assert trace.metadata["user_id"] == str(await owner_of(db_session, trip_id))
@@ -152,6 +152,9 @@ async def test_a_refinement_is_classified_on_a_row_of_its_own_and_every_run_of_t
 
     # ── filtering by trip: this trip's three runs, and none of the other trip's ──
     assert [trace.name for trace in of_trip] == ["plan trip", "classify refinement", "refine trip: targeted_hotel"]
+    assert {trace.project for trace in of_trip + of_other} == {
+        "tests"
+    }  # one project, whichever library began the trace
     assert [trace.name for trace in of_other] == ["plan trip"]
     owner = str(await owner_of(db_session, trip_id))
     for trace in of_trip:
@@ -243,7 +246,7 @@ async def test_ten_evaluator_retries_cross_the_limit_once_and_the_sum_is_the_dat
             for usage in builds(10):
                 await log_agent_run(db_session, dear, "itinerary_builder", {}, {}, 4_800, status="failed", usage=usage)
                 await log_agent_run(db_session, dear, "evaluator", {}, {"passed": False}, 0, status="failed")
-        for usage in builds(10):  # the same ten at the price the model has: three cents in all
+        for usage in builds(10):  # the same ten at the price the model has: two and a half cents in all
             await log_agent_run(db_session, cheap, "itinerary_builder", {}, {}, 4_800, status="failed", usage=usage)
 
     alerts = [record.getMessage() for record in caplog.records if "[COST ALERT]" in record.getMessage()]
@@ -257,7 +260,7 @@ async def test_ten_evaluator_retries_cross_the_limit_once_and_the_sum_is_the_dat
             )
         ).all()
     )
-    assert (float(totals[dear]), float(totals[cheap]), float(totals[another])) == (0.612, 0.0306, 0.0612)
+    assert (float(totals[dear]), float(totals[cheap]), float(totals[another])) == (0.612, 0.0252, 0.0612)
 
 
 async def test_the_cost_summary_says_which_tokens_it_could_not_price(db_session):
@@ -277,13 +280,13 @@ async def test_the_cost_summary_says_which_tokens_it_could_not_price(db_session)
         recent = (await client.get("/admin/cost-summary")).json()
         all_year = (await client.get("/admin/cost-summary?since=2026-01-01")).json()
 
-    assert recent["total"] == {"runs": 2, "tokens": 7_000, "cost_usd": 0.00306, "unpriced_tokens": 1_000}
+    assert recent["total"] == {"runs": 2, "tokens": 7_000, "cost_usd": 0.00252, "unpriced_tokens": 1_000}
     assert recent["by_agent"] == [
-        {"agent": "itinerary_builder", "runs": 1, "tokens": 6_000, "cost_usd": 0.00306, "unpriced_tokens": 0},
+        {"agent": "itinerary_builder", "runs": 1, "tokens": 6_000, "cost_usd": 0.00252, "unpriced_tokens": 0},
         {"agent": "intent_parsing", "runs": 1, "tokens": 1_000, "cost_usd": 0.0, "unpriced_tokens": 1_000},
     ]
     assert all_year["since"] == "2026-01-01"
-    assert all_year["total"] == {"runs": 3, "tokens": 16_999, "cost_usd": 1.00306, "unpriced_tokens": 1_000}
+    assert all_year["total"] == {"runs": 3, "tokens": 16_999, "cost_usd": 1.00252, "unpriced_tokens": 1_000}
     assert [day["date"] for day in all_year["by_date"]] == ["2026-01-15", str(datetime.now(timezone.utc).date())]
 
 
@@ -369,6 +372,7 @@ async def test_the_local_receiver_takes_a_trace_over_http_and_finds_it_by_its_tr
     (trace,) = found
     assert len(everything) == 2
     assert trace["name"] == "plan trip" and trace["metadata"]["trip_id"] == str(trip_id)
+    assert {one["project"] for one in everything} == {"local"}  # the receiver says where each trace was sent
     assert [span["name"] for span in trace["spans"]][:3] == ["intent_parsing", "apply_preferences", "run_flight"]
     assert trace["tokens"] > 0 and trace["duration_ms"] >= 0
     # /records is everything, exactly as it was sent: the place to see what would leave the machine

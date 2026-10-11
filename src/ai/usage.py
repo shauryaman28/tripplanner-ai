@@ -44,13 +44,18 @@ logger = logging.getLogger(__name__)
 
 # USD per million tokens: (input, output). Reasoning tokens are output tokens, and are billed as such.
 #
-# As listed on 2026-10-07 by price trackers that quote the providers (Groq: cloudzero.com; Gemini:
-# anotherwrapper.com, "as of 25 Aug 2026") — the providers' own pricing pages were not read. Check
-# them before relying on a figure, and correct one with LLM_PRICES in .env (no code change).
-# gemini-3.5-flash, the default GEMINI_MODEL, is not here because no price for it was found.
+# Read on 2026-10-11 from the providers' own pages — Groq: console.groq.com/docs/models and each
+# model's page; Gemini: ai.google.dev/gemini-api/docs/pricing, paid tier, output including thinking
+# tokens — and, for the two models a plan asks, checked against what LangSmith itself priced each
+# call of a live one at: the same to the last digit. (The first table came from price trackers. It
+# had gpt-oss-120b's output at $0.75 and gpt-oss-20b at $0.10 / $0.50 — a builder's cost a fifth too
+# high.) Prices move: correct one with LLM_PRICES in .env, no code change. Cached input is cheaper
+# at both providers and is not modelled.
+# gemini-3.5-flash, the default GEMINI_MODEL, is not here: the API still serves it, but Google's
+# price list no longer names it.
 PRICES: dict[str, tuple[float, float]] = {
-    "openai/gpt-oss-120b": (0.15, 0.75),
-    "openai/gpt-oss-20b": (0.10, 0.50),
+    "openai/gpt-oss-120b": (0.15, 0.60),
+    "openai/gpt-oss-20b": (0.075, 0.30),
     "gemini-3.5-flash-lite": (0.30, 2.50),
 }
 

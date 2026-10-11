@@ -314,7 +314,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **897 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **900 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -1000,11 +1000,11 @@ for run in json.load(sys.stdin): print(f\"{run['agent_name']:<26}{str(run['token
 # budget_decision                 —
 # hotel_agent                     —
 # activities_agent                —
-# destination_intelligence      884  0.000396
-# itinerary_builder            4309  0.00195435
+# destination_intelligence      884  0.00033015
+# itinerary_builder            4309  0.00162735
 # evaluator                       —
 # persist                         —
-# preference_extractor          794  0.0002421
+# preference_extractor          794  0.00021135
 # orchestrator                    —
 ```
 
@@ -1015,7 +1015,7 @@ no tokens — not 0. Your numbers will differ; the two totals will not.
 
 ```bash
 curl -s "localhost:8000/admin/cost-summary?since=2026-10-01" -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
-# "total": {"runs": 4, "tokens": 6419, "cost_usd": 0.002902, "unpriced_tokens": 0},
+# "total": {"runs": 4, "tokens": 6419, "cost_usd": 0.002479, "unpriced_tokens": 0},
 # "by_agent": [{"agent": "itinerary_builder", …}, …]      ← dearest first
 # "by_date":  [{"date": "2026-10-11", …}]                  ← oldest first
 ```
@@ -1050,11 +1050,11 @@ leaves 44%, under the half that re-planning starts at. With a fare of ₹8,365, 
 └─ escalate
 ```
 
-**The alert.** A plan costs about a third of a cent, so to see the warning lower the limit: restart Terminal 2's
+**The alert.** A plan costs about a quarter of a cent, so to see the warning lower the limit: restart Terminal 2's
 backend with `LLM_COST_ALERT_USD=0.002` in front of the same command, and plan a trip. The backend logs, once:
 
 ```
-[COST ALERT] trip 528f9612-…: the models have cost $0.0030 over 3 runs — past the $0.002 one trip is expected to stay under
+[COST ALERT] trip 528f9612-…: the models have cost $0.0025 over 3 runs — past the $0.002 one trip is expected to stay under
 ```
 
 **What left the machine.** `/records` is every run exactly as it was sent. None of the keys in `.env` is in it:
@@ -1072,10 +1072,21 @@ rm /tmp/sent.json
 What is in it: the destination, the dates, the budget, the interests, the prompts and the plan. That is what a
 trace is — and why tracing is off unless `.env` switches it on.
 
-**In LangSmith itself** — the one part of this phase that needs a key, and was not run when it was built:
-`LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY=<your key>` in `.env`, no `LANGCHAIN_ENDPOINT`, restart, plan
-a trip. The log must say `sent to LangSmith`; the trace is in the project `tripplanner-ai`; filtering its runs on
-the metadata key `trip_id` leaves that trip's only. The steps are at the end of `docs/phase26_build_log.md`.
+**In LangSmith itself** — with `LANGCHAIN_API_KEY=<your key>` in `.env` (smith.langchain.com → Settings → API keys):
+start the backend with `LANGCHAIN_TRACING_V2=true` in front of the command and no `LANGCHAIN_ENDPOINT`, and plan a
+trip, then change it. The log must say `sent to LangSmith`. In LangSmith, in the project `tripplanner-ai`:
+
+- one trace named `plan trip`, with the tree above; its token total is the sum of the trip's rows, to the token;
+- filter the project's runs on the metadata key `trip_id` with the trip's id as the value → that trip's traces
+  and no other's: `plan trip`, `classify refinement`, `refine trip: …` — **all in this one project**. (On the
+  first run against LangSmith the plan was in a project called `default` and only the changes were here; a trace
+  is now handed its project instead of being left to find one. `curl localhost:1984/traces` shows the same thing
+  locally: every trace's `"project"` is the one you set.)
+- LangSmith shows a cost for each model call from a price list of its own. It should agree with the row's
+  `cost_usd` to the last digit; where it does not, a price has moved — look it up on the provider's page and
+  correct it with `LLM_PRICES`.
+
+This was done on 2026-10-11; what it found is in `docs/phase26_build_log.md`, "In LangSmith itself".
 
 **The tests:** `pytest tests/unit/test_phase26_tracing.py tests/unit/test_phase26_costs.py -v`, and
 `RUN_INTEGRATION=1 pytest tests/integration/test_phase26_tracing_integration.py -v`.
@@ -1128,4 +1139,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **23 (Similar & search)** | Sign in as another account and ask for the demo account's trip: `GET /trips/{demo trip id}/similar` → `404`; its own `/trips/search?q=beach` → no results, though twelve beach-to-temple trips are in the table — only the caller's own are ever searched. `GET /trips/search?q=x` → `422`. Empty `GOOGLE_API_KEY` and restart → `/trips/search?q=beach` → `503` "Search is not available right now", and the page says so and keeps the list; `/similar` still works (it compares stored vectors and embeds nothing). Plan a trip with the key empty → `/similar` answers `"status": "pending"` and `/admin/embedding-health` is `degraded`; put the key back and restart → it is embedded and found. `alembic downgrade 003 && alembic upgrade head` → the vectors are gone and every trip is queued again. `RUN_INTEGRATION=1 pytest tests/integration/test_phase23_similarity_integration.py -k hnsw -v` → passes: with the table scan and the sort forbidden, the query plan uses `ix_embeddings_summary_hnsw`, and the traveller's three trips are still found behind seventy nearer ones of someone else's. |
 | **24 (Caching & rate limits)** | Create a trip whose destination is a sentence ("a relaxed week somewhere in Kerala") → the log says `[CACHE WARM] skipped`, and nothing is searched: where it goes is only known once planning has read it. Create a trip without interests → flights, hotels and weather are warmed, attractions are not. Set `CACHE_WARMING_ENABLED=false` and restart → creating a trip logs no `[CACHE WARM]` line. Create a trip and plan it six minutes later → the flight search is a `[CACHE MISS]` (kept 5 minutes), the hotels still a hit (15). `docker exec tripplanner_redis redis-cli SET mcp:flights:oops '[]'`, then `python scripts/cache_ttls.py` → `flights … NEVER (no TTL) … WRONG`, exit status 1 (`DEL` it again). In `src/ai/mcp_server/outbound.py` delete the line `limiter(provider).acquire()` → `pytest tests/unit/test_phase24_rate_limits.py -k three_agents` fails: the provider answered 429 to the third agent. In `server.py` register the tools without `threaded(...)` → `-k same_moment` fails after three seconds: tools run one after another never meet at their providers. In `tools.py` add the budget back to the flight cache key → `pytest tests/unit/test_phase24_caching.py -k another_budget` fails: the provider is asked twice for the same flights. |
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
-| **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. |
+| **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. With a LangSmith key: plan a trip and change it → both traces are in the project `tripplanner-ai`, though one is started by LangChain and the other by this app — take the tracer out of `tracing.run_config` and the plan goes to a project called `default`, where the trip's filter no longer finds it, and nothing is logged. |

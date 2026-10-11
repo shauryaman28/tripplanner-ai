@@ -96,7 +96,7 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 897 tests
+# Unit + contract tests (no Docker, no network) — 900 tests
 pytest tests/unit/ tests/contract/ -v
 
 # Integration tests (Docker Postgres + Redis) — 51 tests, incl. the full
@@ -243,7 +243,7 @@ tripplanner-ai/
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
 │       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (889 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (892 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
 │   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 51 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
@@ -305,10 +305,10 @@ tripplanner-ai/
 | 23 | pgvector similarity search — similar trips, search, the embedding experiment ([docs/phase23_build_log.md](docs/phase23_build_log.md)) | ✅ Done | 24 unit + 13 integration + 8 Playwright E2E |
 | 24 | Caching & rate limits — cache warming on trip creation, a rate limit per provider, backoff on 429, the tools side by side ([docs/phase24_build_log.md](docs/phase24_build_log.md)) | ✅ Done | 90 unit + 3 integration + 1 Playwright E2E |
 | 25 | Group trips — each traveller's interests searched on their own, a plan with a stop for everyone in every two days, each one's share of the cost ([docs/phase25_build_log.md](docs/phase25_build_log.md)) | ✅ Done | 69 unit + 4 integration + 4 Playwright E2E |
-| 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — verified against a local stand-in for LangSmith; the check in LangSmith itself needs a key | 43 unit + 8 integration |
+| 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — read back from LangSmith itself on 2026-10-11 | 46 unit + 8 integration |
 | 27–50 | Production & Polish | ⏳ | |
 
-**Total: 897 unit + contract, 51 integration, 60 browser — all passing.** Zero network calls in CI.
+**Total: 900 unit + contract, 51 integration, 60 browser — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -354,7 +354,7 @@ none of it leaves the machine unless `.env` says so. Without an account, `python
 prints the same traces locally (`HOW_TO_RUN.md`, Step 24). Whether or not tracing is on, each run that asked a
 model records its tokens and their list price: `GET /admin/cost-summary?since=2026-10-01` adds them up by
 agent and by day, and a trip whose models pass `LLM_COST_ALERT_USD` (default $0.10) is logged. The prices are
-list prices from price trackers — check them against the provider's page, and correct one with `LLM_PRICES`.
+the providers' list prices as read on 2026-10-11 (LangSmith's own cost for each call agrees with them) — when one moves, correct it with `LLM_PRICES`.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.
