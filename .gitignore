@@ -26,6 +26,8 @@ env/
 node_modules/
 .next/
 .next-e2e/
+.next-prodlike/
+.next-verify/
 out/
 .npm
 .pnpm-store

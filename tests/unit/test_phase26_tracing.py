@@ -16,6 +16,7 @@ re-planning branch is a distinct span; evaluator retries are numbered spans;
 filtering by trip_id returns only that trip's traces.
 """
 
+import contextvars
 import json
 import logging
 import threading
@@ -24,7 +25,10 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import langsmith as library
 import pytest
+from langsmith import utils
+from langsmith.run_helpers import get_tracing_context
 
 from app.core.config import Settings
 from src.ai import tracing
@@ -158,6 +162,70 @@ async def test_filtering_by_trip_returns_only_that_trips_traces():
 
 
 # ── Branches ───────────────────────────────────────────────────────────────
+
+
+async def test_every_trace_goes_to_the_one_project_though_tracing_was_switched_on_somewhere_else():
+    """Tracing is switched on once, as the app starts. A plan runs later, in a request's own task.
+
+    Found on the first run against LangSmith itself. Left to find the project, LangChain — which
+    starts the trace of a plan — looks in the context of the task it is running in and then in
+    the process environment, never at what `langsmith.configure` was told: every plan went to a
+    project called "default", and every change to a plan (a trace this project opens itself) to
+    the right one. A trip's filter then found the changes and not the plan.
+    """
+    server = FakeLangSmith()
+    startup = threading.Thread(target=tracing.use, args=(server.client, "the-trips-project"))
+    startup.start()
+    startup.join()  # another thread, as the app's startup is another task: nothing it set is in this one's context
+    try:
+        assert get_tracing_context()["project_name"] is None  # what a request finds when it looks: nothing
+        trip_id, result = await plan()
+        with network_stubs(flight_tool=lambda *_: [flight(8_200.0)]), models_answer():
+            agent = OrchestratorAgent()
+            await agent.refine("targeted_hotel", result, "A nicer hotel", trip_id=trip_id, turn=2)
+            await agent.retry_search("activities_agent", result, trip_id=trip_id, turn=3)
+        traces = server.traces(trip_id)
+    finally:
+        tracing.use(None)
+
+    assert [t.name for t in traces] == ["plan trip", "refine trip: targeted_hotel", "retry trip: activities_agent"]
+    assert {trace.project for trace in traces} == {"the-trips-project"}
+    # …and not one span of any of them anywhere else: the steps, the model calls, the tools
+    assert {span.project for trace in traces for span in trace.walk()} <= {"the-trips-project", None}
+    assert server.traces() == traces  # nothing was traced on its own, into some other project
+
+
+async def test_a_trace_is_handed_its_project_and_none_is_left_to_be_found():
+    """Each library can find a project for a trace by itself — each in places of its own, which is what went wrong.
+
+    So nothing is left to be found. Here the tracing library has been made to forget the project it was
+    told, and every kind of trace still goes to ours: the one LangChain starts (a plan), the one this
+    project opens (a change), and a span that has no trace to belong to.
+    """
+    with traced(project="named-outright") as langsmith:
+        contextvars.copy_context().run(lambda: library.configure(project_name=None))  # process-wide: forgotten
+        trip_id, result = await plan()
+        with network_stubs(flight_tool=lambda *_: [flight(8_200.0)]), models_answer():
+            await OrchestratorAgent().refine("targeted_hotel", result, "A nicer hotel", trip_id=trip_id, turn=2)
+        with tracing.span("a span on its own") as alone:
+            alone.end(outputs={})
+        traces = langsmith.traces()
+
+    assert [trace.name for trace in traces] == ["plan trip", "refine trip: targeted_hotel", "a span on its own"]
+    assert {trace.project for trace in traces} == {"named-outright"}
+
+
+def test_switching_tracing_on_leaves_nothing_behind_in_the_callers_own_context():
+    """`langsmith.configure` also sets values only the calling task sees. Left in place they would make whoever
+    switched tracing on — a test — see more than a request ever does, which is how the bug above stayed hidden."""
+    tracing.use(FakeLangSmith().client, "a-project")
+    try:
+        seen = get_tracing_context()
+        assert (seen["project_name"], seen["enabled"], seen["client"]) == (None, None, None)
+        assert utils.tracing_is_enabled() is True  # on all the same: for the whole process
+    finally:
+        tracing.configure(settings_like())  # and off, the way the app says it
+    assert get_tracing_context()["enabled"] is None and utils.tracing_is_enabled() is False
 
 
 def dear_until_a_stop_is_allowed(_name: str, params: dict):
@@ -441,9 +509,7 @@ async def test_the_app_configures_tracing_as_it_starts_and_sends_the_last_traces
 
 def test_a_shell_that_says_trace_cannot_switch_tracing_on(monkeypatch):
     """The settings decide. A `LANGSMITH_TRACING=true` left in a terminal must not upload anyone's trips."""
-    import langsmith as library
     from langchain_core.tracers.context import _tracing_v2_is_enabled
-    from langsmith import utils
 
     for name in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGSMITH_TRACING_V2"):
         monkeypatch.setenv(name, "true")

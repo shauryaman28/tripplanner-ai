@@ -40,6 +40,12 @@ The trip and the user go on the root as metadata, and LangSmith hands metadata
 down to every span beneath it: "trip_id" in its filter finds every decision
 made for one trip, and nothing else.
 
+Every trace goes to one LangSmith project, `LANGCHAIN_PROJECT`, and is handed
+it outright: a plan's by a tracer made here (`run_config`), every other by name
+(`root`, `span`). Neither library is left to find a project for a trace — each
+looks in places of its own, and when they were left to, a trip's plan and the
+changes to it ended up in two.
+
 What is uploaded is what the planner saw and wrote — the destination, the
 dates, the travellers' names and interests, the plan, the prompts. The live
 objects a run carries in its state (the database session, the callbacks) are
@@ -50,6 +56,7 @@ switch it on, and cannot switch it off.
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import threading
 from collections.abc import Awaitable, Callable, Iterator
@@ -57,6 +64,7 @@ from contextlib import contextmanager
 from typing import Any
 
 import langsmith
+from langchain_core.tracers import LangChainTracer
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +73,7 @@ RUNTIME_KEYS = frozenset({"db", "publish_fn", "on_complete"})
 FLUSH_SECONDS = 5.0  # how long shutdown waits for the last traces to be sent
 
 _client: langsmith.Client | None = None
+_project = "tripplanner-ai"  # the LangSmith project every trace goes to
 
 
 def scrub(data: Any) -> Any:
@@ -84,7 +93,6 @@ def configure(settings: Any) -> bool:
     in anyone's project. Off is said to LangSmith's library too, so that a
     `LANGSMITH_TRACING=true` left in a shell does not trace behind our back.
     """
-    global _client
     off = None
     if not settings.LANGCHAIN_TRACING_V2:
         off = "LANGCHAIN_TRACING_V2 is not true"
@@ -95,8 +103,7 @@ def configure(settings: Any) -> bool:
         logger.warning("[TRACING] off: %s. Set a key in .env, or switch tracing off.", off)
 
     if off:
-        _client = None
-        langsmith.configure(enabled=False)
+        use(None)
         logger.info("[TRACING] LangSmith tracing is off (%s)", off)
         return False
 
@@ -118,13 +125,17 @@ def make_client(api_key: str, api_url: str | None = None, session: Any = None) -
 
 
 def use(client: langsmith.Client | None, project: str = "tripplanner-ai") -> None:
-    """Trace through this client from now on; None switches tracing off. `configure` and the tests end up here."""
-    global _client
-    _client = client
-    if client is None:
-        langsmith.configure(enabled=False)
-    else:
-        langsmith.configure(client=client, enabled=True, project_name=project)
+    """Trace through this client from now on; None switches tracing off. `configure` and the tests end up here.
+
+    The library is told in a context of its own. `langsmith.configure` sets process-wide values *and*
+    context variables, and the context variables would be seen by the caller's task alone: the app's
+    startup, which serves no request. Set here, they would only make this module's caller — a test,
+    say — see more than a request ever does.
+    """
+    global _client, _project
+    _client, _project = client, project
+    told = {"enabled": False} if client is None else {"client": client, "enabled": True, "project_name": project}
+    contextvars.copy_context().run(lambda: langsmith.configure(**told))
 
 
 def shutdown() -> None:
@@ -160,9 +171,19 @@ def run_config(name: str, kind: str, trip_id: Any, user_id: Any = None, turn: in
 
     `name` is what the trace is called; the metadata is what it is found by.
     Harmless when tracing is off: a config nobody reads.
+
+    The tracer is handed over with its project and its client, not left for LangChain to make.
+    Left to itself LangChain looks for the project in the context of the task it runs in, then in
+    the process environment — never at what `langsmith.configure` was told — and this app has
+    `LANGCHAIN_PROJECT` in `.env`, not in the environment. On the first run against LangSmith
+    itself every plan went to a project called "default", and every change to a plan (whose trace
+    the tracing library opens, and which does ask `configure`) to the right one.
     """
     metadata, tags = _labels(kind, trip_id, user_id, turn, **more)
-    return {"run_name": name, "metadata": metadata, "tags": tags}
+    config: dict[str, Any] = {"run_name": name, "metadata": metadata, "tags": tags}
+    if _client is not None:
+        config["callbacks"] = [LangChainTracer(project_name=_project, client=_client)]
+    return config
 
 
 # ── Spans ──────────────────────────────────────────────────────────────────
@@ -190,7 +211,9 @@ def root(
         yield _NoSpan()
         return
     metadata, tags = _labels(kind, trip_id, user_id, turn, **more)
-    with langsmith.trace(name, inputs=inputs or {}, metadata=metadata, tags=tags) as run:
+    with langsmith.trace(
+        name, inputs=inputs or {}, metadata=metadata, tags=tags, project_name=_project, client=_client
+    ) as run:
         yield run
 
 
@@ -212,7 +235,9 @@ def span(
     if not enabled() or (needs_parent and langsmith.get_current_run_tree() is None):
         yield _NoSpan()
         return
-    with langsmith.trace(name, run_type=run_type, inputs=inputs or {}, metadata=metadata) as run:
+    with langsmith.trace(
+        name, run_type=run_type, inputs=inputs or {}, metadata=metadata, project_name=_project, client=_client
+    ) as run:
         yield run
 
 

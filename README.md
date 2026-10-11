@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 26 / 50 — LangSmith Tracing & Token Costs**
+**Status: Phase 27 / 50 — Production Infrastructure**
 
 ---
 
@@ -38,6 +38,12 @@ Every run can be a LangSmith trace (off unless .env switches it on): a span for 
 and tool call, tagged with the trip and the user. Every step that asked a model records its tokens and
 their list price in agent_runs; GET /admin/cost-summary adds them up by agent and by day.
 
+Deployed (Phase 27): one Docker image configured by its environment, on Railway; Postgres + pgvector on
+Neon, through its connection pooler; Redis on Upstash over TCP with TLS (pub/sub needs a connection — its
+REST API cannot subscribe); the frontend on Vercel, whose proxy carries /api/* while the browser opens the
+event stream straight to the backend; errors to Sentry, scrubbed. `python -m app.preflight` says what a
+deployment is missing before it starts; a deploy does not fail the plans being made.
+
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
 Text in the scripts of India is drawn in Noto and shaped by HarfBuzz.
@@ -67,7 +73,7 @@ docker compose up postgres redis -d
 
 ### 3. Install dependencies & run migrations
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt -c constraints.txt   # the versions the tests run on
 alembic upgrade head
 ```
 
@@ -96,10 +102,10 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 897 tests
+# Unit + contract tests (no Docker, no network) — 980 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 51 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 60 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
@@ -129,10 +135,13 @@ tripplanner-ai/
 ├── src/
 │   ├── frontend/                        ← Phases 17–23: Next.js 14 App Router
 │   │   ├── package.json
-│   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend
+│   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend; Phase 27: a deployment build stops
+│   │   │                                  if the backend's address was not given
 │   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
 │   │   ├── tsconfig.json
 │   │   ├── playwright.config.ts         ← starts the E2E stack (stub backend :8100, dev server :3100)
+│   │   ├── playwright.production.config.ts ← Phase 27: one check, in a browser, of a site that is already running
+│   │   ├── e2e-production/smoke.spec.ts ← Phase 27: a traveller plans a trip on the deployed site (real everything)
 │   │   ├── e2e/planning.spec.ts         ← Playwright tests: plan, map, refine, PDF download, budget conflict
 │   │   ├── e2e/polish.spec.ts           ← Phase 20: live draft, refinement marks, retry, every view at 375 px
 │   │   ├── e2e/budget.spec.ts           ← Phase 21: a budget conflict priced, and each way out planned
@@ -161,24 +170,31 @@ tripplanner-ai/
 │   │                                      tips.ts (local tips), useWideScreen.ts, download.ts, places.ts,
 │   │                                      format.ts, types.ts
 │   ├── backend/
-│   │   ├── Dockerfile
+│   │   ├── Dockerfile                   ← Phase 27: the image that is deployed — listens on $PORT, pinned installs,
+│   │   │                                  checks its settings, migrates, then becomes the server
 │   │   └── app/
-│   │       ├── main.py                  ← FastAPI entry point
+│   │       ├── main.py                  ← FastAPI entry point; Phase 27: startup that leaves another instance's
+│   │       │                              runs alone, shutdown that waits for the plans in flight
+│   │       ├── preflight.py             ← Phase 27: what a deployment is missing, said at once, before it starts
 │   │       ├── api/
 │   │       │   ├── deps.py              ← JWT dependencies
 │   │       │   └── routes/
 │   │       │       ├── auth.py          ← POST /auth/register, /auth/login
-│   │       │       ├── health.py        ← GET /ping
+│   │       │       ├── health.py        ← GET /ping; GET /ready (Phase 27: the same, as a status a platform can read)
 │   │       │       ├── trips.py         ← All trip routes + SSE + GET /status + POST /retry + GET /export/pdf
 │   │       │       │                              + GET /similar and GET /search (Phase 23)
 │   │       │       ├── users.py         ← GET/PUT /users/preferences (Phase 16)
-│   │       │       └── admin.py         ← GET /admin/embedding-health (Phase 14)
+│   │       │       └── admin.py         ← GET /admin/embedding-health (Phase 14), /admin/cost-summary (Phase 26),
+│   │       │                              /admin/sentry-test (Phase 27: fails on purpose; needs OPS_TOKEN)
 │   │       ├── core/
 │   │       │   ├── config.py            ← pydantic-settings
+│   │       │   ├── error_reporting.py   ← Phase 27: Sentry — on with a DSN — and what is scrubbed out of a report
 │   │       │   └── security.py         ← JWT + password hashing
 │   │       ├── db/
 │   │       │   ├── session.py           ← async SQLAlchemy
-│   │       │   └── redis.py             ← async Redis singleton
+│   │       │   ├── url.py               ← Phase 27: a hosted Postgres's URL, as each driver needs it; nothing
+│   │       │   │                          prepared is kept, so a pooler can sit in between
+│   │       │   └── redis.py             ← async Redis singleton; Phase 27: retries a closed connection, pings an idle one
 │   │       ├── models/                  ← SQLModel table models
 │   │       ├── schemas/                 ← Pydantic request/response schemas
 │   │       ├── search.py                ← Phase 23: similar trips and search — pgvector over itinerary summaries
@@ -243,9 +259,9 @@ tripplanner-ai/
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
 │       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (889 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (972 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 51 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 60 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
@@ -254,20 +270,29 @@ tripplanner-ai/
 │                                          chat models that report token counts and a LangSmith that keeps
 │                                          what it is sent and sends nothing anywhere (Phase 26)
 ├── docker/
-│   └── init.sql                         ← enables pgvector extension
+│   ├── init.sql                         ← enables pgvector extension (local development only: migration 001 does
+│   │                                      it for a database that was just created)
+│   └── prodlike/                        ← Phase 27: a production-like stack — the deployed image against a TLS-only
+│                                          Postgres behind a pooler in transaction mode and a TLS-only Redis
 ├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
 │                                          seed_demo_trips.py (a demo account with twelve embedded trips),
 │                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec),
 │                                          group_experiment.py (Phase 25: four travellers against the real search),
 │                                          trace_receiver.py (Phase 26: a local stand-in for LangSmith — prints
-│                                          each trace it is sent; no account needed)
+│                                          each trace it is sent; no account needed),
+│                                          prodlike.py (Phase 27: the production-like stack up and down),
+│                                          prod_check.py (Phase 27: asks a running deployment whether it is whole),
+│                                          sentry_receiver.py (Phase 27: a local stand-in for Sentry),
+│                                          freeze_constraints.py (Phase 27: writes constraints.txt again)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–26) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–27) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
-├── requirements.txt
+├── requirements.txt                     ← what the app needs, with lower bounds
+├── constraints.txt                      ← Phase 27: the exact versions the suites run on — and the image installs
 ├── requirements-dev.txt
+├── railway.json                         ← Phase 27: how Railway builds, health-checks and stops the backend
 └── .env.example
 ```
 
@@ -305,10 +330,11 @@ tripplanner-ai/
 | 23 | pgvector similarity search — similar trips, search, the embedding experiment ([docs/phase23_build_log.md](docs/phase23_build_log.md)) | ✅ Done | 24 unit + 13 integration + 8 Playwright E2E |
 | 24 | Caching & rate limits — cache warming on trip creation, a rate limit per provider, backoff on 429, the tools side by side ([docs/phase24_build_log.md](docs/phase24_build_log.md)) | ✅ Done | 90 unit + 3 integration + 1 Playwright E2E |
 | 25 | Group trips — each traveller's interests searched on their own, a plan with a stop for everyone in every two days, each one's share of the cost ([docs/phase25_build_log.md](docs/phase25_build_log.md)) | ✅ Done | 69 unit + 4 integration + 4 Playwright E2E |
-| 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — verified against a local stand-in for LangSmith; the check in LangSmith itself needs a key | 43 unit + 8 integration |
-| 27–50 | Production & Polish | ⏳ | |
+| 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — read back from LangSmith itself on 2026-10-11 | 46 unit + 8 integration |
+| 27 | Production infrastructure — the image, Neon's URL and pooler, Upstash over TCP, Sentry with scrubbed reports, runs that survive a deploy, a pre-start check ([docs/phase27_build_log.md](docs/phase27_build_log.md)) | ✅ Built, and verified on a production-like stack — **not yet deployed**: that needs accounts on the five services | 80 unit + 9 integration + 1 browser check of a running deployment |
+| 28–50 | Production & Polish | ⏳ | |
 
-**Total: 897 unit + contract, 51 integration, 60 browser — all passing.** Zero network calls in CI.
+**Total: 980 unit + contract, 60 integration, 60 browser — all passing.** Zero network calls in CI. (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -354,7 +380,16 @@ none of it leaves the machine unless `.env` says so. Without an account, `python
 prints the same traces locally (`HOW_TO_RUN.md`, Step 24). Whether or not tracing is on, each run that asked a
 model records its tokens and their list price: `GET /admin/cost-summary?since=2026-10-01` adds them up by
 agent and by day, and a trip whose models pass `LLM_COST_ALERT_USD` (default $0.10) is logged. The prices are
-list prices from price trackers — check them against the provider's page, and correct one with `LLM_PRICES`.
+the providers' list prices as read on 2026-10-11 (LangSmith's own cost for each call agrees with them) — when one moves, correct it with `LLM_PRICES`.
+
+**Deploying (Phase 27).** The backend is one Docker image configured by its environment (`railway.json`
+tells Railway how to build, check and stop it); the frontend is `src/frontend` on Vercel. Before anything
+is deployed, `PYTHONPATH=src/backend python -m app.preflight --env-file <your values> --production` says
+everything that is missing or wrong, by name. Without any account, `python scripts/prodlike.py up` starts
+the same image against a TLS-only Postgres behind a connection pooler and a TLS-only Redis, and
+`python scripts/prod_check.py --prodlike` asks it the roadmap's questions — the same script takes a real
+deployment's addresses. Step by step: `HOW_TO_RUN.md`, Step 25. Not yet done from this repository: the
+deploy to the real services.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.
@@ -385,8 +420,8 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Cache | Redis 7 |
 | ORM | SQLModel + Alembic |
 | Embeddings | Gemini `gemini-embedding-001` at 1536 dimensions (Phase 14) |
-| Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry (Phase 27) |
-| Deploy | Railway (backend), Vercel (frontend), Neon (DB), Upstash (Redis) |
+| Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry, with reports scrubbed of secrets (Phase 27) |
+| Deploy | Railway (backend, Docker), Vercel (frontend), Neon (Postgres + pgvector, pooled), Upstash (Redis over TCP + TLS) — Phase 27 |
 
 ---
 

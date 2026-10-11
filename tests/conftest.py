@@ -99,6 +99,17 @@ def costs_as_shipped():
 
 
 @pytest.fixture(autouse=True)
+def no_error_reporting():
+    """Sentry (Phase 27) is off in every test that does not switch it on: a DSN in .env must not be sent a
+    report for every error a test raises on purpose."""
+    from app.core import error_reporting
+
+    error_reporting.switch_off()
+    yield
+    error_reporting.switch_off()
+
+
+@pytest.fixture(autouse=True)
 def no_tracing():
     """LangSmith tracing (Phase 26) is off in every test that does not switch it on (tests/fakes.traced).
 

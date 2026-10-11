@@ -13,7 +13,7 @@ import sys
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, make_url, pool
+from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 # Add src/backend to path so app.* imports resolve
@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "backend
 
 # Import all models — they self-register with SQLModel.metadata on import
 from app.core.config import settings
+from app.db.url import sync_url as libpq_url
 from app.models import AgentRun, Embedding, Itinerary, Trip, User, UserPreferences  # noqa: F401
 
 # ── Alembic config ────────────────────────────────────────────────────────
@@ -28,8 +29,10 @@ from app.models import AgentRun, Embedding, Itinerary, Trip, User, UserPreferenc
 alembic_cfg = context.config
 fileConfig(alembic_cfg.config_file_name, disable_existing_loggers=False)  # type: ignore[arg-type]
 
-# Alembic runs synchronously — swap whatever driver the app uses for psycopg2.
-sync_url = make_url(settings.DATABASE_URL).set(drivername="postgresql+psycopg2").render_as_string(hide_password=False)
+# Alembic runs synchronously, on psycopg2 — which is libpq, and takes a hosted database's URL as it
+# is. Given the database's direct address as well (Phase 27), migrations go there and not through the
+# connection pooler: DDL is one long session's work.
+sync_url = libpq_url(settings.DATABASE_URL_UNPOOLED or settings.DATABASE_URL)
 alembic_cfg.set_main_option("sqlalchemy.url", sync_url.replace("%", "%%"))
 
 target_metadata = SQLModel.metadata

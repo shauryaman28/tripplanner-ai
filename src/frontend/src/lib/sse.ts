@@ -22,7 +22,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentStatus, SSEAgentUpdateEvent } from "./types";
 import { getToken } from "./api";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Compiled in when the site is built (next.config.mjs refuses a deployment build without it).
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000];
 

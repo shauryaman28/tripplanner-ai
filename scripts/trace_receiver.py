@@ -53,6 +53,7 @@ SETTLE_SECONDS = 1.0  # a trace's last spans can arrive a batch after its root h
 def as_json(span: Span) -> dict:
     return {
         "name": span.name,
+        "project": span.project,  # the LangSmith project the run was sent to: one, for every trace
         "run_type": span.run_type,
         "duration_ms": span.duration_ms,
         "tokens": span.tokens,

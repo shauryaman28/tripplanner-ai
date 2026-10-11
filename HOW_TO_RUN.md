@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–26
+# How to Run & Verify — Phases 1–27
 
 ## What changed vs the original codebase?
 
@@ -25,6 +25,7 @@
 | 24 | `tools.py` (every request through `send()`; flights and hotels cached by what the provider is asked; one search per cache key at a time; `RATE_LIMITED`), `cache.py` (`single_flight`), `server.py` (the tools run in threads), `orchestrator.py` + the three search agents (their search parameters as functions), `failures.py`, `trips.py` (`POST /trips` starts cache warming), `config.py` (`CACHE_WARMING_ENABLED`), `main.py` (the app's INFO log lines are shown), `tests/conftest.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, `polish.spec.ts`, `.env.example` — see `docs/phase24_build_log.md` | `src/ai/mcp_server/rate_limiter.py`, `src/ai/mcp_server/outbound.py`, `src/ai/orchestrator/warming.py`, `scripts/cache_ttls.py`, `tests/unit/test_phase24_rate_limits.py`, `tests/unit/test_phase24_caching.py`, `tests/integration/test_phase24_caching_integration.py` |
 | 25 | `tools.py` (every attraction says which interest it was found under; lesser-known places fill up a thin interest; "spa" searched as nothing; `estimate_budget` per person), `models.py`, `activities_agent.py` (a group searched member by member), `builder.py` (the group in the prompt, the plan repaired, the shares), `evaluator.py` (`unbalanced_group`), `orchestrator.py`, `warming.py`, `pricing.py`, `itinerary.py`, `models/trip.py` + `schemas/trip.py` + `trips.py` (`group_members`), `pdf/plan.py` + `document.py` + `formatting.py`, `main.py`, the new-trip form, `CostSummary.tsx`, `DayCard.tsx`, `ItineraryView.tsx`, `lib/types.ts` + `api.ts` + `format.ts`, `tests/fakes.py`, `tests/e2e/stub_backend.py` — see `docs/phase25_build_log.md` | `src/ai/group.py`, `migrations/versions/005_trip_group_members.py`, `GroupPanel.tsx`, `lib/group.ts`, `prompts/itinerary_builder_v9.md`, `scripts/group_experiment.py`, `tests/unit/test_phase25_group.py`, `tests/integration/test_phase25_group_integration.py`, `src/frontend/e2e/group.spec.ts` |
 | 26 | `run_logger.py` (`timed_run` meters what the models are asked; a row carries `token_count` and `cost_usd`; the over-cost alert), `orchestrator.py` (a run tagged with its trip and user; "re-plan N" and "evaluator retry N" spans; a change to a plan as a trace), `mcp_client/client.py` (a span per tool call), the three search agents, `builder.py`, `destination_intelligence.py`, `preference_extractor.py`, `trips.py` (the refinement classifier timed, traced and logged), `admin.py` (`GET /admin/cost-summary`), `config.py`, `main.py`, `models/agent_run.py`, `schemas/agent_run.py`, `.env.example`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py` — see `docs/phase26_build_log.md` | `src/ai/tracing.py`, `src/ai/usage.py`, `src/ai/trace_tree.py`, `scripts/trace_receiver.py`, `schemas/cost.py`, migration 006, `tests/unit/test_phase26_tracing.py`, `test_phase26_costs.py`, `test_version.py`, `tests/integration/test_phase26_tracing_integration.py` |
+| 27 | `Dockerfile` (listens on `$PORT`, `exec`s the server, pinned installs, not root), `main.py` (the pre-start check, Sentry, recovery that leaves another instance's runs alone, waiting for plans at shutdown, `no-store`, a JSON 500), `trips.py` (a run's note kept up; a run cut short tidied up; the event stream's wait), `session.py` + `migrations/env.py` (a hosted Postgres's URL), `db/redis.py` + `mcp_server/cache.py` (retries, health checks, no password in a log), `health.py` (`GET /ready`), `admin.py` (`GET /admin/sentry-test`), `config.py`, `conversation.py`, `requirements.txt` (`sentry-sdk`), `ci.yml`, `next.config.mjs`, `lib/sse.ts`, `.env.example`, `.gitignore`, `tests/conftest.py` — see `docs/phase27_build_log.md` | `app/preflight.py`, `app/db/url.py`, `app/core/error_reporting.py`, `constraints.txt`, `railway.json`, `docker/prodlike/` (the production-like stack), `scripts/prodlike.py`, `scripts/prod_check.py`, `scripts/sentry_receiver.py`, `scripts/freeze_constraints.py`, `playwright.production.config.ts`, `e2e-production/smoke.spec.ts`, three unit test files and one integration test file |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -106,9 +107,12 @@ No keys at all? Steps 15–16 run the whole flow on a stub backend.
 ## Step 2 — Install dependencies
 
 ```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt -c constraints.txt
 ```
+
+`-c constraints.txt` gives you, of what the two files ask for, exactly the versions the test suites
+run on — and the deployed image runs (Phase 27). Without it `pip` takes the newest of everything, and
+that has already been a different app once: on a newer `sqlmodel`, registering an account answers 500.
 
 `requirements.txt` already includes fixes for three issues discovered during first-time setup (see "Known first-run issues" below) — if you're on an older clone missing these, see that section.
 
@@ -306,7 +310,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–26 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–27 check
 
 Run from the **project root**:
 
@@ -314,7 +318,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **897 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **980 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -323,7 +327,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **51 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **60 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -1000,11 +1004,11 @@ for run in json.load(sys.stdin): print(f\"{run['agent_name']:<26}{str(run['token
 # budget_decision                 —
 # hotel_agent                     —
 # activities_agent                —
-# destination_intelligence      884  0.000396
-# itinerary_builder            4309  0.00195435
+# destination_intelligence      884  0.00033015
+# itinerary_builder            4309  0.00162735
 # evaluator                       —
 # persist                         —
-# preference_extractor          794  0.0002421
+# preference_extractor          794  0.00021135
 # orchestrator                    —
 ```
 
@@ -1015,7 +1019,7 @@ no tokens — not 0. Your numbers will differ; the two totals will not.
 
 ```bash
 curl -s "localhost:8000/admin/cost-summary?since=2026-10-01" -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
-# "total": {"runs": 4, "tokens": 6419, "cost_usd": 0.002902, "unpriced_tokens": 0},
+# "total": {"runs": 4, "tokens": 6419, "cost_usd": 0.002479, "unpriced_tokens": 0},
 # "by_agent": [{"agent": "itinerary_builder", …}, …]      ← dearest first
 # "by_date":  [{"date": "2026-10-11", …}]                  ← oldest first
 ```
@@ -1050,11 +1054,11 @@ leaves 44%, under the half that re-planning starts at. With a fare of ₹8,365, 
 └─ escalate
 ```
 
-**The alert.** A plan costs about a third of a cent, so to see the warning lower the limit: restart Terminal 2's
+**The alert.** A plan costs about a quarter of a cent, so to see the warning lower the limit: restart Terminal 2's
 backend with `LLM_COST_ALERT_USD=0.002` in front of the same command, and plan a trip. The backend logs, once:
 
 ```
-[COST ALERT] trip 528f9612-…: the models have cost $0.0030 over 3 runs — past the $0.002 one trip is expected to stay under
+[COST ALERT] trip 528f9612-…: the models have cost $0.0025 over 3 runs — past the $0.002 one trip is expected to stay under
 ```
 
 **What left the machine.** `/records` is every run exactly as it was sent. None of the keys in `.env` is in it:
@@ -1072,13 +1076,181 @@ rm /tmp/sent.json
 What is in it: the destination, the dates, the budget, the interests, the prompts and the plan. That is what a
 trace is — and why tracing is off unless `.env` switches it on.
 
-**In LangSmith itself** — the one part of this phase that needs a key, and was not run when it was built:
-`LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY=<your key>` in `.env`, no `LANGCHAIN_ENDPOINT`, restart, plan
-a trip. The log must say `sent to LangSmith`; the trace is in the project `tripplanner-ai`; filtering its runs on
-the metadata key `trip_id` leaves that trip's only. The steps are at the end of `docs/phase26_build_log.md`.
+**In LangSmith itself** — with `LANGCHAIN_API_KEY=<your key>` in `.env` (smith.langchain.com → Settings → API keys):
+start the backend with `LANGCHAIN_TRACING_V2=true` in front of the command and no `LANGCHAIN_ENDPOINT`, and plan a
+trip, then change it. The log must say `sent to LangSmith`. In LangSmith, in the project `tripplanner-ai`:
+
+- one trace named `plan trip`, with the tree above; its token total is the sum of the trip's rows, to the token;
+- filter the project's runs on the metadata key `trip_id` with the trip's id as the value → that trip's traces
+  and no other's: `plan trip`, `classify refinement`, `refine trip: …` — **all in this one project**. (On the
+  first run against LangSmith the plan was in a project called `default` and only the changes were here; a trace
+  is now handed its project instead of being left to find one. `curl localhost:1984/traces` shows the same thing
+  locally: every trace's `"project"` is the one you set.)
+- LangSmith shows a cost for each model call from a price list of its own. It should agree with the row's
+  `cost_usd` to the last digit; where it does not, a price has moved — look it up on the provider's page and
+  correct it with `LLM_PRICES`.
+
+This was done on 2026-10-11; what it found is in `docs/phase26_build_log.md`, "In LangSmith itself".
 
 **The tests:** `pytest tests/unit/test_phase26_tracing.py tests/unit/test_phase26_costs.py -v`, and
 `RUN_INTEGRATION=1 pytest tests/integration/test_phase26_tracing_integration.py -v`.
+
+---
+
+## Step 25 — Verify Phase 27: production
+
+Two halves. **A** needs nothing but Docker and the keys already in `.env`: the image that is deployed,
+on a stack that behaves the way the hosted services do. **B** is the deploy itself, and needs your own
+accounts on Neon, Upstash, Sentry, Railway and Vercel — it has not been done from this repository.
+
+### A. The production-like stack (no accounts)
+
+Four terminals, all from the project root.
+
+```bash
+# Terminal 1 — a stand-in for Sentry: prints every error report it is sent
+python scripts/sentry_receiver.py
+# Receiving error reports on http://localhost:9010 — set SENTRY_DSN=http://standin@localhost:9010/1
+
+# Terminal 2 — the stack: builds the image, starts it against a TLS-only Postgres behind a pooler
+# and a TLS-only Redis, and waits until it is ready (first time: a few minutes)
+python scripts/prodlike.py up
+# wrote .env.prodlike (git-ignored): a signing secret and an operations token for this stack
+# …
+# ready: http://localhost:8200/ready answers 200.  Next: python scripts/prod_check.py --prodlike
+
+python scripts/prodlike.py logs
+# [PREFLIGHT] APP_ENV=production
+# Every setting a deployment needs is there.
+# INFO  [alembic.runtime.migration] Running upgrade  -> 001, Initial schema — …      ← an empty database, migrated
+# INFO:     Started server process [1]                                                 ← the server is process 1
+# INFO:     [STARTUP] production — database pooler:6432/tripplanner, Redis rediss://upstash-standin:6379
+# INFO:     [SENTRY] error reporting is on — environment 'production', release 'tripplanner-ai@0.27.0', …
+# INFO:     Uvicorn running on http://0.0.0.0:8200                                     ← the port it was told
+
+# Terminal 3 — the frontend, built for production with the backend's address compiled in
+cd src/frontend
+cp tsconfig.json /tmp/tsconfig.json.keep
+NEXT_DIST_DIR=.next-prodlike BACKEND_URL=http://localhost:8200 NEXT_PUBLIC_API_URL=http://localhost:8200 npx next build
+cp /tmp/tsconfig.json.keep tsconfig.json      # a build into another directory adds a line to it
+NEXT_DIST_DIR=.next-prodlike BACKEND_URL=http://localhost:8200 NEXT_PUBLIC_API_URL=http://localhost:8200 npx next start -p 3200
+```
+
+**The acceptance, asked of the running stack** (Terminal 4). It plans one real trip:
+
+```bash
+python scripts/prod_check.py --prodlike
+# 1. The backend answers                  ✓ GET /ready is 200 · ✓ Cache-Control: no-store · ✓ this version
+# 2. pgvector on the database             ✓ found, 0.8.6 · ✓ newest migration · ✓ HNSW index · ✓ encrypted
+# 3. Redis pub/sub over TCP               ✓ PING with TLS · ✓ a published message arrives at a subscriber
+# 4. A deliberate error reaches Sentry    ✓ 404 without the token · ✓ 500 with it · ✓ the report arrived
+#                                         ✓ nothing secret in anything the stand-in was sent
+# 5. The frontend answers                 ✓ page loads · ✓ /api/* reaches the backend · ✓ not cached
+# 6. A trip is planned end to end         ✓ … ✓ the event stream opens, straight from the backend
+#                                         ✓ CORS · ✓ POST /plan answers at once — 202 in 20 ms
+#                                         ✓ the plan arrives over the stream — 9.9 s; 40 events
+#                                         ✓ none of them comes near the 120 s the frontend's host allows
+# 29 passed, 0 failed, 0 skipped
+```
+
+Terminal 1 has printed the error that was raised on purpose —
+`✗ DeliberateError: deliberate test error check-…   production · tripplanner-ai@0.27.0 · GET /admin/sentry-test` —
+and `curl -s localhost:9010/raw` is every report exactly as it was sent: search it for any key in `.env`.
+
+**The same in a real browser** — which is what enforces the cross-origin rule on the event stream:
+
+```bash
+cd src/frontend && npx playwright test -c playwright.production.config.ts
+# planned on http://localhost:3200; its event stream came from http://localhost:8200; …
+#   ✓  a traveller plans a trip on the deployed site
+```
+
+**What a deploy does to a plan in flight.** Register once in the browser at http://localhost:3200, create a
+trip, and then, as you send the chat message that starts the plan:
+
+```bash
+docker stop -t 70 tripplanner-prodlike-backend-1     # what a platform does: SIGTERM, then a grace period
+python scripts/prodlike.py logs | grep SHUTDOWN
+# [SHUTDOWN] 1 planning run(s) in flight — waiting up to 40 s for them      ← the plan is finished first
+docker start tripplanner-prodlike-backend-1
+```
+
+Reload the page: the itinerary is there. Do it again with `docker kill tripplanner-prodlike-backend-1` (no
+warning, as a crash) and `docker start` it straight away: the log says
+`[STARTUP RECOVERY] 1 trip(s) are being planned by another instance — left alone, looked at again in 45 s`,
+then `1 run(s) died with the instance that had them`, and the page says the server was restarted and to start
+the plan again — instead of "planning" for ever.
+
+**What a hosted Redis does to connections:**
+
+```bash
+REDIS="docker exec tripplanner-prodlike-upstash-standin-1 redis-cli --tls --insecure --no-auth-warning -a standin_redis_password"
+$REDIS client kill type normal        # every ordinary connection closed, as when a hosted Redis redeploys
+curl -s localhost:8200/ready          # {"postgres":"ok","redis":"ok"} — the command was sent again on a new one
+$REDIS client kill type pubsub        # with a trip's page open: its event stream stays open, and still hears
+```
+
+```bash
+python scripts/prodlike.py down       # stops it and deletes everything it made
+```
+
+### B. The deploy itself (your accounts)
+
+**1. The values.** Put them in `.env.production` (git-ignored; never in chat, never committed), and have them
+judged before any platform sees them:
+
+```bash
+PYTHONPATH=src/backend python -m app.preflight --env-file .env.production --production
+# Cannot start in production:
+#   ✗ REDIS_URL is an https:// address — that is a REST API, and a REST API cannot subscribe: …
+# Starts, and will not fully work:
+#   ! OPS_TOKEN is empty: GET /admin/sentry-test is switched off, so error reporting cannot be tried out
+```
+
+| Variable | Where it comes from |
+|---|---|
+| `APP_ENV` | `production` (the image's default) |
+| `DATABASE_URL` | Neon → your project → Connection string → **Pooled connection**, copied as it is |
+| `DATABASE_URL_UNPOOLED` | optional — the same page with pooling off; only the migrations use it |
+| `REDIS_URL` | Upstash → your Redis database → the `rediss://…:6379` URL. Not the REST URL |
+| `JWT_SECRET` | `openssl rand -hex 32` — a new one, not your laptop's |
+| `OPS_TOKEN` | `openssl rand -hex 32` |
+| `SENTRY_DSN` | Sentry → new project, platform FastAPI → Client Keys (DSN) |
+| `CORS_ORIGINS` | the frontend's address, once you have it (step 4): `https://<your-app>.vercel.app` |
+| `GOOGLE_API_KEY`, `GEMINI_MODEL`, `GROQ_API_KEY`, `DUFFEL_ACCESS_TOKEN`, `LITEAPI_API_KEY`, `OPENTRIPMAP_API_KEY`, `OPENWEATHER_API_KEY` | as in your `.env` |
+| `LANGCHAIN_TRACING_V2`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT` | optional — as in your `.env`, to trace production runs |
+
+**2. The backend → Railway.** New Project → Deploy from GitHub repo → this repository. `railway.json` tells it
+the rest: build `src/backend/Dockerfile`, check `GET /ready`, give a stopping instance 70 seconds. Under
+Settings → Networking, **Generate Domain** — that address is needed before the first deploy can succeed.
+Under Variables, paste the table above (Raw Editor takes the file). Leave `PORT` alone: Railway sets it.
+
+**3. The frontend → Vercel.** Add New → Project → the same repository, **Root Directory `src/frontend`**.
+Environment variables, before the first build — both the backend's Railway address:
+`BACKEND_URL=https://<backend>` and `NEXT_PUBLIC_API_URL=https://<backend>`. (Without them the build stops and
+says so. They are compiled in: change them and you must redeploy.)
+
+**4. Close the loop.** Put the Vercel address in Railway's `CORS_ORIGINS` (no trailing slash). Railway
+redeploys. The order is forced: without a deployed origin there the backend refuses to start, because the
+browser would refuse the event stream.
+
+**5. Ask it.**
+
+```bash
+python scripts/prod_check.py --api https://<backend> --web https://<frontend> --env-file .env.production
+cd src/frontend && E2E_PRODUCTION_URL=https://<frontend> npx playwright test -c playwright.production.config.ts
+```
+
+Check 4 prints what to search Sentry for (`check-…`): the roadmap's "one deliberate test error appears in
+Sentry". With `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the env file it is read back for you.
+Each run leaves one account (`prod-check-…@example.com` / `browser-check-…@example.com`) and one trip behind.
+
+What to expect to be different from the stand-in, because no stand-in can know: `docs/phase27_build_log.md`,
+"The deploy itself".
+
+**The tests:** `pytest tests/unit/test_phase27_production.py tests/unit/test_phase27_error_reporting.py
+tests/unit/test_phase27_runs.py -v`, and
+`RUN_INTEGRATION=1 pytest tests/integration/test_phase27_production_integration.py -v`.
 
 ---
 
@@ -1128,4 +1300,5 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **23 (Similar & search)** | Sign in as another account and ask for the demo account's trip: `GET /trips/{demo trip id}/similar` → `404`; its own `/trips/search?q=beach` → no results, though twelve beach-to-temple trips are in the table — only the caller's own are ever searched. `GET /trips/search?q=x` → `422`. Empty `GOOGLE_API_KEY` and restart → `/trips/search?q=beach` → `503` "Search is not available right now", and the page says so and keeps the list; `/similar` still works (it compares stored vectors and embeds nothing). Plan a trip with the key empty → `/similar` answers `"status": "pending"` and `/admin/embedding-health` is `degraded`; put the key back and restart → it is embedded and found. `alembic downgrade 003 && alembic upgrade head` → the vectors are gone and every trip is queued again. `RUN_INTEGRATION=1 pytest tests/integration/test_phase23_similarity_integration.py -k hnsw -v` → passes: with the table scan and the sort forbidden, the query plan uses `ix_embeddings_summary_hnsw`, and the traveller's three trips are still found behind seventy nearer ones of someone else's. |
 | **24 (Caching & rate limits)** | Create a trip whose destination is a sentence ("a relaxed week somewhere in Kerala") → the log says `[CACHE WARM] skipped`, and nothing is searched: where it goes is only known once planning has read it. Create a trip without interests → flights, hotels and weather are warmed, attractions are not. Set `CACHE_WARMING_ENABLED=false` and restart → creating a trip logs no `[CACHE WARM]` line. Create a trip and plan it six minutes later → the flight search is a `[CACHE MISS]` (kept 5 minutes), the hotels still a hit (15). `docker exec tripplanner_redis redis-cli SET mcp:flights:oops '[]'`, then `python scripts/cache_ttls.py` → `flights … NEVER (no TTL) … WRONG`, exit status 1 (`DEL` it again). In `src/ai/mcp_server/outbound.py` delete the line `limiter(provider).acquire()` → `pytest tests/unit/test_phase24_rate_limits.py -k three_agents` fails: the provider answered 429 to the third agent. In `server.py` register the tools without `threaded(...)` → `-k same_moment` fails after three seconds: tools run one after another never meet at their providers. In `tools.py` add the budget back to the flight cache key → `pytest tests/unit/test_phase24_caching.py -k another_budget` fails: the provider is asked twice for the same flights. |
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
-| **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. |
+| **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. With a LangSmith key: plan a trip and change it → both traces are in the project `tripplanner-ai`, though one is started by LangChain and the other by this app — take the tracer out of `tracing.run_config` and the plan goes to a project called `default`, where the trip's filter no longer finds it, and nothing is logged. |
+| **27 (Production)** | `python scripts/prodlike.py up`, then: `docker stop -t 70 tripplanner-prodlike-backend-1` while a trip is being planned → the log says `[SHUTDOWN] 1 planning run(s) in flight — waiting…` and the plan is there after `docker start`; `docker kill` it instead → the trip fails 45 s after the restart, with the reason on the page — never "planning" for ever. Kill Redis's connections (`redis-cli … client kill type normal`, then `type pubsub` with a trip's page open) → the next request answers 200 and the page's event stream still hears. In `docker/prodlike/compose.yml` take `CORS_ORIGIN_REGEX` out → the backend does not start: `Cannot start in production: ✗ CORS_ORIGINS names no deployed frontend` (the list has only localhost in it). Set `CORS_ORIGINS` to another site instead (`https://elsewhere.example`) → it starts, `prod_check.py` says 28 passed, 1 failed — `✗ the backend lets a page on the frontend's origin read it (CORS)` — and the browser check stops at the event stream, which never connects, while the plan itself is still made. Set `REDIS_URL` to an `https://` address → `that is a REST API, and a REST API cannot subscribe`. Set `JWT_SECRET` to the repository's default → refused. `VERCEL=1 npx next build` in `src/frontend` with no `BACKEND_URL` → the build stops and names it. `pip install sqlmodel==0.0.48` in the venv → `test_what_is_deployed_is_what_was_tested` fails: the environment is no longer the pinned one (the same version the first image installed by itself, and on which registering an account answered 500). `curl localhost:8200/admin/sentry-test` without `X-Ops-Token` → 404; with it → 500, and `curl localhost:9010/raw` shows the report with the token header `[Filtered]`. `GET /ping` with the database down → 200 and the error in the body; `GET /ready` → 503. |

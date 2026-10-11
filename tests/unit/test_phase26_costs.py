@@ -9,6 +9,10 @@ The roadmap's acceptance for token cost tracking:
   (`test_ten_evaluator_retries_…`) — and does not, at the prices the models
   actually have, which is the more useful half of that test.
 
+The prices are the providers' own (src/ai/usage.py). A test that names a figure
+names it on purpose: a price that changes in the table should fail here, and be
+looked up again.
+
 The models are stand-ins that answer through LangChain (tests/fakes.py), so the
 callback that reads token usage is the one that runs on the real stack.
 """
@@ -93,8 +97,8 @@ def test_tokens_are_priced_at_their_models_list_price():
     builder_call = asked(LARGE, 2_400, 3_600)  # the reasoning a model does is in its output tokens, and billed so
 
     assert builder_call.token_count == 6_000
-    assert builder_call.cost_usd == cost(LARGE, 2_400, 3_600) == 0.00306  # $0.15 and $0.75 a million
-    assert asked(SMALL, 1_000_000, 1_000_000).cost_usd == 0.60
+    assert builder_call.cost_usd == cost(LARGE, 2_400, 3_600) == 0.00252  # $0.15 and $0.60 a million
+    assert asked(SMALL, 1_000_000, 1_000_000).cost_usd == 0.375
     assert asked(GEMINI, 300, 40).cost_usd == round((300 * 0.30 + 40 * 2.50) / 1e6, 8)
 
     two_models = asked(LARGE, 1_000, 1_000)
@@ -105,7 +109,7 @@ def test_tokens_are_priced_at_their_models_list_price():
 
 
 def test_a_dated_or_prefixed_name_is_priced_as_the_model_it_is():
-    assert price_of(LARGE) == (0.15, 0.75)
+    assert price_of(LARGE) == (0.15, 0.60)
     assert price_of("models/gemini-3.5-flash-lite") == (0.30, 2.50)  # as Google's API names it
     assert price_of("gemini-3.5-flash-lite-preview-09-2026") == (0.30, 2.50)  # a version of it
     assert price_of("gemini-3.5-flash") is None  # not the same model as its "-lite": no price on record
@@ -121,7 +125,7 @@ def test_a_price_is_added_or_corrected_in_the_settings_without_touching_the_code
         assert price_of("models/gemini-3.5-flash-002") == (0.50, 3.00)
         assert asked(LARGE, 1_000_000, 1_000_000).cost_usd == 3.0  # corrected
 
-    assert price_of("gemini-3.5-flash") is None and price_of(LARGE) == (0.15, 0.75)
+    assert price_of("gemini-3.5-flash") is None and price_of(LARGE) == (0.15, 0.60)
 
 
 def test_a_model_without_a_price_has_its_tokens_counted_and_its_cost_left_out(caplog):
@@ -255,12 +259,12 @@ async def test_a_logged_run_carries_its_tokens_and_their_cost():
     without = await log_agent_run(db, trip_id, "flight_agent", {}, {}, 20)
     asked_nobody = await log_agent_run(db, trip_id, "evaluator", {}, {}, 0, usage=Usage())
 
-    assert (with_model.token_count, with_model.cost_usd) == (6_000, 0.00306)
+    assert (with_model.token_count, with_model.cost_usd) == (6_000, 0.00252)
     assert (without.token_count, without.cost_usd) == (None, None)
     assert (asked_nobody.token_count, asked_nobody.cost_usd) == (None, None)
     # …and they are what the API hands out
     read = AgentRunRead.model_validate(with_model)
-    assert (read.token_count, read.cost_usd) == (6_000, 0.00306)
+    assert (read.token_count, read.cost_usd) == (6_000, 0.00252)
 
 
 @pytest.mark.parametrize("streamed", [False, True], ids=["in one piece", "streamed"])
@@ -342,14 +346,14 @@ async def test_ten_evaluator_retries_set_off_the_alert_once_at_a_price_that_make
     assert sum(row.cost_usd or 0 for row in db.rows) == pytest.approx(0.612)  # ten builds, in the end
 
 
-async def test_at_the_prices_the_models_have_ten_retries_cost_three_cents_and_set_off_nothing(caplog):
-    """What the roadmap's threshold means for this app: $0.10 is thirty-three itineraries, not ten."""
+async def test_at_the_prices_the_models_have_ten_retries_cost_two_and_a_half_cents_and_set_off_nothing(caplog):
+    """What the roadmap's threshold means for this app: $0.10 is forty itineraries, not ten."""
     db, trip_id = Rows(), uuid.uuid4()
 
     with caplog.at_level(logging.WARNING, logger="src.ai.utils.run_logger"):
         await retries(db, trip_id, 10)
         assert "[COST ALERT]" not in caplog.text
-        assert sum(row.cost_usd or 0 for row in db.rows) == pytest.approx(0.0306)
+        assert sum(row.cost_usd or 0 for row in db.rows) == pytest.approx(0.0252)
 
         # a limit set to what a runaway looks like here does catch them
         again = Rows()
@@ -366,7 +370,7 @@ async def test_a_limit_below_a_cent_is_said_as_it_was_set(caplog):
     ):
         await retries(Rows(), uuid.uuid4(), 1)
 
-    assert "the models have cost $0.0031 over 1 run — past the $0.002 one trip is expected" in caplog.text
+    assert "the models have cost $0.0025 over 1 run — past the $0.002 one trip is expected" in caplog.text
     assert [run_logger._dollars(limit) for limit in (0.10, 0.02, 1, 2.5)] == ["$0.10", "$0.02", "$1.00", "$2.50"]
 
 
@@ -417,5 +421,9 @@ async def test_the_cost_summary_needs_a_signed_in_user_and_a_real_date():
 
 def test_the_alert_limit_and_the_price_table_are_what_the_docs_say():
     assert settings.LLM_COST_ALERT_USD == 0.10  # the roadmap's
-    assert PRICES == {LARGE: (0.15, 0.75), SMALL: (0.10, 0.50), GEMINI: (0.30, 2.50)}
+    assert PRICES == {
+        LARGE: (0.15, 0.60),
+        SMALL: (0.075, 0.30),
+        GEMINI: (0.30, 2.50),
+    }  # the providers' pages, 2026-10-11
     assert run_logger.settings is settings

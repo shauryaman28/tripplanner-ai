@@ -1,13 +1,13 @@
 # Phase 26 — LangSmith Tracing & Token Costs
 
-**Status: ✅ Complete — on everything that can be checked without a LangSmith account. One step needs a key, and is yours: [it is at the end](#the-one-step-that-needs-a-key).**
+**Status: ✅ Complete.** Merged on what could be checked without a LangSmith account; **read back from LangSmith itself on 2026-10-11, after the merge** — which found one bug nothing local could have ([In LangSmith itself](#in-langsmith-itself)).
 **What the phase delivers (roadmap):** Every agent run produces a complete trace. Re-planning and evaluation branches visible. Filterable by `trip_id`.
 
-Decisions: `DECISIONS.md` #173–#188. Three things are worth knowing before reading on.
+Decisions: `DECISIONS.md` #173–#190. Three things are worth knowing before reading on.
 
-- **There is no LangSmith key in this build's `.env`.** The roadmap's acceptance is four sentences that end "in LangSmith". They are verified here on what a trace *is* — the records the tracing library uploads — read by the tests, and by a local receiver on a real run of the real backend. Nothing here was seen in LangSmith's own UI (#179).
-- **The dollar figures are list prices from price trackers, not from the providers' own pricing pages.** One table, three models, correctable in `.env` (#181).
-- **At those prices the roadmap's alert — $0.10 for one trip — is about thirty-four plans, not ten evaluator retries.** The roadmap's test passes at a frontier model's price; a second test says what it means at this app's (#184).
+- **The phase was built without a LangSmith key, and has been run with one since.** Everything up to "In LangSmith itself" was verified on what a trace *is* — the records the tracing library uploads — by the tests and by a local receiver on a real run. The first run against LangSmith then showed what none of that could: every plan's trace went to a project called `default`. It is fixed, and the roadmap's four acceptance points have been read back from LangSmith (#189).
+- **The dollar figures are the providers' own list prices, read from their pages on 2026-10-11** — and agreed with, to the last digit, by what LangSmith itself priced each call of a live plan at. The first table came from price trackers and had two models of three wrong (#190). Outputs quoted below from before that day show the first table's dollars.
+- **At those prices the roadmap's alert — $0.10 for one trip — is about forty plans, not ten evaluator retries.** The roadmap's test passes at a frontier model's price; a second test says what it means at this app's (#184).
 
 ## What was built
 
@@ -260,6 +260,68 @@ would have waited for it. A LangSmith that is down costs a deploy five seconds, 
 **The switch without a key** logs `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty.
 Set a key in .env, or switch tracing off.` and plans as ever.
 
+## In LangSmith itself
+
+Run on 2026-10-11 with a key, after the phase had been merged: the real backend, the real models,
+`LANGCHAIN_TRACING_V2=true` for that run only, and LangSmith's own API to read back what it holds (`list_runs`
+with its filter on metadata — what the filter box in its UI sends). The backend said `[TRACING] LangSmith tracing
+is on — project 'tripplanner-ai', sent to LangSmith`; the key was accepted; the tracing library logged no complaint.
+
+**What the first run showed.** One trip, planned and then changed. In LangSmith:
+
+| Project | Traces of the trip |
+|---|---|
+| `tripplanner-ai` | `classify refinement`, `refine trip: targeted_hotel` |
+| `default` | `plan trip` |
+
+One trip's traces in two projects — and the filter on `trip_id`, asked of `tripplanner-ai`, found the change and
+not the plan. Nothing had failed, and nothing was logged.
+
+**Why.** Two libraries start traces here, and each finds a project for one in places of its own. A change to a plan
+is a trace this project opens through the tracing library (`langsmith.trace`), which falls back on what
+`langsmith.configure` was told. A plan is one invocation of the graph, and its trace is started by LangChain, which
+looks in the context of the task it is running in, then in the process environment, and then says "default" — it
+never asks what `configure` was told. `configure` does set that context, but for its caller's task: the app's
+startup, which serves no request. And `LANGCHAIN_PROJECT` is in this app's `.env`, which is read into settings and
+never exported (#173).
+
+**Why nothing before had seen it.** Three reasons, any one of which would have been enough:
+
+- the tests switched tracing on *inside the test's own task*, so LangChain found the project in the context —
+  the one place a request never finds it;
+- the local receiver does not keep projects apart, and nobody had asked which one a trace named;
+- under `docker compose`, `.env` is exported to the process, and there it would have worked by accident.
+
+**The fix** (`src/ai/tracing.py`, #189). Nothing is left to be found. A plan's graph is handed a tracer made with
+the project and the client (`run_config`), and every trace and span this project opens names both. And
+`tracing.use` now tells the library in a context of its own, so that whoever switches tracing on — a test — sees
+exactly what a request sees. With that last change alone, and the bug still in, an existing test failed the way
+LangSmith had shown: `assert 'default' == 'tests'`. Three tests hold it since: tracing switched on from another
+thread, as the app's startup is another task; the library made to forget the project it was told; nothing left
+behind in the caller's context. The receiver's `/traces` now says which project each trace was sent to.
+
+**After the fix.** A trip planned and changed (`acb0faa7`), and one with a budget too tight for its flights
+(`9bc8881c`), read back from LangSmith:
+
+| Roadmap | What LangSmith returned |
+|---|---|
+| One planning run produces a complete trace | `plan trip`: 34 runs — 27 steps, 4 model calls, 3 tool calls — each with a start, an end, inputs and outputs; under the root, the graph's ten nodes in the order the run took them. The model calls are 432 + 854 + 4,315 + 816 = **6,417 tokens: the root's total in LangSmith, and the sum of the trip's rows in `agent_runs`** |
+| Filtering by `trip_id` returns only that trip's traces | `metadata trip_id = acb0faa7…` → 3 traces: `plan trip`, `classify refinement`, `refine trip: targeted_hotel`. `= 9bc8881c…` → 1. An id that is no trip's → 0. All of them in `tripplanner-ai` |
+| Tagged with `trip_id` and `user_id` | on every run of every trace — 34, 2 and 11 runs, none without either. The same filter on `user_id` returns that user's trips |
+| Re-planning branch appears as a distinct span | `re-plan 1: cheaper flights` (cap ₹9,750, 2 stops: 2 flights found) and `re-plan 2: cheaper flights` (cap ₹8,250: none), each under a `run_flight` of its own, then `escalate`. The search that found nothing is a failed span: `NO_RESULTS: No flights from DEL to JAI within ₹8,250.` |
+| Evaluator retries appear as numbered spans | `evaluator retry 1`, `evaluator retry 2`, `evaluator retry 3`, each under a `retry_dispatch`, each saying why the plan was sent back (`DATA_SCOPE_VIOLATION`) and holding the search it repeated; the branch taken after each check: retry, retry, retry, failed |
+
+The last row is not a live plan — the real model's plans pass the evaluator. It is the unit test's scenario, stub
+tools and a stand-in model that keeps naming a place nobody found, traced to LangSmith into a project of its own
+(`tripplanner-ai-checks`), so that no made-up trip sits among real ones.
+
+Everything LangSmith held for the two trips was read back and searched — 78 runs, 451,368 characters: none of the
+nine secret values in `.env`, no email address, no bearer token, and no `db`, `publish_fn` or `on_complete` among
+any run's inputs or outputs.
+
+**What was not done.** Nobody has looked at LangSmith's screens. The check was made through its API, whose filter
+is the one its UI sends; the traces are there to be opened ([how](#seeing-it-in-langsmith-yourself)).
+
 ## Dev B — the tokens and what they cost
 
 **The columns.** Migration 006 adds `agent_runs.token_count` and `agent_runs.cost_usd`, both nullable. A row for
@@ -275,14 +337,35 @@ and counted every token twice — once for the agent and once for the orchestrat
 
 | Model | Used for | Price |
 |---|---|---|
-| `openai/gpt-oss-120b` (Groq) | the itinerary, the local tips, the preferences | 0.15 / 0.75 |
-| `openai/gpt-oss-20b` (Groq) | the fallback | 0.10 / 0.50 |
+| `openai/gpt-oss-120b` (Groq) | the itinerary, the local tips, the preferences | 0.15 / 0.60 |
+| `openai/gpt-oss-20b` (Groq) | the fallback | 0.075 / 0.30 |
 | `gemini-3.5-flash-lite` | reading the request; classifying a change | 0.30 / 2.50 |
 | `gemini-3.5-flash` — the code's default `GEMINI_MODEL` | the same, when `.env` does not name another | **none on record**: tokens counted, cost left out |
 
-Taken on 2026-10-07 from price trackers that quote the providers. **The providers' own pages were not read** — the
-two page fetches that would have confirmed them were declined during the build. `LLM_PRICES` in `.env` corrects or
-adds a price without a code change.
+Read on 2026-10-11 from the providers' own pages: Groq's list of models and each model's page
+(console.groq.com/docs/models), and Google's price list (ai.google.dev/gemini-api/docs/pricing — the paid tier;
+output includes thinking tokens). `gemini-3.5-flash` is still served — the API's own model list names it — but
+Google's price list and its documented models no longer do, so it has no price here either. Cached input costs
+half at Groq and is not modelled. `LLM_PRICES` in `.env` corrects or adds a price without a code change.
+
+**A second opinion.** LangSmith prices every model call it is sent, from a list of its own. The seven calls of the
+trip planned and changed for the check above:
+
+| Model | Tokens in / out | LangSmith | This table | The first table |
+|---|---|---|---|---|
+| `gemini-3.5-flash-lite` | 350 / 82 | $0.000310 | $0.000310 | $0.000310 |
+| `openai/gpt-oss-120b` | 445 / 409 | $0.000312 | $0.000312 | $0.000374 |
+| `openai/gpt-oss-120b` | 2,129 / 2,186 | $0.001631 | $0.001631 | $0.001959 |
+| `openai/gpt-oss-120b` | 592 / 224 | $0.000223 | $0.000223 | $0.000257 |
+| `gemini-3.5-flash-lite` | 484 / 40 | $0.000245 | $0.000245 | $0.000245 |
+| `openai/gpt-oss-120b` | 2,416 / 2,721 | $0.001995 | $0.001995 | $0.002403 |
+| all seven | 12,078 | **$0.004717** | **$0.004716** | $0.005548 |
+
+**The first table was wrong.** It was put together on 2026-10-07 from price trackers, when the providers' pages
+were not read: `gpt-oss-120b`'s output at $0.75 (it is $0.60), `gpt-oss-20b` at $0.10 / $0.50 (it is $0.075 /
+$0.30). A plan's cost was recorded about 15% too high. The dollar figures in the outputs this log quotes from
+before the correction are the first table's, left as they were recorded — the tokens are right, and
+`HOW_TO_RUN.md` shows the same run at the corrected prices.
 
 **`GET /admin/cost-summary`** on the live database after the runs above:
 
@@ -312,14 +395,14 @@ The roadmap's test is "fires in a test simulating 10 evaluator retries". What te
 | | one build of the plan (2,400 in, 3,600 out) | ten retries | the alert at $0.10 |
 |---|---|---|---|
 | at a frontier model's price, $3 / $15 a million | $0.0612 | $0.612 | fires once — on the second |
-| at `gpt-oss-120b`'s price, $0.15 / $0.75 | $0.00306 | $0.0306 | does not fire |
+| at `gpt-oss-120b`'s price, $0.15 / $0.60 | $0.00252 | $0.0252 | does not fire |
 
-Both are tests. On the live run a whole plan cost $0.0029, so $0.10 is some thirty-four plans; and the evaluator's
+Both are tests. On the live run a whole plan cost a quarter of a cent ($0.0025), so $0.10 is some forty plans; and the evaluator's
 loop stops at three retries a turn. The default is the roadmap's; `LLM_COST_ALERT_USD=0.02` is what would catch a
 runaway on these models, and the second test shows it does (#184).
 
 Live, with the real backend started with `LLM_COST_ALERT_USD=0.002` and one trip planned (Udaipur, 6,536 tokens,
-$0.002993), the log had the warning once — on the builder's row, the third with a cost, which took the trip from
+$0.002993 by the first table), the log had the warning once — on the builder's row, the third with a cost, which took the trip from
 $0.000684 to $0.002993 — and not again when the preference extractor's row was written after it:
 
 ```
@@ -362,16 +445,27 @@ $0.000684 to $0.002993 — and not again when the preference extractor's row was
     change nothing: a handler that is not run inline is run in a thread with a copy of the caller's context, and
     finds the same meter. The flag only saves that trip through a thread pool, and the comment now says so.
 
+13. **Every plan's trace went to the wrong LangSmith project** — `default`, while every change to a plan went to
+    the right one. Found on the first run with a key, after the merge; no test and no local run could have seen
+    it, and the section "In LangSmith itself" says why (#189).
+14. **Two prices of three were wrong.** The first table, from price trackers, had `gpt-oss-120b`'s output a quarter
+    too high and `gpt-oss-20b` a third too high. Read from the providers' pages since, and confirmed by LangSmith's
+    own figure for each live call (#190).
+15. **Switching tracing off left a mark on whoever did it.** When the settings say off, `configure()` told the
+    library so in its caller's own context — and in a test run that context is inherited by every test after it.
+    Nobody noticed, because switching tracing on wrote over it; once switching on stopped touching the caller's
+    context (the fix above), a test three tests later found tracing off. Both now go the same way.
+
 ## Tests
 
-**897 unit + contract, 51 integration, 60 browser — all passing.** New in this phase: 43 unit, 8 integration.
+**900 unit + contract, 51 integration, 60 browser — all passing.** New in this phase: 46 unit, 8 integration.
 Nothing in them reaches a network: the models are stand-ins that answer through LangChain with token counts
 (so the callback that counts them is the one that runs on the real stack), and LangSmith is a stand-in that keeps
 what the real client sends it.
 
 | File | Tests | What they hold |
 |---|---|---|
-| `tests/unit/test_phase26_tracing.py` | 21 | **The trace**: one per run with a span for every step; a model call with its tokens, and every step above it showing the sum; trip and user on every span; filtering by trip; the re-plan branch; numbered evaluator retries; a refinement, a retried search and "add a day" as traces with the graph's steps, each step with what went in and came out; a tool call as a span — and not a trace when it belongs to no run; a failed tool as a failed span. **What leaves the machine**: no live objects and the key only in a header — in JSON batches, in multipart, and in the compressed multipart a current LangSmith is sent. **On and off**: off by default, off without a key, off in the test stacks, not switchable from a shell's environment; off sends nothing, also to a client that was in use a moment ago; the app configures it at startup and flushes at shutdown, also when something else fails to close; a service that is down never fails a plan; shutdown waits five seconds, not for ever. **The reader**: records merged and hung under their parents; the stand-in answers `/info` in full |
+| `tests/unit/test_phase26_tracing.py` | 24 | **The trace**: one per run with a span for every step; a model call with its tokens, and every step above it showing the sum; trip and user on every span; filtering by trip; the re-plan branch; numbered evaluator retries; a refinement, a retried search and "add a day" as traces with the graph's steps, each step with what went in and came out; a tool call as a span — and not a trace when it belongs to no run; a failed tool as a failed span. **What leaves the machine**: no live objects and the key only in a header — in JSON batches, in multipart, and in the compressed multipart a current LangSmith is sent. **On and off**: off by default, off without a key, off in the test stacks, not switchable from a shell's environment; off sends nothing, also to a client that was in use a moment ago; the app configures it at startup and flushes at shutdown, also when something else fails to close; a service that is down never fails a plan; shutdown waits five seconds, not for ever. **One project**: every trace of a trip in the configured project though tracing was switched on from another thread, as the app's startup does it; each kind of trace handed its project outright, the library made to forget it; nothing left in the caller's context by switching on or off. **The reader**: records merged and hung under their parents; the stand-in answers `/info` in full |
 | `tests/unit/test_phase26_costs.py` | 21 | **Prices**: per model, input and output apart; a dated or prefixed name priced as the longest model it starts with; `LLM_PRICES` adds and corrects; a model without a price counted and not costed, warned about once; no model asked is `None`, not 0. **The meter**: the innermost one only; side-by-side work counted apart; nothing credited to a meter that has closed; a streamed reply once; a silent provider and a failed call claim nothing. **The rows**: tokens and cost on a logged run; the builder's row to the token; each agent its own, a search none. **The alert**: ten retries at a frontier price fire it once; at the real prices they cost three cents and do not; a limit under a cent is printed as set; one trip only, off at 0, never fails a run. **The route**: 401 without a token, 422 for a date that is not one |
 | `tests/unit/test_version.py` | 1 | the app's version is the phase the README says |
 | `tests/integration/test_phase26_tracing_integration.py` | 8 | Through the HTTP API on Postgres and Redis: **a plan's rows and its trace agree to the token**, and the timeline and `GET /admin/cost-summary` show the same figures (by agent dearest first, by day, `since`); a refinement's classifier on a row of its own, and three traces under one trip while another trip's stay apart; a refinement goes ahead when that row cannot be written; a way out of a budget conflict is a trace named for it; ten retries against Postgres' own `SUM`, with two other trips in the table; tokens that could not be priced; migration 006 down and up; the local receiver over real sockets, with `/traces?trip_id=` and `/records` |
@@ -381,7 +475,7 @@ Two existing integration tests were updated: a refinement's rows now begin with 
 The frontend gained two optional fields on a type and no page: `tsc`, the linter and all 60 browser tests were
 rerun and pass, and there is nothing new for a browser test to look at.
 
-What was run on the final code, 2026-10-11:
+What was run on the code as merged, 2026-10-11:
 
 | Check | Result |
 |---|---|
@@ -394,6 +488,19 @@ What was run on the final code, 2026-10-11:
 | `docker compose build backend` | builds; inside the image tracing switches on with the switch and a key, and stays off without the key |
 | `alembic check` | no drift between the models and the migrations; the dev database is at 006 |
 | the live run above | the real backend, real models, the local receiver |
+
+And after the merge, on the fix to the project a trace goes to and the corrected prices (branch
+`phase-26-langsmith-verified`, 2026-10-11):
+
+| Check | Result |
+|---|---|
+| `ruff check .` and `ruff format --check` | clean |
+| `pytest tests/unit tests/contract` | 900 passed |
+| `RUN_INTEGRATION=1 pytest tests/integration` | 51 passed |
+| `npx playwright test` | 60 passed — the stub backend goes through the changed startup |
+| CI's own steps in a clean `python:3.11-slim` container, with no `.env` | lint clean, 900 passed — on `langsmith` 0.14.7, `langchain-core` 1.6.9, `langgraph` 1.2.14 |
+| the real backend against LangSmith itself | a plan, a change and a budget too tight, read back through LangSmith's API ("In LangSmith itself") |
+| ten more breaks on a copy | all caught (below) |
 
 ### Break it on purpose
 
@@ -449,6 +556,22 @@ caught, then 81 of 81 once the last two had their tests.
 | A span's tokens leave out the spans inside it / filtering by trip returns every trace / the stand-in's `/info` lacks a key the library reads | the reader's tests (the last one slowly: the library's sending thread has died, and the test's own bounded flush reports that nothing was sent) |
 | The receiver ignores `?trip_id=` / `/records` returns nothing | integration: the receiver over real sockets |
 
+**Ten more, after the merge** — on a copy again, with a database of its own. All ten are caught:
+
+| Break | Caught by |
+|---|---|
+| A plan's tracer is left for LangChain to make / is not told the project / the project given is not the project used | a span for every step — which now sees what a request sees, and so finds the plan in `default` |
+| A change's trace is not told the project / a span on its own is not | each kind of trace is handed its project, the library made to forget it |
+| The library is told in the caller's own context | tracing switched on from another thread: the test's own check that its context holds nothing |
+| Switching off tells the library in the caller's own context | nothing is left behind in the caller's context |
+| `gpt-oss-120b`'s output at the first table's price / `gpt-oss-20b` at the first table's | the price tests, which name the figures |
+| The receiver does not say which project | integration: the receiver over real sockets |
+
+Handing the tracer and the traces the *client* as well as the project is the same precaution, and has no break
+of its own here: without it both libraries fall back on the client `configure` was told, which is the same one,
+and the only way to tell the difference would be to let a library build a client of its own — one that calls
+LangSmith.
+
 One break was planned and not made: `run_inline` on the recorder. Reading LangChain first showed it would change
 nothing (#12 under "Found and fixed") — the comment that claimed otherwise was the defect.
 
@@ -460,27 +583,34 @@ nothing (#12 under "Found and fixed") — the comment that claimed otherwise was
 | Every LangGraph node execution is a span: input, output, duration, token count | ✅ on the uploaded records, in tests and on a live run |
 | Every trace tagged with `trip_id` and `user_id` as metadata | ✅ on every span of every trace — plan, re-plan, refinement, retried search, classifier |
 | Re-planning branches appear as distinct spans | ✅ "re-plan N: cheaper flights" — in a test, and live with a real second search |
-| EvaluatorAgent retry loops appear as numbered spans | ✅ "evaluator retry N" — in a test. Not seen live: the real model's plans passed the evaluator on every run |
-| **Acceptance A:** a complete trace **in LangSmith**; re-plan span; numbered retries; filtering by `trip_id` | ⚠️ **all four on what is uploaded** (both encodings, and against a real HTTP server on a real run) — **not seen in LangSmith's UI**: no key in this build. The step is below |
+| EvaluatorAgent retry loops appear as numbered spans | ✅ "evaluator retry N" — in a test, and in LangSmith with the loop forced (stub tools, a stand-in model). Never on a live plan: the real model's plans pass the evaluator |
+| **Acceptance A:** a complete trace **in LangSmith**; re-plan span; numbered retries; filtering by `trip_id` | ✅ **all four read back from LangSmith** through its API on 2026-10-11, after the fix to the project every trace goes to. Not looked at in its UI |
 | `agent_runs.token_count`, `cost_usd` (Alembic migration) | ✅ migration 006, up and down |
-| Token usage extracted from a LangChain callback and written to the DB | ✅ one recorder; each row its own agent's tokens; live rows and live trace agree at 6,419 |
+| Token usage extracted from a LangChain callback and written to the DB | ✅ one recorder; each row its own agent's tokens; the rows, the local trace and LangSmith's own total agree to the token on every live plan (6,419; 6,417) |
 | `GET /admin/cost-summary?since=` — tokens and USD by agent and by date | ✅ checked by hand against the live rows (12,499 tokens) |
 | Single trip over $0.10 → log warning | ✅ once, on the row that crosses it; seen live with the limit lowered |
-| **Acceptance B:** `token_count` populated after each run; the summary correct; the alert fires in a test simulating 10 evaluator retries | ✅ — the last at a frontier model's price; at this app's prices ten retries cost three cents, and a second test says so (#184) |
+| **Acceptance B:** `token_count` populated after each run; the summary correct; the alert fires in a test simulating 10 evaluator retries | ✅ — the last at a frontier model's price; at this app's prices ten retries cost two and a half cents, and a second test says so (#184) |
 
 ## Known limits
 
-- **Not seen in LangSmith.** No key. What is uploaded was checked on all three of the library's roads, and against
-  a real HTTP server; that LangSmith accepts the key, draws this tree and filters on `trip_id` in its UI was not.
-  See the last section.
+- **Read back from LangSmith's API, not seen on its screens.** Its filter on metadata is what the UI sends, so there
+  is little room between the two — but nobody has opened the trace in a browser.
+- **A model asked outside any trace would be a trace of its own, in `default`.** Every model call the app makes
+  today is inside a plan's run or a trace this project opens, and a test holds that nothing is traced on its own.
+  A new route that calls a model directly would need `tracing.root` around it — LangChain cannot be told a
+  project process-wide except through the environment.
 - **A LangSmith that is down adds five seconds to every shutdown**, and its traces are lost — nothing queues them
   to disk for later.
 - **The tracing library writes a shortened key into its own error line.** When it cannot reach the server its log
   message ends `API Key: lsv2_…` — the key's first five characters, asterisks, and its last two. That is the
   library's doing, not this project's; this project logs the key nowhere. Worth knowing where logs are shipped on.
-- **The prices were not read from the providers.** They are right as far as two price trackers are; `LLM_PRICES`
-  overrides them. `gemini-3.5-flash` has no price at all, so a deployment on the code's default Gemini model has its
-  intent-parsing and classifier tokens counted and their cost missing — the summary's `unpriced_tokens` says how many.
+- **Prices move, and the table does not follow them.** It is the providers' pages as of 2026-10-11. `gemini-3.5-flash`
+  has no price at all, so a deployment on the code's default Gemini model has its intent-parsing and classifier
+  tokens counted and their cost missing — the summary's `unpriced_tokens` says how many.
+- **A corrected price does not reach rows already written.** A row stores its tokens in one number and its dollars
+  in another, not input and output apart, so its cost cannot be worked out again in general. The dev database's
+  rows from before 2026-10-11 keep the first table's dollars (for one model on a row the split can be solved from
+  the two numbers — that is how `HOW_TO_RUN.md`'s sample was corrected — but nothing does it for a database).
 - **`cost_usd` is a list price, not a bill.** On the free tiers this project runs on, nothing is charged. Cached-input
   discounts and batch prices are not modelled.
 - **Embeddings are not counted or traced.** An itinerary is embedded by a direct HTTPS call to Gemini's
@@ -499,17 +629,22 @@ nothing (#12 under "Found and fixed") — the comment that claimed otherwise was
 - **The receiver is a development tool**: it keeps what it is sent in memory, checks no key, and listens on
   127.0.0.1 only.
 
-## The one step that needs a key
+## Seeing it in LangSmith yourself
 
-1. Create a key at smith.langchain.com (Settings → API keys).
-2. In `.env`: `LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY=<the key>`. (A workspace in LangSmith's EU
-   region also needs `LANGCHAIN_ENDPOINT` set to the EU address LangSmith gives for it.)
-3. Start the backend — the log must say `[TRACING] LangSmith tracing is on — project 'tripplanner-ai', sent to LangSmith`.
-4. Plan a trip. In LangSmith, project **tripplanner-ai**, there is one trace named "plan trip". Its tree should
-   match the one above.
-5. Filter the project's runs on the metadata key `trip_id` with the trip's id as its value. Only that trip's
-   traces should remain.
-6. Plan one with a budget only just too small for its flights (the Jaipur trip above at ₹15,000) to see
+The key is in `.env`; `LANGCHAIN_TRACING_V2` there is `false`, so nothing is uploaded unless a run asks for it.
+
+1. Start the backend with tracing on — for one run, `LANGCHAIN_TRACING_V2=true` in front of the `uvicorn` command;
+   for every run, the same line in `.env`. The log must say
+   `[TRACING] LangSmith tracing is on — project 'tripplanner-ai', sent to LangSmith`. (A workspace in LangSmith's
+   EU region also needs `LANGCHAIN_ENDPOINT` set to the EU address LangSmith gives for it.)
+2. Plan a trip. In LangSmith, project **tripplanner-ai**: one trace named "plan trip", its tree the one above.
+3. Filter the project's runs on the metadata key `trip_id` with the trip's id as its value: only that trip's
+   traces remain — the plan, and every change made to it.
+4. Plan one with a budget only just too small for its flights (the Jaipur trip above at ₹15,000) to see
    "re-plan 1: cheaper flights".
 
-If step 3 says "on" and nothing appears, the backend log has the library's own error (a refused key is a 401 there).
+What the check of 2026-10-11 left in the account: in `tripplanner-ai`, the traces of three trips of the demo
+user; in `default`, two "plan trip" traces from before the fix — the evidence of the bug, and nothing else;
+and a project `tripplanner-ai-checks` with one forced-retry trace of stub data. The last two can be deleted.
+
+If step 1 says "on" and nothing appears, the backend log has the library's own error (a refused key is a 401 there).
