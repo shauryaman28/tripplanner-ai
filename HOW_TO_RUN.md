@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–27
+# How to Run & Verify — Phases 1–28
 
 ## What changed vs the original codebase?
 
@@ -26,6 +26,7 @@
 | 25 | `tools.py` (every attraction says which interest it was found under; lesser-known places fill up a thin interest; "spa" searched as nothing; `estimate_budget` per person), `models.py`, `activities_agent.py` (a group searched member by member), `builder.py` (the group in the prompt, the plan repaired, the shares), `evaluator.py` (`unbalanced_group`), `orchestrator.py`, `warming.py`, `pricing.py`, `itinerary.py`, `models/trip.py` + `schemas/trip.py` + `trips.py` (`group_members`), `pdf/plan.py` + `document.py` + `formatting.py`, `main.py`, the new-trip form, `CostSummary.tsx`, `DayCard.tsx`, `ItineraryView.tsx`, `lib/types.ts` + `api.ts` + `format.ts`, `tests/fakes.py`, `tests/e2e/stub_backend.py` — see `docs/phase25_build_log.md` | `src/ai/group.py`, `migrations/versions/005_trip_group_members.py`, `GroupPanel.tsx`, `lib/group.ts`, `prompts/itinerary_builder_v9.md`, `scripts/group_experiment.py`, `tests/unit/test_phase25_group.py`, `tests/integration/test_phase25_group_integration.py`, `src/frontend/e2e/group.spec.ts` |
 | 26 | `run_logger.py` (`timed_run` meters what the models are asked; a row carries `token_count` and `cost_usd`; the over-cost alert), `orchestrator.py` (a run tagged with its trip and user; "re-plan N" and "evaluator retry N" spans; a change to a plan as a trace), `mcp_client/client.py` (a span per tool call), the three search agents, `builder.py`, `destination_intelligence.py`, `preference_extractor.py`, `trips.py` (the refinement classifier timed, traced and logged), `admin.py` (`GET /admin/cost-summary`), `config.py`, `main.py`, `models/agent_run.py`, `schemas/agent_run.py`, `.env.example`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py` — see `docs/phase26_build_log.md` | `src/ai/tracing.py`, `src/ai/usage.py`, `src/ai/trace_tree.py`, `scripts/trace_receiver.py`, `schemas/cost.py`, migration 006, `tests/unit/test_phase26_tracing.py`, `test_phase26_costs.py`, `test_version.py`, `tests/integration/test_phase26_tracing_integration.py` |
 | 27 | `Dockerfile` (listens on `$PORT`, `exec`s the server, pinned installs, not root), `main.py` (the pre-start check, Sentry, recovery that leaves another instance's runs alone, waiting for plans at shutdown, `no-store`, a JSON 500), `trips.py` (a run's note kept up; a run cut short tidied up; the event stream's wait), `session.py` + `migrations/env.py` (a hosted Postgres's URL), `db/redis.py` + `mcp_server/cache.py` (retries, health checks, no password in a log), `health.py` (`GET /ready`), `admin.py` (`GET /admin/sentry-test`), `config.py`, `conversation.py`, `requirements.txt` (`sentry-sdk`), `ci.yml`, `next.config.mjs`, `lib/sse.ts`, `.env.example`, `.gitignore`, `tests/conftest.py` — see `docs/phase27_build_log.md` | `app/preflight.py`, `app/db/url.py`, `app/core/error_reporting.py`, `constraints.txt`, `railway.json`, `docker/prodlike/` (the production-like stack), `scripts/prodlike.py`, `scripts/prod_check.py`, `scripts/sentry_receiver.py`, `scripts/freeze_constraints.py`, `playwright.production.config.ts`, `e2e-production/smoke.spec.ts`, three unit test files and one integration test file |
+| 28 | `.github/workflows/ci.yml` (two jobs, pushes only, the migrations up / checked / down / up, a deploy on `main` after both), `health.py` (`GET /version`), `config.py` (`GIT_COMMIT_SHA`, `settings.commit`), `error_reporting.py` (a report's release from the same commit), `next.config.mjs` (the build told its commit), `docker/prodlike/compose.yml`, `.env.example` — see `docs/phase28_build_log.md` | `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`, `.github/nightly-issue.md`, `scripts/wait_for_release.py`, `scripts/nightly_summary.py`, `scripts/nightly_post.sh`, `src/frontend/src/app/version/route.ts`, `tests/ci/fake_gh.sh`, `tests/unit/test_phase28_pipeline.py` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -310,7 +311,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–27 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–28 check
 
 Run from the **project root**:
 
@@ -318,7 +319,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **980 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **1010 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -1254,6 +1255,146 @@ tests/unit/test_phase27_runs.py -v`, and
 
 ---
 
+## Step 26 — Verify Phase 28: the pipeline
+
+Three workflows in `.github/workflows/`. What each does can be run on your own machine, command for command;
+what only GitHub can show — and the three things only you can set — are at the end.
+
+### A. What CI runs, by hand
+
+```bash
+# the backend job — lint and tests (about 25 seconds on a laptop); its migrations step is below
+ruff check . && ruff format --check .
+pytest tests/unit/ tests/contract/ -v          # 1010 passed
+
+# the frontend job
+cd src/frontend && npm ci && npx tsc --noEmit && npm run lint && npm run build
+```
+
+The job's third step takes every table down and puts it up again — **never run it on a database you want to
+keep**. CI does it on a database of its own; so do you, on a scratch one:
+
+```bash
+docker exec tripplanner_postgres createdb -U tripplanner tripplanner_scratch
+DATABASE_URL=postgresql://tripplanner:<your password>@localhost:5432/tripplanner_scratch \
+  sh -c 'alembic upgrade head && alembic check && alembic downgrade base && alembic upgrade head'
+# …
+# No new upgrade operations detected.
+docker exec tripplanner_postgres dropdb -U tripplanner tripplanner_scratch
+```
+
+Now break it. Add a column to a model and no migration — in `src/backend/app/models/trip.py`, inside `Trip`:
+`a_column_nobody_migrated: str | None = None` — and run `alembic check` again:
+
+```
+FAILED: New upgrade operations detected: [('add_column', None, 'trips', Column('a_column_nobody_migrated', …))]
+```
+
+That is the line that fails the build. Take the column out again.
+
+### B. The same, as GitHub runs it — on your machine
+
+[`act`](https://github.com/nektos/act) runs the workflow files themselves, in containers, with the service
+containers they ask for. It needs Docker, and ports 5432 and 6379 free — stop the development database first.
+
+```bash
+brew install act
+docker compose stop postgres redis
+touch /tmp/empty.env    # see the note below: without this, act hands your .env to every job
+
+act push -W .github/workflows/ci.yml -j backend  --env-file /tmp/empty.env --secret-file /tmp/empty.env --var-file /tmp/empty.env
+act push -W .github/workflows/ci.yml -j frontend --env-file /tmp/empty.env --secret-file /tmp/empty.env --var-file /tmp/empty.env
+act workflow_dispatch -W .github/workflows/deploy.yml --env-file /tmp/empty.env --secret-file /tmp/empty.env --var-file /tmp/empty.env
+# [Deploy/backend → Railway]   ::notice title=Nothing was deployed::The secret RAILWAY_TOKEN or the variable RAILWAY_SERVICE is not set …
+
+docker compose start postgres redis
+```
+
+**`act` reads the repository's `.env` and gives every variable in it to every job** — your real keys, and your
+laptop's `DATABASE_URL` in place of the job's own. GitHub does no such thing. The three `--…-file` options
+pointing at an empty file switch it off; a run without them tells you nothing about what GitHub will do.
+
+The first run downloads a runner image of about 1.5 GB. If a run stops with "port is already allocated", a
+service container from the run before is still there: `docker ps -aq --filter name=act- | xargs docker rm -f`.
+
+### C. The scripts behind the deploy and the night
+
+```bash
+# the wait for a deploy — against the production-like stack of Step 25
+PRODLIKE_COMMIT=$(git rev-parse HEAD) python scripts/prodlike.py up
+curl -s localhost:8200/version                 # {"version":"0.28.0","commit":"45c070e9…"}
+python scripts/wait_for_release.py --commit $(git rev-parse HEAD) --api http://localhost:8200
+#   ✓ the backend is running 45c070e  (after 0 s)
+#   **45c070e is live** — the backend after 0 s.
+
+python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12 ; echo "exit $?"
+#   error: the backend is not running 0000000 after 12 s — last answer: commit 45c070e92143
+#   exit 1
+python scripts/prodlike.py down
+
+# the night's comment — from real reports
+RUN_INTEGRATION=1 pytest tests/integration/ -q --junitxml=/tmp/reports/integration.xml
+python scripts/nightly_summary.py /tmp/reports --require integration --absent evals="no eval suite yet (Phase 33)"
+#   ### ✅ Nightly, 2026-10-11 — 60 passed
+#   | integration | 60 | 0 | 0 | 31 s |
+#   | evals | — | — | — | not run: no eval suite yet (Phase 33) |
+
+# …and from none: a night whose tests never started is not a night with no failures
+python scripts/nightly_summary.py /tmp/an-empty-directory --require integration ; echo "exit $?"
+#   ### ❌ Nightly, 2026-10-11 — 1 failed
+#   | integration | — | — | — | DID NOT RUN — no report was written |
+#   exit 1
+```
+
+### D. On GitHub — and what is yours to set
+
+**Every push** shows two checks, `backend` and `frontend`, on the commit and on its pull request (Actions tab
+→ CI). To see one fail: push a branch with `assert 1 + 1 == 3` in a new test; the commit gets a red cross
+and the run's log ends `1 failed, 1010 passed`. Delete the branch afterwards.
+
+**1. Make a red cross block the merge.** Settings → Branches → Add branch ruleset (or "Add classic branch
+protection rule") for `main` → *Require status checks to pass* → add `backend` and `frontend` → also
+*Require branches to be up to date*. **On a private repository this needs GitHub Pro**; on the free plan the
+option is shown and not enforced. Until then the checks inform and do not block — except the deploy, which
+never runs for a commit that failed.
+
+**2. Make a merge deploy.** After Step 25 B (the Railway service and the Vercel project exist):
+
+| Where | Name | Value |
+|---|---|---|
+| Settings → Secrets and variables → Actions → **Secrets** | `RAILWAY_TOKEN` | Railway → your project → Settings → Tokens → a **project token** for the production environment |
+| … → **Variables** | `RAILWAY_SERVICE` | the backend service's name in Railway |
+| … → **Variables** | `PRODUCTION_API_URL` | `https://<backend>` |
+| … → **Variables** | `PRODUCTION_WEB_URL` | `https://<your-app>.vercel.app` |
+
+In Railway, switch **off** the service's own deploy-on-push (the service → Settings → **Disable** automatic
+deployments): with both on, every merge deploys twice, and one of the two without waiting for the tests. Do
+not use Railway's "Wait for CI" together with this pipeline either — it waits for the run to finish, and the
+run's last job is waiting for Railway. In Vercel nothing is needed beyond Step 25 B: its GitHub integration
+builds every push to `main` by itself. (The site learns its commit from Vercel's `VERCEL_GIT_COMMIT_SHA`:
+Settings → Environment Variables → "Automatically expose System Environment Variables" must be on, which is
+the default. With it off the site's `/version` answers `null` and the wait never ends.)
+
+Then merge something. The run's page (Actions → CI → the `deploy` job) ends with
+"**abc1234 is live** — … From the merge to live: **N s**". More than 300 is a warning on the run; not live
+after ten minutes fails it.
+
+**3. The night.** Nothing to set. At 02:00 UTC — 07:30 in India — the integration tests run, and a comment
+appears on the issue "Nightly test results" (label `nightly`; the first night creates both). To have one now:
+Actions → Nightly → Run workflow. Unsubscribe from the issue if a notification a day is too many; a bad
+night also fails its run, and GitHub mails whoever last changed the workflow's schedule. GitHub starts
+scheduled runs late when it is busy — the top of an hour is its busiest — and says it may drop one
+altogether: a date missing from the issue is a night that never ran, not a night that passed.
+
+**The cost.** A private repository on the free plan has 2,000 Actions minutes a month, and every job is
+rounded up to a whole minute. From the local runs a push should cost 4–5 and a night 2–3 (up to 90 a month),
+which leaves room for some 380 pushes a month — an estimate until GitHub has run them: Settings → Billing →
+Usage has the figure.
+
+**The tests:** `pytest tests/unit/test_phase28_pipeline.py -v` (30).
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -1302,3 +1443,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
 | **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. With a LangSmith key: plan a trip and change it → both traces are in the project `tripplanner-ai`, though one is started by LangChain and the other by this app — take the tracer out of `tracing.run_config` and the plan goes to a project called `default`, where the trip's filter no longer finds it, and nothing is logged. |
 | **27 (Production)** | `python scripts/prodlike.py up`, then: `docker stop -t 70 tripplanner-prodlike-backend-1` while a trip is being planned → the log says `[SHUTDOWN] 1 planning run(s) in flight — waiting…` and the plan is there after `docker start`; `docker kill` it instead → the trip fails 45 s after the restart, with the reason on the page — never "planning" for ever. Kill Redis's connections (`redis-cli … client kill type normal`, then `type pubsub` with a trip's page open) → the next request answers 200 and the page's event stream still hears. In `docker/prodlike/compose.yml` take `CORS_ORIGIN_REGEX` out → the backend does not start: `Cannot start in production: ✗ CORS_ORIGINS names no deployed frontend` (the list has only localhost in it). Set `CORS_ORIGINS` to another site instead (`https://elsewhere.example`) → it starts, `prod_check.py` says 28 passed, 1 failed — `✗ the backend lets a page on the frontend's origin read it (CORS)` — and the browser check stops at the event stream, which never connects, while the plan itself is still made. Set `REDIS_URL` to an `https://` address → `that is a REST API, and a REST API cannot subscribe`. Set `JWT_SECRET` to the repository's default → refused. `VERCEL=1 npx next build` in `src/frontend` with no `BACKEND_URL` → the build stops and names it. `pip install sqlmodel==0.0.48` in the venv → `test_what_is_deployed_is_what_was_tested` fails: the environment is no longer the pinned one (the same version the first image installed by itself, and on which registering an account answered 500). `curl localhost:8200/admin/sentry-test` without `X-Ops-Token` → 404; with it → 500, and `curl localhost:9010/raw` shows the report with the token header `[Filtered]`. `GET /ping` with the database down → 200 and the error in the body; `GET /ready` → 503. |
+| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1010 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |

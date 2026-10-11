@@ -31,6 +31,12 @@ const nextConfig = {
   // The Playwright stack builds into its own directory (see playwright.config.ts).
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
 
+  // Which commit this build is of — compiled in, and answered at /version (Phase 28). Vercel says it when
+  // it builds from GitHub; anywhere else GIT_COMMIT_SHA can; a laptop's build has none.
+  env: {
+    NEXT_PUBLIC_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GIT_COMMIT_SHA ?? "",
+  },
+
   // Proxy /api/* → FastAPI backend, so the browser only ever talks to this origin.
   // SSE is the exception: EventSource connects straight to NEXT_PUBLIC_API_URL.
   //

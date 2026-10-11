@@ -1,0 +1,129 @@
+# Every night (Phase 28): the tests that need real services, and one comment that says how it went.
+#
+#   02:00 UTC   the integration tests, on a real Postgres (with pgvector) and a real Redis;
+#               the eval suite, once there is one (Phase 33);
+#               the result, as a comment on the issue labelled "nightly" — made the first night.
+#
+# Also startable by hand (Actions → Nightly → Run workflow), and by pushing a branch named
+# nightly-check/… — which is how a change to this job is tried out before it is merged: a schedule
+# only ever runs the workflow that is on main.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+  push:
+    branches: ["nightly-check/**"]
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write # to post the result
+
+jobs:
+  tests:
+    name: integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: tripplanner
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: tripplanner_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tripplanner -d tripplanner_ci"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      # The tests make a database of their own beside this one (<name>_test) and migrate it themselves.
+      DATABASE_URL: postgresql://tripplanner:ci-only-password@localhost:5432/tripplanner_ci
+      REDIS_URL: redis://localhost:6379
+      RUN_INTEGRATION: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            constraints.txt
+
+      - name: Install — exactly the versions that are deployed
+        run: pip install -r requirements.txt -r requirements-dev.txt -c constraints.txt
+
+      # Each suite may fail without stopping the night: the comment has to be written either way.
+      # Whether the night was a good one is decided at the end, from the reports.
+      - name: Integration tests
+        continue-on-error: true
+        run: pytest tests/integration/ -v --junitxml=reports/integration.xml
+
+      - name: Eval suite (Phase 33 — runs once there is one)
+        continue-on-error: true
+        run: |
+          if [ -d tests/eval ]; then
+            pytest tests/eval/ -v --junitxml=reports/evals.xml
+          else
+            echo "No eval suite yet (tests/eval does not exist): Phase 33."
+          fi
+
+      - name: Write the night's summary
+        id: summary
+        continue-on-error: true
+        # `|| verdict=$?`: the shell stops a step at the first command that fails, and on a bad night that
+        # is this one — the run's page would be left without the summary it failed over.
+        run: |
+          verdict=0
+          python scripts/nightly_summary.py reports/ \
+            --require integration \
+            --absent evals="no eval suite yet (Phase 33)" \
+            --commit "$GITHUB_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > summary.md || verdict=$?
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit $verdict
+
+      - name: Post it to the nightly issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/nightly_post.sh summary.md
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-reports
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: A night in which something failed is a failed run
+        if: steps.summary.outcome != 'success'
+        run: |
+          echo "::error::The nightly tests did not all pass — the summary above, and the nightly issue, say which."
+          exit 1

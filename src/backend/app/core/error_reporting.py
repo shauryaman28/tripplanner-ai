@@ -34,7 +34,6 @@ not depend on guessing where a secret might turn up.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -166,8 +165,9 @@ def quiet_access_log() -> None:
 def release() -> str:
     """What is running: the commit a platform built (Railway says), or the app's version."""
     from app import __version__
+    from app.core.config import settings
 
-    commit = os.environ.get("RAILWAY_GIT_COMMIT_SHA") or os.environ.get("GIT_COMMIT_SHA") or ""
+    commit = settings.commit
     return f"tripplanner-ai@{__version__}" + (f"+{commit[:12]}" if commit else "")
 
 

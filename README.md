@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 27 / 50 — Production Infrastructure**
+**Status: Phase 28 / 50 — CI/CD Pipeline**
 
 ---
 
@@ -43,6 +43,13 @@ Neon, through its connection pooler; Redis on Upstash over TCP with TLS (pub/sub
 REST API cannot subscribe); the frontend on Vercel, whose proxy carries /api/* while the browser opens the
 event stream straight to the backend; errors to Sentry, scrubbed. `python -m app.preflight` says what a
 deployment is missing before it starts; a deploy does not fail the plans being made.
+
+Checked on every push (Phase 28): GitHub Actions runs two jobs side by side — the backend's (ruff, every
+migration up / compared with the models / down / up on a real Postgres, the unit and contract tests) and the
+frontend's (types, lint, a production build). On main, a third job follows only when both pass: it deploys
+the backend to Railway and waits until the public addresses answer GET /version with the merged commit.
+Every night at 02:00 UTC the integration tests run on a real Postgres and Redis, and the result is one
+comment on the repository's "Nightly test results" issue.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -102,7 +109,7 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 980 tests
+# Unit + contract tests (no Docker, no network) — 1,010 tests
 pytest tests/unit/ tests/contract/ -v
 
 # Integration tests (Docker Postgres + Redis) — 60 tests, incl. the full
@@ -136,7 +143,8 @@ tripplanner-ai/
 │   ├── frontend/                        ← Phases 17–23: Next.js 14 App Router
 │   │   ├── package.json
 │   │   ├── next.config.mjs              ← /api/* proxy → FastAPI backend; Phase 27: a deployment build stops
-│   │   │                                  if the backend's address was not given
+│   │   │                                  if the backend's address was not given; Phase 28: the build is told
+│   │   │                                  its commit
 │   │   ├── tailwind.config.ts           ← design tokens: neutrals, status colours, shadows, motion
 │   │   ├── tsconfig.json
 │   │   ├── playwright.config.ts         ← starts the E2E stack (stub backend :8100, dev server :3100)
@@ -156,6 +164,7 @@ tripplanner-ai/
 │   │       │   ├── layout.tsx           ← fonts (Inter + Fraunces)
 │   │       │   ├── page.tsx             ← redirects → /trips
 │   │       │   ├── login/page.tsx       ← sign in / create account
+│   │       │   ├── version/route.ts     ← Phase 28: GET /version — the commit this site was built from
 │   │       │   └── trips/
 │   │       │       ├── page.tsx         ← trip cards, new-trip form with "Who is going" (Phase 25), search (Phase 23)
 │   │       │       └── [id]/page.tsx    ← the plan, the assistant, live progress
@@ -180,7 +189,8 @@ tripplanner-ai/
 │   │       │   ├── deps.py              ← JWT dependencies
 │   │       │   └── routes/
 │   │       │       ├── auth.py          ← POST /auth/register, /auth/login
-│   │       │       ├── health.py        ← GET /ping; GET /ready (Phase 27: the same, as a status a platform can read)
+│   │       │       ├── health.py        ← GET /ping; GET /ready (Phase 27: the same, as a status a platform can read);
+│   │       │       │                      GET /version (Phase 28: the commit that is running)
 │   │       │       ├── trips.py         ← All trip routes + SSE + GET /status + POST /retry + GET /export/pdf
 │   │       │       │                              + GET /similar and GET /search (Phase 23)
 │   │       │       ├── users.py         ← GET/PUT /users/preferences (Phase 16)
@@ -259,16 +269,24 @@ tripplanner-ai/
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
 │       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (972 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (1,002 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
 │   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 60 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
+│   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
 │                                          fake providers behind the real MCP tools (Phase 24), with an
 │                                          attractions catalogue that answers by kind and popularity (Phase 25);
 │                                          chat models that report token counts and a LangSmith that keeps
 │                                          what it is sent and sends nothing anywhere (Phase 26)
+├── .github/
+│   ├── workflows/ci.yml                 ← Phase 28: every push — the backend's checks and the frontend's, side by
+│   │                                      side; on main, the deploy after both
+│   ├── workflows/deploy.yml             ← Phase 28: the backend to Railway, then a wait until the merged commit
+│   │                                      is what answers; says "Nothing was deployed" until there is a target
+│   ├── workflows/nightly.yml            ← Phase 28: 02:00 UTC — the integration tests, and one comment about them
+│   └── nightly-issue.md                 ← what the nightly issue is opened with
 ├── docker/
 │   ├── init.sql                         ← enables pgvector extension (local development only: migration 001 does
 │   │                                      it for a database that was just created)
@@ -283,9 +301,12 @@ tripplanner-ai/
 │                                          prodlike.py (Phase 27: the production-like stack up and down),
 │                                          prod_check.py (Phase 27: asks a running deployment whether it is whole),
 │                                          sentry_receiver.py (Phase 27: a local stand-in for Sentry),
-│                                          freeze_constraints.py (Phase 27: writes constraints.txt again)
+│                                          freeze_constraints.py (Phase 27: writes constraints.txt again),
+│                                          wait_for_release.py (Phase 28: waits until a deployment answers with
+│                                          the commit that was merged), nightly_summary.py + nightly_post.sh
+│                                          (Phase 28: the night's test reports as one comment, and its posting)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–27) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–28) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -332,9 +353,10 @@ tripplanner-ai/
 | 25 | Group trips — each traveller's interests searched on their own, a plan with a stop for everyone in every two days, each one's share of the cost ([docs/phase25_build_log.md](docs/phase25_build_log.md)) | ✅ Done | 69 unit + 4 integration + 4 Playwright E2E |
 | 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — read back from LangSmith itself on 2026-10-11 | 46 unit + 8 integration |
 | 27 | Production infrastructure — the image, Neon's URL and pooler, Upstash over TCP, Sentry with scrubbed reports, runs that survive a deploy, a pre-start check ([docs/phase27_build_log.md](docs/phase27_build_log.md)) | ✅ Built, and verified on a production-like stack — **not yet deployed**: that needs accounts on the five services | 80 unit + 9 integration + 1 browser check of a running deployment |
-| 28–50 | Production & Polish | ⏳ | |
+| 28 | CI/CD pipeline — two checks on every push, a deploy on main only after both, a wait until the merged commit is live, the integration tests every night with one comment about them ([docs/phase28_build_log.md](docs/phase28_build_log.md)) | ✅ Built, and every job run by a local runner on the workflow files as they are — **not yet seen on GitHub**, and the deploy has no target yet: see the build log | 30 unit |
+| 29–50 | Production & Polish | ⏳ | |
 
-**Total: 980 unit + contract, 60 integration, 60 browser — all passing.** Zero network calls in CI. (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,010 unit + contract, 60 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -391,6 +413,19 @@ the same image against a TLS-only Postgres behind a connection pooler and a TLS-
 deployment's addresses. Step by step: `HOW_TO_RUN.md`, Step 25. Not yet done from this repository: the
 deploy to the real services.
 
+**CI/CD (Phase 28).** `.github/workflows/ci.yml` runs on every push: the `backend` job (lint, the migrations
+against a real Postgres — `alembic check` fails the build when a model says something no migration does —
+and the 1,010 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
+the `deploy` job follows only when both pass. It needs four things set in the repository — the secret
+`RAILWAY_TOKEN` and the variables `RAILWAY_SERVICE`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` — and until
+they are it says "Nothing was deployed" and passes. The frontend is deployed by Vercel's own GitHub
+integration. `scripts/wait_for_release.py` then asks `GET /version` at the backend, the site and the site's
+`/api` until all three answer with the merged commit, and writes the merge-to-live time on the run's page.
+`.github/workflows/nightly.yml` runs the integration tests at 02:00 UTC and comments on the issue labelled
+`nightly`. Two things are settings, not files: requiring the two checks before a merge to `main` (branch
+protection — on a private repository that needs GitHub Pro), and the four values above. `HOW_TO_RUN.md`,
+Step 26.
+
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.
 Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is an `.env` change.
@@ -422,6 +457,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Embeddings | Gemini `gemini-embedding-001` at 1536 dimensions (Phase 14) |
 | Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry, with reports scrubbed of secrets (Phase 27) |
 | Deploy | Railway (backend, Docker), Vercel (frontend), Neon (Postgres + pgvector, pooled), Upstash (Redis over TCP + TLS) — Phase 27 |
+| CI/CD | GitHub Actions: checks on every push, deploy on `main` after them, integration tests nightly — Phase 28 |
 
 ---
 

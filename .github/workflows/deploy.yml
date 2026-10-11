@@ -1,0 +1,94 @@
+# The deploy (Phase 28): the backend to Railway, and then the wait until the merge is really live.
+#
+# Called by CI on main, after both of its jobs have passed — a commit that fails a test is never deployed —
+# and startable by hand (Actions → Deploy → Run workflow) to deploy main again.
+#
+# What it needs, in the repository's settings (Settings → Secrets and variables → Actions):
+#
+#   secret    RAILWAY_TOKEN         a Railway *project* token (the project → Settings → Tokens)
+#   variable  RAILWAY_SERVICE       the backend service's name in that project
+#   variable  PRODUCTION_API_URL    https://<the backend's address>          — to wait for it, and check it
+#   variable  PRODUCTION_WEB_URL    https://<the frontend's address>         — the same for the site
+#
+# Without the token or the service's name the job says so and passes: a repository that has nowhere to
+# deploy to yet must still be able to merge. Nothing is deployed until both are there.
+#
+# The frontend is not deployed from here. Vercel's own GitHub integration builds it on every push to main
+# (import the repository there once, Root Directory src/frontend). What this workflow does about it is
+# wait: the merge is live when the backend AND the site answer with the merged commit.
+name: Deploy
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+# One deploy at a time, and none thrown away half-way: the second waits for the first.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend → Railway
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE }}
+      PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+      PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL }}
+
+    steps:
+      - name: Is there somewhere to deploy to?
+        id: target
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ] || [ -z "$RAILWAY_SERVICE" ]; then
+            echo "::notice title=Nothing was deployed::The secret RAILWAY_TOKEN or the variable RAILWAY_SERVICE is not set in this repository. See HOW_TO_RUN.md, Step 26."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.target.outputs.configured == 'true'
+
+      - name: Set up Node 22
+        if: steps.target.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install the Railway CLI
+        if: steps.target.outputs.configured == 'true'
+        run: |
+          npm install --global @railway/cli
+          railway --version
+
+      - name: Tell the deployment which commit it is
+        # GET /version answers with it. --skip-deploys: the variable is for the deploy that follows, not one of its own.
+        if: steps.target.outputs.configured == 'true'
+        run: railway variable set "GIT_COMMIT_SHA=$GITHUB_SHA" --service "$RAILWAY_SERVICE" --skip-deploys
+
+      - name: railway up
+        # --ci: the build's log, then exit — 0 when the deploy went through, 1 when it failed or crashed.
+        if: steps.target.outputs.configured == 'true'
+        run: railway up --ci --service "$RAILWAY_SERVICE"
+
+      - name: railway status
+        if: steps.target.outputs.configured == 'true'
+        run: railway status
+
+      - name: Wait until the merge is live — the backend, and the site Vercel builds
+        # "Deployed" is the platform's word for a container it started. Live is the public address
+        # answering with this commit; how long that took since the merge is written on the run's page.
+        if: steps.target.outputs.configured == 'true'
+        run: >-
+          python3 scripts/wait_for_release.py
+          --commit "$GITHUB_SHA"
+          --api "$PRODUCTION_API_URL"
+          --web "$PRODUCTION_WEB_URL"
+          --since "${{ github.event.head_commit.timestamp }}"
+          --timeout 600
