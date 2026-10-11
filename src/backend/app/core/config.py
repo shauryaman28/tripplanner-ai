@@ -86,6 +86,11 @@ class Settings(BaseSettings):
     # GET /admin/sentry-test, which fails on purpose so that error reporting can be seen to work.
     # Empty: that route does not exist (404). Set: openssl rand -hex 32
     OPS_TOKEN: str = ""
+    # Phase 28 — which commit this deployment was built from. The pipeline that deploys sets it, and
+    # GET /version says it: that is how a deploy is known to be live, and not merely to have been started.
+    # (A platform that builds from GitHub itself says the same under a name of its own — see `commit`.)
+    GIT_COMMIT_SHA: str = ""
+
     # How long a stopping server waits for the plans it is making before it gives them up (Phase 27).
     # A platform's own grace period (Railway: drainingSeconds) must be longer than this.
     SHUTDOWN_GRACE_SECONDS: float = 40.0
@@ -95,6 +100,11 @@ class Settings(BaseSettings):
     # development; a deployment points this at a tile provider it has an account with. Empty = no map.
     MAP_TILE_URL: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     MAP_ATTRIBUTION: str = "© OpenStreetMap contributors"
+
+    @property
+    def commit(self) -> str:
+        """The commit this is running, as far as anyone has said: ours, else Railway's own, else nothing."""
+        return self.GIT_COMMIT_SHA or os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")
 
     @property
     def cors_origins(self) -> list[str]:

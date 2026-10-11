@@ -9,12 +9,16 @@ Per roadmap spec: errors go in body, never in HTTP status.
 
 GET /ready   (Phase 27)
 → the same body; 200 when both are ok, 503 otherwise — a platform's health check.
+
+GET /version (Phase 28)
+→ { "version": "0.28.0", "commit": "3f2a…" | null } — what is running here.
 """
 
 import logging
 
 from fastapi import APIRouter, Response
 
+from app import __version__
 from app.core.config import settings
 from app.db.redis import get_redis
 from app.db.session import get_db_raw
@@ -68,3 +72,15 @@ async def ready(response: Response) -> dict[str, str]:
     if any(state != "ok" for state in results.values()):
         response.status_code = 503
     return results
+
+
+@router.get("/version")
+async def version() -> dict[str, str | None]:
+    """Phase 28 — what is running here: the app's version, and the commit it was built from.
+
+    "The deploy succeeded" is what a platform says when it has started a
+    container. "It is live" is this address answering with the commit that was
+    merged — which is what the deploy pipeline waits for, and times
+    (scripts/wait_for_release.py). `commit` is null where nobody said: a laptop.
+    """
+    return {"version": __version__, "commit": settings.commit or None}

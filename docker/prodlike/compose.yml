@@ -102,6 +102,8 @@ services:
       CORS_ORIGIN_REGEX: ^http://localhost:3200$$
       SENTRY_DSN: ${PRODLIKE_SENTRY_DSN:-http://standin@host.docker.internal:9010/1}
       SHUTDOWN_GRACE_SECONDS: ${PRODLIKE_SHUTDOWN_GRACE_SECONDS:-40}
+      # Which commit this "deployment" is (Phase 28) — what the deploy pipeline sets, and GET /version answers.
+      GIT_COMMIT_SHA: ${PRODLIKE_COMMIT:-}
       # The providers — each one a variable the platform must be given.
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
