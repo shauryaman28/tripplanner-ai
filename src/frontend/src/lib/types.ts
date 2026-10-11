@@ -35,6 +35,9 @@ export interface AgentRun {
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   duration_ms: number | null;
+  // Phase 26: what the step asked of the models and its list price in USD — null when it asked none
+  token_count?: number | null;
+  cost_usd?: number | null;
   turn: number;
   created_at: string;
 }

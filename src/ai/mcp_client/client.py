@@ -27,6 +27,8 @@ from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from src.ai import tracing
+
 try:
     from src.ai.mcp_server.models import ToolError
 except ImportError:
@@ -137,12 +139,30 @@ def _parse_result(response: Any) -> Any:
 
 
 async def call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
-    """Call an MCP tool asynchronously.
+    """Call an MCP tool asynchronously. Returns a Pydantic ToolError for any error case — never raises.
+
+    Phase 26: inside a traced run the call is a span of its own — "mcp:search_flights",
+    with what was asked and what came back. A tool that could not answer is a span
+    that failed: nothing is raised here, so the span is told — otherwise the one call
+    that explains why a re-plan gave up would look like every call that worked. A call
+    that belongs to no run (a trip's caches being warmed) is not traced: it would be a
+    trace of one span, about nothing.
+    """
+    with tracing.span(f"mcp:{tool_name}", run_type="tool", inputs=params, needs_parent=True) as span:
+        result = await _call_tool(tool_name, params)
+        if isinstance(result, ToolError):
+            span.end(outputs={"error": result.error, "code": result.code}, error=f"{result.code}: {result.error}")
+        else:
+            span.end(outputs={"result": result})
+        return result
+
+
+async def _call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
+    """The call itself.
 
     Ensures parameters are nested under the 'input' key (as expected by FastMCP,
     since every tool function has a single Pydantic-model parameter named
-    'input'), handles network / server errors, and parses responses. Returns a
-    Pydantic ToolError for any error case — never raises.
+    'input'), handles network / server errors, and parses responses.
     """
     try:
         session = await get_session()

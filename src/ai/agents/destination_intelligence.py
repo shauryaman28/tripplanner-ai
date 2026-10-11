@@ -38,6 +38,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.ai import tracing
 from src.ai.itinerary import (
     MAX_BEST_TIMES,
     MAX_TIPS,
@@ -221,7 +222,10 @@ class DestinationIntelligenceAgent:
     ) -> dict:
         facts = build_facts(input_state)
         async with timed_run() as timer:
-            intelligence, error = await gather_intelligence(facts)
+            # Phase 26: not a graph of its own, so it would be an unnamed model call in a trace — this names it
+            with tracing.span(AGENT_NAME, inputs=facts, needs_parent=True) as span:
+                intelligence, error = await gather_intelligence(facts)
+                span.end(outputs={"tips_found": intelligence is not None, "error": (error or {}).get("code")})
         if error:
             logger.warning("DestinationIntelligence: no local tips for %r (%s)", facts["destination"], error["code"])
 
@@ -237,5 +241,6 @@ class DestinationIntelligenceAgent:
                 duration_ms=timer.duration_ms,
                 status="failed" if error else "completed",
                 turn=turn,
+                usage=timer.usage,
             )
         return output

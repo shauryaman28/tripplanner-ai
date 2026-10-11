@@ -221,7 +221,8 @@ class ActivitiesAgent:
     ) -> dict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
         async with timed_run() as timer:
-            result = await self._graph.ainvoke(input_state)
+            # named, so the trace says which agent this is (Phase 26)
+            result = await self._graph.ainvoke(input_state, config={"run_name": "activities_agent"})
 
         if db is not None and trip_id is not None:
             await log_agent_run(
@@ -237,6 +238,7 @@ class ActivitiesAgent:
                 duration_ms=timer.duration_ms,
                 status="failed" if result.get("error") is not None else "completed",
                 turn=turn,
+                usage=timer.usage,
             )
 
         return result

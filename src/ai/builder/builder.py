@@ -512,6 +512,7 @@ class ItineraryBuilder:
                 duration_ms=timer.duration_ms,
                 status=status,
                 turn=turn,
+                usage=timer.usage,
             )
 
         return output

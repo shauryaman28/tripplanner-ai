@@ -65,6 +65,7 @@ from app.schemas.trip import (
 )
 from app.schemas.types import as_utc
 from app.search import Match, search_trips, similar_trips
+from src.ai import tracing
 from src.ai.agents.budget_decision import viable_budget
 from src.ai.agents.refinement_classifier import classify_refinement
 from src.ai.embeddings.embedder import EMBEDDING_MODEL, embed_query
@@ -82,6 +83,7 @@ from src.ai.utils.conversation import (
     start_history,
 )
 from src.ai.utils.failures import can_retry, failure_words
+from src.ai.utils.run_logger import log_agent_run, timed_run
 from src.ai.utils.tasks import spawn
 
 logger = logging.getLogger(__name__)
@@ -499,7 +501,9 @@ async def replan_trip(
         trip,
         db,
         redis,
-        lambda agent, bg_db, hooks: agent.run(state, db=bg_db, trip_id=trip_id, **hooks),
+        lambda agent, bg_db, hooks: agent.run(
+            state, db=bg_db, trip_id=trip_id, kind="replan", detail=body.choice, **hooks
+        ),
         choice=body.choice,
     )
     return {"status": "replanning_started", "trip_id": str(trip_id), "choice": body.choice}
@@ -537,7 +541,29 @@ async def refine_trip(
         )
 
     turn = max(await get_current_turn(redis, str(trip_id)), 1) + 1  # the initial plan is always turn 1
-    classification = await classify_refinement(body.message, await get_history(redis, str(trip_id)))
+    # Phase 26: reading the request is a model call like any other — a trace of this trip, and a row
+    # of its own in agent_runs with what it cost. (Until now its tokens were counted nowhere.)
+    async with timed_run() as timer:
+        with tracing.root(
+            "classify refinement", "classify", trip_id, current_user.id, turn, inputs={"message": body.message}
+        ) as trace:
+            classification = await classify_refinement(body.message, await get_history(redis, str(trip_id)))
+            trace.end(outputs=classification.model_dump())
+    try:
+        await log_agent_run(
+            db=db,
+            trip_id=trip_id,
+            agent_name="refinement_classifier",
+            input={"message": body.message},
+            output=classification.model_dump(),
+            duration_ms=timer.duration_ms,
+            turn=turn,
+            usage=timer.usage,
+        )
+    except Exception:  # a refinement is not refused because its classification could not be logged
+        logger.warning("Could not log the classification of a refinement of trip %s", trip_id, exc_info=True)
+        await db.rollback()
+        await db.refresh(trip)  # the rollback expired it, and the run is about to be started on it
     await append_history(redis, str(trip_id), role="user", content=body.message, turn=turn)
 
     await _start_run(
@@ -954,6 +980,7 @@ _AGENT_LABELS: dict[str, str] = {
     "builder_failed": "Itinerary build failed after maximum retries",
     "nothing_found": "Nothing found for the destination — no plan built",
     "preference_extractor": "Learned traveller preferences from the trip",
+    "refinement_classifier": "Read what the change asks for",
     "orchestrator": "Finished planning run",
 }
 
@@ -999,6 +1026,9 @@ async def get_trip_timeline(
             "status": run.status,
             "turn": run.turn,
             "duration_ms": run.duration_ms,
+            # Phase 26: what the step asked of the models, and its list price — None when it asked none
+            "token_count": run.token_count,
+            "cost_usd": run.cost_usd,
             "detail": _run_detail(run.agent_name, run.output or {}, run.status),
         }
         for run in runs
@@ -1014,6 +1044,8 @@ async def get_trip_timeline(
             "status": "completed",
             "turn": None,
             "duration_ms": None,
+            "token_count": None,
+            "cost_usd": None,
             "detail": {
                 "itinerary_id": str(itinerary.id),
                 "total_cost": itinerary.total_cost,

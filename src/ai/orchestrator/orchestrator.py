@@ -28,6 +28,7 @@ local tips — see _local_tips.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -38,7 +39,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
-from src.ai import group
+from src.ai import group, tracing
 from src.ai.agents.activities_agent import ActivitiesAgent
 from src.ai.agents.budget_alternatives import conflict_alternatives, plain_options
 from src.ai.agents.budget_decision import BudgetDecision, make_budget_decision, replan_flight_budget
@@ -59,6 +60,7 @@ from src.ai.agents.refinement_classifier import RefinementType
 from src.ai.builder.builder import ItineraryBuilder
 from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import ask, parse_json_object
+from src.ai.usage import Usage
 from src.ai.utils.embeddings import generate_embeddings
 from src.ai.utils.failures import can_retry, failure_words
 from src.ai.utils.preferences import (
@@ -179,9 +181,18 @@ async def _publish(state: OrchestratorState, event: dict) -> None:
 
 
 async def _log(
-    state: OrchestratorState, agent_name: str, input: dict, output: dict, duration_ms: int, status: str = "completed"
+    state: OrchestratorState,
+    agent_name: str,
+    input: dict,
+    output: dict,
+    duration_ms: int,
+    status: str = "completed",
+    usage: Usage | None = None,
 ) -> None:
-    """Write an agent_runs row for a graph node (no-op without a DB session)."""
+    """Write an agent_runs row for a graph node (no-op without a DB session).
+
+    `usage` (Phase 26): what the models were asked while the node worked — the timer's.
+    """
     db, trip_id = state.get("db"), state.get("trip_id")
     if db is not None and trip_id is not None:
         await log_agent_run(
@@ -193,7 +204,27 @@ async def _log(
             duration_ms=duration_ms,
             status=status,
             turn=state.get("turn", 1),
+            usage=usage,
         )
+
+
+# ── Tracing (Phase 26) ─────────────────────────────────────────────────────
+
+
+async def _user_of(state: OrchestratorState) -> uuid.UUID | None:
+    """Whose trip this run is for — looked up only to tag a trace with it."""
+    db, trip_id = state.get("db"), state.get("trip_id")
+    if db is None or trip_id is None:
+        return None
+    try:
+        return await get_trip_user_id(db, trip_id)
+    except Exception:
+        return None
+
+
+def _trace_name(kind: str, detail: str | None) -> str:
+    """What a run's trace is called: "plan trip", "replan trip: cheaper_flights", "refine trip: targeted_hotel"."""
+    return f"{kind} trip" + (f": {detail}" if detail else "")
 
 
 async def _set_trip_status(state: OrchestratorState, status: TripStatus) -> None:
@@ -376,16 +407,33 @@ def activities_search_input(state: OrchestratorState) -> dict:
 
 
 async def _search_flights(state: OrchestratorState, attempt: int = 0) -> dict:
-    """Flight search → state updates. `attempt` > 0 is a re-plan: tighter budget cap, one more stop."""
-    flights, error, _ = await _run_agent(
-        state,
-        FlightAgent(),
-        "flight_agent",
-        flight_search_input(state, attempt),
-        "flights",
-        "flights",
-        note=f" (re-plan attempt {attempt})" if attempt else "",
+    """Flight search → state updates. `attempt` > 0 is a re-plan: tighter budget cap, one more stop.
+
+    A re-plan is a branch the run took, and in its trace it is a span of its own
+    (Phase 26): "re-plan 1: cheaper flights" stands out from the first search.
+    """
+    search = flight_search_input(state, attempt)
+    branch = (
+        tracing.span(
+            f"re-plan {attempt}: cheaper flights",
+            inputs={"budget_cap": search["budget"], "max_stops": search["max_stops"]},
+            metadata={"replan_attempt": attempt},
+        )
+        if attempt
+        else contextlib.nullcontext()
     )
+    with branch as span:
+        flights, error, _ = await _run_agent(
+            state,
+            FlightAgent(),
+            "flight_agent",
+            search,
+            "flights",
+            "flights",
+            note=f" (re-plan attempt {attempt})" if attempt else "",
+        )
+        if span is not None:
+            span.end(outputs={"flights_found": len(flights), "error": (error or {}).get("code")})
     return {"flights": flights, "flight_error": error, "flight_status": "failed" if error else "completed"}
 
 
@@ -504,6 +552,7 @@ async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
         output={"extracted_fields": extracted, "pass_through": not message},
         duration_ms=timer.duration_ms,
         status=status,
+        usage=timer.usage,
     )
     return {**state, **extracted}
 
@@ -824,16 +873,27 @@ def route_after_evaluator(state: OrchestratorState) -> str:
 
 
 async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
-    """Re-run only the sub-agent the evaluator's failures point at, then loop back to the builder."""
+    """Re-run only the sub-agent the evaluator's failures point at, then loop back to the builder.
+
+    In the trace each pass is "evaluator retry 1", "evaluator retry 2", … (Phase 26):
+    how often a plan was sent back is read off the names, not counted by hand.
+    """
     failures = (state.get("evaluator_verdict") or {}).get("failures", [])
     agent_to_retry = next_agent_for_failures([EvaluatorFailure(**f) for f in failures]) or "activities_agent"
+    attempt = state.get("evaluator_retry_count", 0) + 1
 
-    if agent_to_retry == "flight_agent":
-        key, updates = "flights", await _search_flights(state)
-    else:
-        key, updates = "attractions", await _search_activities(state)
+    with tracing.span(
+        f"evaluator retry {attempt}",
+        inputs={"failed_checks": [f.get("check") for f in failures], "builder_error": state.get("builder_error")},
+        metadata={"evaluator_retry": attempt, "agent": agent_to_retry},
+    ) as span:
+        if agent_to_retry == "flight_agent":
+            key, updates = "flights", await _search_flights(state)
+        else:
+            key, updates = "attractions", await _search_activities(state)
+        span.end(outputs={"searched_again": agent_to_retry, "found": len(updates[key])})
 
-    new_state: OrchestratorState = {**state, "evaluator_retry_count": state.get("evaluator_retry_count", 0) + 1}
+    new_state: OrchestratorState = {**state, "evaluator_retry_count": attempt}
     if updates[key]:  # a failed retry keeps the previous results rather than wiping them
         new_state.update(updates)
     return new_state
@@ -1186,7 +1246,14 @@ class OrchestratorAgent:
         publish_fn=None,
         turn: int = 1,
         on_complete=None,
+        kind: str = "plan",
+        detail: str | None = None,
     ) -> dict:
+        """Plan a trip: one pass through the graph.
+
+        `kind` and `detail` say what the pass is, for its trace (Phase 26):
+        "plan"; "replan" and the way out that was picked; "refine" and its type.
+        """
         full_state = {
             **_RESULT_DEFAULTS,
             **input_state,
@@ -1197,8 +1264,13 @@ class OrchestratorAgent:
             "on_complete": on_complete,
         }
 
+        traced = None  # nothing is looked up, and nothing passed on, unless tracing is on
+        if tracing.enabled():
+            traced = tracing.run_config(
+                _trace_name(kind, detail), kind, full_state["trip_id"], await _user_of(full_state), turn, detail=detail
+            )
         async with timed_run() as timer:
-            result = await self._graph.ainvoke(full_state)
+            result = await self._graph.ainvoke(full_state, config=traced)
 
         await _log(
             full_state,
@@ -1207,6 +1279,7 @@ class OrchestratorAgent:
             output=_result_summary(result),
             duration_ms=timer.duration_ms,
             status="completed" if result.get("itinerary_id") else "failed",
+            usage=timer.usage,  # only what no agent of its own was timed for: every agent's tokens are on its own row
         )
         return _public(result)
 
@@ -1244,7 +1317,14 @@ class OrchestratorAgent:
                 # the same place, a day longer: what is true of it has not changed
                 fresh.update({key: prior_state.get(key) for key in ("local_intelligence", "intelligence_error")})
             return await self.run(
-                fresh, db=db, trip_id=trip_id, publish_fn=publish_fn, turn=turn, on_complete=on_complete
+                fresh,
+                db=db,
+                trip_id=trip_id,
+                publish_fn=publish_fn,
+                turn=turn,
+                on_complete=on_complete,
+                kind="refine",
+                detail=refinement_type,
             )
 
         return await self._rerun_search(
@@ -1330,67 +1410,85 @@ class OrchestratorAgent:
             state.update(tips)
             return updates
 
+        async def build_and_check(current: OrchestratorState) -> OrchestratorState:
+            """build_itinerary → evaluate, each the span the graph makes of it (Phase 26)."""
+            built = await tracing.step("build_itinerary", build_itinerary_node, current)
+            return await tracing.step("evaluate", evaluate_node, built)
+
+        # Phase 26: this run is not one graph invocation, so its trace is opened here — and every node
+        # called below is made the span the graph would have made of it (tracing.step).
+        kind, detail = ("retry", retry_of) if retry_of else ("refine", refinement_type)
+        user_id = await _user_of(state) if tracing.enabled() else None
         async with timed_run() as timer:
-            escalated = False
-            if refinement_type == "targeted_flights":
-                updates = await search(_search_flights)
-                found, error = bool(updates["flights"]), updates["flight_error"]
-                if found:  # a failed search keeps the previous flights
-                    # The flights already found stay in the running (the plan takes the cheapest), so a
-                    # request for something cheaper can never come back dearer when prices have moved.
-                    known = [f for f in state.get("flights") or [] if f not in updates["flights"]]
-                    updates["flights"] = updates["flights"] + known
-                    # "Make it cheaper" → new flights, then the budget check decides whether the plan still stands.
-                    state = await budget_decision_node({**state, **updates, "replan_attempts": 0})
-                    escalated = route_after_budget_decision(state) == "escalate"
-            elif refinement_type == "targeted_hotel":
-                updates = await search(_search_hotels)
-                found, error = bool(updates["hotels"]), updates["hotel_error"]
-                if found:
-                    state.update(updates)
-            else:  # targeted_activities
-                new_interests = None
-                if retry_of is None:  # the traveller's message usually names the new interests
-                    try:
-                        new_interests = (await _extract_intent(request)).get("interests")
-                    except Exception:
-                        new_interests = None
-                    if new_interests:
-                        state["interests"] = new_interests
-                if new_interests and group.is_group(state.get("group_members")):
-                    # Phase 25: the request names what to look for, so that is searched — as one search,
-                    # not member by member — and every find says which of the group it suits.
-                    updates = await search(lambda s: _search_activities({**s, "group_members": None}))
-                    group.tag_for_group(updates["attractions"], group.clean_members(state["group_members"]))
-                else:
-                    updates = await search(_search_activities)
-                found, error = bool(updates["attractions"]), updates["activities_error"]
-                if found:
-                    # the new finds join the places already in the plan: "add a food stop" must not
-                    # cost the traveller every stop that is not food
-                    names = {a.get("name") for a in updates["attractions"]}
-                    updates["attractions"] = updates["attractions"] + [
-                        a for a in state.get("attractions") or [] if a.get("name") not in names
-                    ]
-                    state.update(updates)
+            with tracing.root(
+                _trace_name(kind, detail), kind, trip_id, user_id, turn, inputs={"request": request}, detail=detail
+            ) as trace:
+                escalated = False
+                if refinement_type == "targeted_flights":
+                    updates = await search(_search_flights)
+                    found, error = bool(updates["flights"]), updates["flight_error"]
+                    if found:  # a failed search keeps the previous flights
+                        # The flights already found stay in the running (the plan takes the cheapest), so a
+                        # request for something cheaper can never come back dearer when prices have moved.
+                        known = [f for f in state.get("flights") or [] if f not in updates["flights"]]
+                        updates["flights"] = updates["flights"] + known
+                        # "Make it cheaper" → new flights, then the budget check decides whether the plan still stands.
+                        state = await tracing.step(
+                            "budget_decision", budget_decision_node, {**state, **updates, "replan_attempts": 0}
+                        )
+                        escalated = route_after_budget_decision(state) == "escalate"
+                elif refinement_type == "targeted_hotel":
+                    updates = await search(_search_hotels)
+                    found, error = bool(updates["hotels"]), updates["hotel_error"]
+                    if found:
+                        state.update(updates)
+                else:  # targeted_activities
+                    new_interests = None
+                    if retry_of is None:  # the traveller's message usually names the new interests
+                        try:
+                            new_interests = (await _extract_intent(request)).get("interests")
+                        except Exception:
+                            new_interests = None
+                        if new_interests:
+                            state["interests"] = new_interests
+                    if new_interests and group.is_group(state.get("group_members")):
+                        # Phase 25: the request names what to look for, so that is searched — as one search,
+                        # not member by member — and every find says which of the group it suits.
+                        updates = await search(lambda s: _search_activities({**s, "group_members": None}))
+                        group.tag_for_group(updates["attractions"], group.clean_members(state["group_members"]))
+                    else:
+                        updates = await search(_search_activities)
+                    found, error = bool(updates["attractions"]), updates["activities_error"]
+                    if found:
+                        # the new finds join the places already in the plan: "add a food stop" must not
+                        # cost the traveller every stop that is not food
+                        names = {a.get("name") for a in updates["attractions"]}
+                        updates["attractions"] = updates["attractions"] + [
+                            a for a in state.get("attractions") or [] if a.get("name") not in names
+                        ]
+                        state.update(updates)
 
-            if retry_of is not None and not found:
-                # The search failed again, so the plan would come out as it is: don't rebuild it, say why.
-                reason = failure_words(error) if error else "Nothing was found."
-                await _publish(
-                    state, {"event": "planning_failed", "agent": retry_of, "status": "failed", "error": reason}
-                )
-            elif escalated:
-                state = await escalate_node(state)
-            else:
-                state = await evaluate_node(await build_itinerary_node(state))
-                while route_after_evaluator(state) == "retry":  # bounded by MAX_EVALUATOR_RETRIES
-                    state = await evaluate_node(await build_itinerary_node(await retry_dispatch_node(state)))
-
-                if route_after_evaluator(state) == "passed":
-                    state = await merge_node(await persist_node(state))
+                if retry_of is not None and not found:
+                    # The search failed again, so the plan would come out as it is: don't rebuild it, say why.
+                    reason = failure_words(error) if error else "Nothing was found."
+                    await _publish(
+                        state, {"event": "planning_failed", "agent": retry_of, "status": "failed", "error": reason}
+                    )
+                elif escalated:
+                    state = await tracing.step("escalate", escalate_node, state)
                 else:
-                    state = await builder_failed_node(state)
+                    state = await build_and_check(state)
+                    while route_after_evaluator(state) == "retry":  # bounded by MAX_EVALUATOR_RETRIES
+                        state = await build_and_check(await tracing.step("retry_dispatch", retry_dispatch_node, state))
+
+                    if route_after_evaluator(state) == "passed":
+                        state = await tracing.step(
+                            "merge", merge_node, await tracing.step("persist", persist_node, state)
+                        )
+                    else:
+                        state = await tracing.step("builder_failed", builder_failed_node, state)
+
+                trace.end(outputs=_result_summary(state))
 
         await _log(
             state,
@@ -1399,5 +1497,6 @@ class OrchestratorAgent:
             output=_result_summary(state),
             duration_ms=timer.duration_ms,
             status="completed" if state.get("itinerary_id") else "failed",
+            usage=timer.usage,  # the request read for new interests, which has no row of its own
         )
         return _public(state)

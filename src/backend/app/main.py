@@ -28,6 +28,7 @@ from app.db.session import AsyncSessionLocal
 from app.models.embedding import Embedding
 from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
+from src.ai import tracing
 from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
 from src.ai.mcp_client.client import close_session
 from src.ai.utils.embeddings import EMBEDDINGS_PENDING_KEY, generate_embeddings
@@ -119,6 +120,7 @@ async def _regenerate_embeddings(itinerary_ids: list) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _show_app_logs()
+    tracing.configure(settings)  # Phase 26: LangSmith tracing — on only with the switch and a key
     redis = await init_redis()
     try:
         await redis.delete(EMBEDDINGS_PENDING_KEY)
@@ -126,8 +128,11 @@ async def lifespan(app: FastAPI):
         logger.warning("Redis unavailable at startup: %s", exc)
     await _recover_after_restart()
     yield
-    await close_redis()
-    await close_session()
+    try:
+        await close_redis()
+        await close_session()
+    finally:
+        tracing.shutdown()  # the last traces, sent — for a few seconds at most, whatever else failed to close
 
 
 # ── App ────────────────────────────────────────────────────────────────────
@@ -136,7 +141,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.25.0",
+    version="0.26.0",
     lifespan=lifespan,
 )
 

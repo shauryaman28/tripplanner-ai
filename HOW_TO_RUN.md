@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–25
+# How to Run & Verify — Phases 1–26
 
 ## What changed vs the original codebase?
 
@@ -24,6 +24,7 @@
 | 23 | `trips.py` (`GET /trips/{id}/similar` — was 501 — and `GET /trips/search`), `embedder.py` (the summary text, `kind`, task types), `models/embedding.py`, `main.py` (recovery one itinerary at a time), `schemas/trip.py`, `ItineraryView.tsx`, the trips list page, `lib/api.ts`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py`, `tests/e2e/stub_backend.py` — see `docs/phase23_build_log.md` | `src/backend/app/search.py`, `migrations/versions/004_embedding_kind.py`, `scripts/embedding_experiment.py`, `scripts/seed_demo_trips.py`, `SimilarTrips.tsx`, `tests/unit/test_phase23_similarity.py`, `tests/integration/test_phase23_similarity_integration.py`, `e2e/similar.spec.ts` |
 | 24 | `tools.py` (every request through `send()`; flights and hotels cached by what the provider is asked; one search per cache key at a time; `RATE_LIMITED`), `cache.py` (`single_flight`), `server.py` (the tools run in threads), `orchestrator.py` + the three search agents (their search parameters as functions), `failures.py`, `trips.py` (`POST /trips` starts cache warming), `config.py` (`CACHE_WARMING_ENABLED`), `main.py` (the app's INFO log lines are shown), `tests/conftest.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, `polish.spec.ts`, `.env.example` — see `docs/phase24_build_log.md` | `src/ai/mcp_server/rate_limiter.py`, `src/ai/mcp_server/outbound.py`, `src/ai/orchestrator/warming.py`, `scripts/cache_ttls.py`, `tests/unit/test_phase24_rate_limits.py`, `tests/unit/test_phase24_caching.py`, `tests/integration/test_phase24_caching_integration.py` |
 | 25 | `tools.py` (every attraction says which interest it was found under; lesser-known places fill up a thin interest; "spa" searched as nothing; `estimate_budget` per person), `models.py`, `activities_agent.py` (a group searched member by member), `builder.py` (the group in the prompt, the plan repaired, the shares), `evaluator.py` (`unbalanced_group`), `orchestrator.py`, `warming.py`, `pricing.py`, `itinerary.py`, `models/trip.py` + `schemas/trip.py` + `trips.py` (`group_members`), `pdf/plan.py` + `document.py` + `formatting.py`, `main.py`, the new-trip form, `CostSummary.tsx`, `DayCard.tsx`, `ItineraryView.tsx`, `lib/types.ts` + `api.ts` + `format.ts`, `tests/fakes.py`, `tests/e2e/stub_backend.py` — see `docs/phase25_build_log.md` | `src/ai/group.py`, `migrations/versions/005_trip_group_members.py`, `GroupPanel.tsx`, `lib/group.ts`, `prompts/itinerary_builder_v9.md`, `scripts/group_experiment.py`, `tests/unit/test_phase25_group.py`, `tests/integration/test_phase25_group_integration.py`, `src/frontend/e2e/group.spec.ts` |
+| 26 | `run_logger.py` (`timed_run` meters what the models are asked; a row carries `token_count` and `cost_usd`; the over-cost alert), `orchestrator.py` (a run tagged with its trip and user; "re-plan N" and "evaluator retry N" spans; a change to a plan as a trace), `mcp_client/client.py` (a span per tool call), the three search agents, `builder.py`, `destination_intelligence.py`, `preference_extractor.py`, `trips.py` (the refinement classifier timed, traced and logged), `admin.py` (`GET /admin/cost-summary`), `config.py`, `main.py`, `models/agent_run.py`, `schemas/agent_run.py`, `.env.example`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py` — see `docs/phase26_build_log.md` | `src/ai/tracing.py`, `src/ai/usage.py`, `src/ai/trace_tree.py`, `scripts/trace_receiver.py`, `schemas/cost.py`, migration 006, `tests/unit/test_phase26_tracing.py`, `test_phase26_costs.py`, `test_version.py`, `tests/integration/test_phase26_tracing_integration.py` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -305,7 +306,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–25 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–26 check
 
 Run from the **project root**:
 
@@ -313,7 +314,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **855 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **897 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -322,7 +323,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **43 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **51 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -466,7 +467,7 @@ Terminal 1 shows, in order: `planning_started` → `flight_agent` → `hotel_age
 | 13 | `…/trips/$TRIP_ID/runs` | 11 rows in order: `intent_parsing`, `preferences`, `flight_agent`, `budget_decision`, `hotel_agent` / `activities_agent` (concurrent, either order), `itinerary_builder`, `evaluator`, `persist`, `preference_extractor`, `orchestrator` — each with `duration_ms` |
 | 13 | `…/trips/$TRIP_ID/timeline` and `…/trips?status=completed` | readable ordered log; only completed trips |
 | 14 | `…/admin/embedding-health` | `{"status":"ok","in_flight":0,"pending_retry":0}`; `SELECT count(*), max(vector_dims(vector)) FROM embeddings` → `2`, `1536` |
-| 15 | `curl -s -X POST …/trips/$TRIP_ID/refine -H … -d '{"message":"closer to the beach"}'` then `…/runs?turn=2` and `…/itineraries` | `turn: 2`; turn-2 rows are `hotel_agent`, `itinerary_builder`, `evaluator`, `persist`, `orchestrator` (no `flight_agent`); two itinerary versions, newest first |
+| 15 | `curl -s -X POST …/trips/$TRIP_ID/refine -H … -d '{"message":"closer to the beach"}'` then `…/runs?turn=2` and `…/itineraries` | `turn: 2`; turn-2 rows are `refinement_classifier` (reading the message — a row of its own since Phase 26), `hotel_agent`, `itinerary_builder`, `evaluator`, `persist`, `orchestrator` (no `flight_agent`); two itinerary versions, newest first |
 | 16 | `curl -s -X PUT localhost:8000/users/preferences -H … -d '{"dietary_restrictions":["vegetarian"],"home_city":"Mumbai"}'`, then plan a new trip | the `activities_agent` run's `input.interests` contains `vegetarian`; the `flight_agent` run's `input.origin` is `BOM` |
 | 10 | create a trip with `"budget": 9000`, plan it | `budget_conflict` then `planning_failed` on the stream; trip `failed`; `POST …/replan` with `{"choice":"increase_budget"}` raises the trip's budget by 25% and re-plans |
 | 13 | `POST …/plan` twice in a row | the second is `409` while the first run is in flight |
@@ -911,6 +912,176 @@ python scripts/group_experiment.py
 
 ---
 
+## Step 24 — Verify Phase 26: traces, tokens and what they cost
+
+**Migrate first** — Phase 26 adds two columns:
+
+```bash
+alembic upgrade head        # 005 → 006: agent_runs.token_count, agent_runs.cost_usd
+```
+
+**See a trace — no LangSmith account needed.** Terminal 1, from the project root: a local stand-in for
+LangSmith that prints every trace it is sent.
+
+```bash
+python scripts/trace_receiver.py
+# Receiving traces on http://localhost:1984 — set LANGCHAIN_ENDPOINT to that, and plan a trip.
+```
+
+Terminal 2: the backend, pointed at it for this run only. Stop the one from Step 5 first. `.env` is not
+touched — and its provider keys are needed, because this is a real plan by the real models:
+
+```bash
+LANGCHAIN_TRACING_V2=true LANGCHAIN_API_KEY=local LANGCHAIN_ENDPOINT=http://localhost:1984 \
+  uvicorn app.main:app --app-dir src/backend
+# [TRACING] LangSmith tracing is on — project 'tripplanner-ai', sent to http://localhost:1984
+```
+
+Terminal 3 — plan a trip (`$TOKEN` from Step 7):
+
+```bash
+TRIP_ID=$(curl -s -X POST localhost:8000/trips -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"destination":"Jaipur","start_date":"2026-12-10","end_date":"2026-12-13","budget":70000,"group_size":2,"interests":["history","food"]}' \
+  | python3 -c "import json, sys; print(json.load(sys.stdin)['id'])")
+curl -s -X POST localhost:8000/trips/$TRIP_ID/plan -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"raw_input":"A relaxed long weekend of forts and good food"}'
+```
+
+A few seconds after it has finished, Terminal 1 has printed the run (shortened here — the two search agents
+look like the flight agent):
+
+```
+plan trip   trip 45a86c91  user 8ce59c4b  turn 1                       9.1 s    6,419 tokens
+├─ intent_parsing                                                      1.3 s      432 tokens
+│  └─ ChatGoogleGenerativeAI  [llm]                                    1.3 s      432 tokens
+├─ apply_preferences                                                   0.0 s
+├─ run_flight                                                          0.0 s
+│  └─ flight_agent                                                     0.0 s
+│     ├─ intent_parsing                                                0.0 s
+│     │  └─ router                                                     0.0 s
+│     └─ search_flights                                                0.0 s
+│        └─ mcp:search_flights  [tool]                                 0.0 s
+├─ budget_decision                                                     0.0 s
+├─ hotel_activities                                                    1.5 s      884 tokens
+│  ├─ hotel_agent …  ├─ activities_agent …
+│  └─ destination_intelligence                                         1.5 s      884 tokens
+│     └─ ChatGroq  [llm]                                               1.4 s      884 tokens
+├─ build_itinerary                                                     5.2 s    4,309 tokens
+│  └─ ChatGroq  [llm]                                                  5.2 s    4,309 tokens
+├─ evaluate                                                            0.0 s
+├─ persist                                                             0.0 s
+├─ merge                                                               0.0 s
+└─ extract_preferences                                                 1.0 s      794 tokens
+   └─ ChatGroq  [llm]                                                  1.0 s      794 tokens
+```
+
+One trace; a line for every step the graph took; a model call under the step that made it, with its tokens;
+each step's tokens the sum of what is inside it. The trip and the user are on the first line because they are
+on every span.
+
+**Only this trip's traces** — what the filter on `trip_id` does in LangSmith:
+
+```bash
+curl -s "localhost:1984/traces?trip_id=$TRIP_ID" | python3 -c "
+import json, sys
+for trace in json.load(sys.stdin): print(trace['name'], '·', trace['tokens'], 'tokens · turn', trace['metadata']['turn'])"
+# plan trip · 6419 tokens · turn 1
+```
+
+**The same run in the database** — the tokens each step asked for, and their list price in dollars:
+
+```bash
+curl -s localhost:8000/trips/$TRIP_ID/runs -H "Authorization: Bearer $TOKEN" | python3 -c "
+import json, sys
+for run in json.load(sys.stdin): print(f\"{run['agent_name']:<26}{str(run['token_count'] or '—'):>7}  {run['cost_usd'] or ''}\")"
+# intent_parsing                432  0.00031
+# preferences                     —
+# flight_agent                    —
+# budget_decision                 —
+# hotel_agent                     —
+# activities_agent                —
+# destination_intelligence      884  0.000396
+# itinerary_builder            4309  0.00195435
+# evaluator                       —
+# persist                         —
+# preference_extractor          794  0.0002421
+# orchestrator                    —
+```
+
+Add the tokens up: they are the trace's total, to the token (6,419 here). A step that asked no model has
+no tokens — not 0. Your numbers will differ; the two totals will not.
+
+**What it all cost:**
+
+```bash
+curl -s "localhost:8000/admin/cost-summary?since=2026-10-01" -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+# "total": {"runs": 4, "tokens": 6419, "cost_usd": 0.002902, "unpriced_tokens": 0},
+# "by_agent": [{"agent": "itinerary_builder", …}, …]      ← dearest first
+# "by_date":  [{"date": "2026-10-11", …}]                  ← oldest first
+```
+
+`since=yesterday` → `422`; no token → `401`. If `unpriced_tokens` is not 0, the backend's log names the model
+that has no price: add it with `LLM_PRICES` in `.env` (the format is in `.env.example`).
+
+**A change is two more traces under the same trip:**
+
+```bash
+curl -s -X POST localhost:8000/trips/$TRIP_ID/refine -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"message":"Could we stay somewhere nicer? A better hotel please."}'
+# Terminal 1:
+# classify refinement   trip 45a86c91  user 8ce59c4b  turn 2             1.2 s      524 tokens
+# refine trip: targeted_hotel   trip 45a86c91  user 8ce59c4b  turn 2     6.1 s    4,712 tokens
+# …and `…/runs?turn=2` starts with a row named refinement_classifier
+```
+
+**The re-planning branch.** Plan the same trip with a budget its flights only just do not fit — the run
+above logged the fare (`…/runs`, the `budget_decision` row's `output.flight_cost`); a budget of 1.8 × that fare
+leaves 44%, under the half that re-planning starts at. With a fare of ₹8,365, `"budget": 15000`:
+
+```
+├─ run_flight
+│  └─ re-plan 1: cheaper flights                                       3.8 s
+│     └─ flight_agent → search_flights → mcp:search_flights  [tool]
+├─ budget_decision
+├─ run_flight
+│  └─ re-plan 2: cheaper flights                                       0.0 s
+│     └─ … mcp:search_flights  [tool]        ✗ NO_RESULTS: No flights from DEL to JAI within ₹8,250.
+├─ budget_decision
+└─ escalate
+```
+
+**The alert.** A plan costs about a third of a cent, so to see the warning lower the limit: restart Terminal 2's
+backend with `LLM_COST_ALERT_USD=0.002` in front of the same command, and plan a trip. The backend logs, once:
+
+```
+[COST ALERT] trip 528f9612-…: the models have cost $0.0030 over 3 runs — past the $0.002 one trip is expected to stay under
+```
+
+**What left the machine.** `/records` is every run exactly as it was sent. None of the keys in `.env` is in it:
+
+```bash
+curl -s localhost:1984/records > /tmp/sent.json
+for key in GROQ_API_KEY GOOGLE_API_KEY DUFFEL_ACCESS_TOKEN JWT_SECRET; do
+  value=$(grep "^$key=" .env | cut -d= -f2-)
+  [ -n "$value" ] && echo "$key: $(grep -c -F "$value" /tmp/sent.json) occurrences in what was sent"
+done
+# GROQ_API_KEY: 0 occurrences in what was sent       (and so on — the loop prints counts, never a key)
+rm /tmp/sent.json
+```
+
+What is in it: the destination, the dates, the budget, the interests, the prompts and the plan. That is what a
+trace is — and why tracing is off unless `.env` switches it on.
+
+**In LangSmith itself** — the one part of this phase that needs a key, and was not run when it was built:
+`LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY=<your key>` in `.env`, no `LANGCHAIN_ENDPOINT`, restart, plan
+a trip. The log must say `sent to LangSmith`; the trace is in the project `tripplanner-ai`; filtering its runs on
+the metadata key `trip_id` leaves that trip's only. The steps are at the end of `docs/phase26_build_log.md`.
+
+**The tests:** `pytest tests/unit/test_phase26_tracing.py tests/unit/test_phase26_costs.py -v`, and
+`RUN_INTEGRATION=1 pytest tests/integration/test_phase26_tracing_integration.py -v`.
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -957,3 +1128,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **23 (Similar & search)** | Sign in as another account and ask for the demo account's trip: `GET /trips/{demo trip id}/similar` → `404`; its own `/trips/search?q=beach` → no results, though twelve beach-to-temple trips are in the table — only the caller's own are ever searched. `GET /trips/search?q=x` → `422`. Empty `GOOGLE_API_KEY` and restart → `/trips/search?q=beach` → `503` "Search is not available right now", and the page says so and keeps the list; `/similar` still works (it compares stored vectors and embeds nothing). Plan a trip with the key empty → `/similar` answers `"status": "pending"` and `/admin/embedding-health` is `degraded`; put the key back and restart → it is embedded and found. `alembic downgrade 003 && alembic upgrade head` → the vectors are gone and every trip is queued again. `RUN_INTEGRATION=1 pytest tests/integration/test_phase23_similarity_integration.py -k hnsw -v` → passes: with the table scan and the sort forbidden, the query plan uses `ix_embeddings_summary_hnsw`, and the traveller's three trips are still found behind seventy nearer ones of someone else's. |
 | **24 (Caching & rate limits)** | Create a trip whose destination is a sentence ("a relaxed week somewhere in Kerala") → the log says `[CACHE WARM] skipped`, and nothing is searched: where it goes is only known once planning has read it. Create a trip without interests → flights, hotels and weather are warmed, attractions are not. Set `CACHE_WARMING_ENABLED=false` and restart → creating a trip logs no `[CACHE WARM]` line. Create a trip and plan it six minutes later → the flight search is a `[CACHE MISS]` (kept 5 minutes), the hotels still a hit (15). `docker exec tripplanner_redis redis-cli SET mcp:flights:oops '[]'`, then `python scripts/cache_ttls.py` → `flights … NEVER (no TTL) … WRONG`, exit status 1 (`DEL` it again). In `src/ai/mcp_server/outbound.py` delete the line `limiter(provider).acquire()` → `pytest tests/unit/test_phase24_rate_limits.py -k three_agents` fails: the provider answered 429 to the third agent. In `server.py` register the tools without `threaded(...)` → `-k same_moment` fails after three seconds: tools run one after another never meet at their providers. In `tools.py` add the budget back to the flight cache key → `pytest tests/unit/test_phase24_caching.py -k another_budget` fails: the provider is asked twice for the same flights. |
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
+| **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. |

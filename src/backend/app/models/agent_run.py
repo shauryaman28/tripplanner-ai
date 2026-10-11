@@ -4,6 +4,11 @@ Phase 15 addition: `turn` column (integer, default 1) tracks which
 conversation turn produced this row. GET /trips/{id}/runs?turn=N lets
 callers isolate the second refinement pass from the initial plan.
 
+Phase 26 addition: `token_count` and `cost_usd` — what the run asked of the
+models, and what that costs at list price (src/ai/usage.py). NULL for a run
+that asked no model, which most rows are: a search, a budget check and the
+evaluator are plain code.
+
 status lifecycle: pending → running → completed | failed
 input / output stored as JSONB so you can query them from psql.
 """
@@ -33,5 +38,9 @@ class AgentRun(SQLModel, table=True):
     # Phase 15: which conversation turn produced this row (1-indexed).
     # Default 1 means all pre-Phase-15 rows are treated as first-turn data.
     turn: int = Field(default=1)
+
+    # Phase 26: tokens in and out of every model the run asked, and their cost in US dollars.
+    token_count: int | None = Field(default=None)
+    cost_usd: float | None = Field(default=None)
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
