@@ -23,11 +23,23 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_PORT: int = 8000
 
+    # Phase 27 — a hosted Postgres's URL is taken as it is handed out (sslmode=…, channel_binding=…,
+    # postgres://…): src/backend/app/db/url.py makes of it what each driver needs. The pooled address
+    # (Neon: the host with "-pooler") is the one to give here.
     DATABASE_URL: str = "postgresql://tripplanner:tripplanner_secret@localhost:5432/tripplanner_db"
+    # Optional: the same database's direct, un-pooled address. Only the migrations use it — a pooler
+    # in transaction mode is the wrong road for anything that needs one session from start to end.
+    DATABASE_URL_UNPOOLED: str = ""
+    # Redis over TCP: redis://, or rediss:// (TLS) for a hosted one. Never a REST URL — the event
+    # stream is a subscription, and a REST API cannot subscribe.
     REDIS_URL: str = "redis://localhost:6379"
 
-    # Comma-separated browser origins allowed by CORS (Phase 17)
+    # Comma-separated browser origins allowed by CORS (Phase 17). In production: the frontend's
+    # origin — the page opens its event stream straight from the browser to this API.
     CORS_ORIGINS: str = "http://localhost:3000"
+    # Origins allowed by pattern as well (Phase 27) — for a host that gives every deployment an
+    # address of its own, e.g. https://tripplanner-[a-z0-9-]+\.vercel\.app. Empty: only the list above.
+    CORS_ORIGIN_REGEX: str = ""
 
     # JWT (Phase 5)
     JWT_SECRET: str = "change-me-before-production"
@@ -65,6 +77,18 @@ class Settings(BaseSettings):
     # Prices to add to, or put in place of, the ones in src/ai/usage.py — USD per million tokens,
     # as JSON: {"gemini-3.5-flash": [0.50, 3.00]} is that model's input and output price.
     LLM_PRICES: dict[str, tuple[float, float]] = {}
+
+    # Phase 27 — errors reported to Sentry. Empty: nothing is reported (src/backend/app/core/error_reporting.py
+    # says what a report may and may not carry). One request in ten is also sent as a performance trace.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    # A secret for operating the deployment, sent as the X-Ops-Token header. Today it opens one door:
+    # GET /admin/sentry-test, which fails on purpose so that error reporting can be seen to work.
+    # Empty: that route does not exist (404). Set: openssl rand -hex 32
+    OPS_TOKEN: str = ""
+    # How long a stopping server waits for the plans it is making before it gives them up (Phase 27).
+    # A platform's own grace period (Railway: drainingSeconds) must be longer than this.
+    SHUTDOWN_GRACE_SECONDS: float = 40.0
 
     # Map tiles for the static map in the exported PDF (Phase 19) — the backend's counterpart of the
     # frontend's NEXT_PUBLIC_MAP_TILE_URL. OpenStreetMap's own server needs no key and is fine for

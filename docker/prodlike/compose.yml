@@ -1,0 +1,120 @@
+# A production-like stack on one machine (Phase 27) — what the hosted services have in common with
+# their real selves is exactly what breaks a first deploy:
+#
+#   neon-standin     Postgres + pgvector that refuses any connection without TLS, and starts EMPTY:
+#                    no init.sql — the extension and the schema come from the migrations, as on a
+#                    database that was just created;
+#   pooler           PgBouncer in transaction mode in front of it, the address a hosted Postgres hands
+#                    out: a server connection is lent for one transaction, and nothing prepared on it
+#                    is there for the next;
+#   upstash-standin  Redis reachable only over TLS, with a password, that closes idle connections;
+#   backend          the image that is deployed (src/backend/Dockerfile), given its settings as a
+#                    platform gives them: environment variables only — no .env, no source mounted —
+#                    and the port it must listen on.
+#
+# Started and stopped by scripts/prodlike.py, which also makes the two secrets it needs. The provider
+# keys are taken from the repo's .env, one by one — the list below is the list a platform must be given.
+name: tripplanner-prodlike
+
+services:
+  certs:
+    image: pgvector/pgvector:pg16
+    user: root
+    entrypoint: ["sh", "/prodlike/make-certs.sh"]
+    volumes:
+      - certs:/certs
+      - ./:/prodlike:ro
+
+  neon-standin:
+    image: pgvector/pgvector:pg16
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_USER: tripplanner
+      POSTGRES_PASSWORD: standin_db_password
+      POSTGRES_DB: tripplanner
+    command: >
+      postgres -c ssl=on -c ssl_cert_file=/certs/server.crt -c ssl_key_file=/certs/postgres.key
+      -c hba_file=/prodlike/pg_hba.conf
+    volumes:
+      - certs:/certs:ro
+      - ./:/prodlike:ro
+    tmpfs:
+      - /var/lib/postgresql/data  # every start is a database nobody has migrated yet
+    ports:
+      - "5544:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tripplanner -d tripplanner"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  pooler:
+    build:
+      context: .
+      dockerfile: pooler.Dockerfile
+    depends_on:
+      neon-standin:
+        condition: service_healthy
+    volumes:
+      - certs:/certs:ro
+    ports:
+      - "6543:6432"
+
+  upstash-standin:
+    image: redis:7-alpine
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+    command: >
+      redis-server --port 0 --tls-port 6379
+      --tls-cert-file /certs/server.crt --tls-key-file /certs/server.key --tls-ca-cert-file /certs/ca.crt
+      --tls-auth-clients no --requirepass standin_redis_password
+      --timeout 60 --save "" --appendonly no
+    volumes:
+      - certs:/certs:ro
+    ports:
+      - "6390:6379"
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: src/backend/Dockerfile
+    depends_on:
+      pooler:
+        condition: service_started
+      upstash-standin:
+        condition: service_started
+    environment:
+      PORT: "8200"  # the platform says where it will send traffic
+      # A hosted Postgres's URL, as it is handed out: the pooled address, libpq's parameters and all.
+      DATABASE_URL: postgresql://tripplanner:standin_db_password@pooler:6432/tripplanner?sslmode=require&channel_binding=require
+      DATABASE_URL_UNPOOLED: postgresql://tripplanner:standin_db_password@neon-standin:5432/tripplanner?sslmode=require&channel_binding=require
+      # A hosted Redis's URL: TLS, a password. (ssl_ca_certs only because this stand-in signed its own
+      # certificate; a real one is signed by a public authority and needs nothing added.)
+      REDIS_URL: rediss://default:standin_redis_password@upstash-standin:6379?ssl_ca_certs=/certs/ca.crt
+      JWT_SECRET: ${PRODLIKE_JWT_SECRET:?run scripts/prodlike.py, which makes it}
+      OPS_TOKEN: ${PRODLIKE_OPS_TOKEN:?run scripts/prodlike.py, which makes it}
+      # The frontend's origin. A pattern, because the check that guards production refuses a list
+      # with nothing but localhost in it — rightly, anywhere but here.
+      CORS_ORIGINS: http://localhost:3200
+      CORS_ORIGIN_REGEX: ^http://localhost:3200$$
+      SENTRY_DSN: ${PRODLIKE_SENTRY_DSN:-http://standin@host.docker.internal:9010/1}
+      SHUTDOWN_GRACE_SECONDS: ${PRODLIKE_SHUTDOWN_GRACE_SECONDS:-40}
+      # The providers — each one a variable the platform must be given.
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      DUFFEL_ACCESS_TOKEN: ${DUFFEL_ACCESS_TOKEN:-}
+      LITEAPI_API_KEY: ${LITEAPI_API_KEY:-}
+      OPENTRIPMAP_API_KEY: ${OPENTRIPMAP_API_KEY:-}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+    volumes:
+      - certs:/certs:ro  # the stand-in's own certificate authority, and nothing else
+    ports:
+      - "8200:8200"
+    stop_grace_period: 70s  # a platform's draining time: SIGTERM, then this long, then SIGKILL
+
+volumes:
+  certs:

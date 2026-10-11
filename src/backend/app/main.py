@@ -5,6 +5,7 @@ FastAPI application entry point.
   docker compose up backend                              (Docker)
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from http import HTTPStatus
@@ -14,23 +15,32 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import func
 from sqlmodel import select, update
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app import __version__, preflight
 from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
+from app.api.routes.trips import INTERRUPTED, finish_runs
 from app.api.routes.trips import router as trips_router
 from app.api.routes.users import router as users_router
+from app.core import error_reporting
 from app.core.config import settings
+from app.db import redis as redis_db
 from app.db.redis import close_redis, init_redis
 from app.db.session import AsyncSessionLocal
+from app.db.url import where as database_at
+from app.models.agent_run import AgentRun
 from app.models.embedding import Embedding
 from app.models.itinerary import Itinerary
 from app.models.trip import Trip, TripStatus
 from src.ai import tracing
 from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
 from src.ai.mcp_client.client import close_session
+from src.ai.mcp_server.config import mcp_settings
+from src.ai.utils.conversation import RUN_TTL_S, run_in_flight
 from src.ai.utils.embeddings import EMBEDDINGS_PENDING_KEY, generate_embeddings
 from src.ai.utils.tasks import spawn
 
@@ -66,6 +76,52 @@ def _show_app_logs() -> None:
 # ── Startup recovery ───────────────────────────────────────────────────────
 
 
+RECHECK_TIMES = 20  # how often a trip another instance is planning is looked at again, RUN_TTL_S apart
+
+
+async def _being_planned_elsewhere(trip_ids: list) -> set:
+    """Of these trips, the ones some process is at work on right now: its note in Redis is being kept up.
+
+    When Redis cannot be asked, none — a trip left "planning" for ever is worse than a run failed twice.
+    """
+    redis = redis_db.redis_client
+    if redis is None or not trip_ids:
+        return set()
+    try:
+        return {trip_id for trip_id in trip_ids if await run_in_flight(redis, str(trip_id))}
+    except Exception as exc:
+        logger.warning("[STARTUP RECOVERY] Redis could not say which runs are alive (%s) — taking none to be", exc)
+        return set()
+
+
+async def _mark_interrupted(db, trip_ids: list) -> None:
+    """These trips' runs died with their process: completed if a plan stands (a refinement), failed if none does."""
+    if not trip_ids:
+        return
+    theirs = Trip.id.in_(trip_ids), Trip.status == TripStatus.PLANNING
+    has_itinerary = select(Itinerary.id).where(Itinerary.trip_id == Trip.id).exists()
+    await db.execute(update(Trip).where(*theirs, has_itinerary).values(status=TripStatus.COMPLETED))
+    failed = (
+        (await db.execute(update(Trip).where(*theirs).values(status=TripStatus.FAILED).returning(Trip.id)))
+        .scalars()
+        .all()
+    )
+    for trip_id in failed:  # why, for the page (GET /status → failure_reason)
+        turn = await db.scalar(select(func.coalesce(func.max(AgentRun.turn), 1)).where(AgentRun.trip_id == trip_id))
+        db.add(
+            AgentRun(
+                trip_id=trip_id,
+                agent_name="interrupted",
+                status="failed",
+                turn=turn or 1,
+                input={},
+                output={"reason": INTERRUPTED},
+                duration_ms=0,
+            )
+        )
+    await db.commit()
+
+
 async def _recover_after_restart() -> None:
     """Repair what an unclean shutdown leaves behind.
 
@@ -79,15 +135,21 @@ async def _recover_after_restart() -> None:
         one itinerary after another: after migration 004 that is every trip, and the
         embedding API's free tier answers a burst with 429s.
 
+    Phase 27: "still planning" is not proof of a dead run any more. A platform
+    starts the new instance while the old one is serving, and for a while both
+    are alive: the old one is still making plans, and this startup must not
+    fail them under it. A run in flight keeps a note in Redis (routes/trips.py);
+    a trip whose note is there is left alone and looked at again later, in case
+    its process dies after all.
+
     Failures are logged, never raised — the app must boot even if the database
     is unreachable (GET /ping reports that in its body).
     """
     try:
         async with AsyncSessionLocal() as db:
-            interrupted = Trip.status == TripStatus.PLANNING
-            has_itinerary = select(Itinerary.id).where(Itinerary.trip_id == Trip.id).exists()
-            await db.execute(update(Trip).where(interrupted, has_itinerary).values(status=TripStatus.COMPLETED))
-            await db.execute(update(Trip).where(interrupted).values(status=TripStatus.FAILED))
+            planning = (await db.execute(select(Trip.id).where(Trip.status == TripStatus.PLANNING))).scalars().all()
+            elsewhere = await _being_planned_elsewhere(planning)
+            await _mark_interrupted(db, [trip_id for trip_id in planning if trip_id not in elsewhere])
             await db.commit()
             pending = (
                 (
@@ -101,11 +163,44 @@ async def _recover_after_restart() -> None:
                 .all()
             )
 
+        if elsewhere:
+            logger.info(
+                "[STARTUP RECOVERY] %d trip(s) are being planned by another instance — left alone, "
+                "looked at again in %d s",
+                len(elsewhere),
+                RUN_TTL_S,
+            )
+            spawn(_look_again(sorted(elsewhere, key=str)))
         if pending:
             logger.info("[EMBEDDING RECOVERY] Re-queuing %d pending embedding(s)", len(pending))
             spawn(_regenerate_embeddings(pending))
     except Exception as exc:
         logger.warning("[STARTUP RECOVERY] skipped: %s", exc)
+
+
+async def _look_again(trip_ids: list) -> None:
+    """The trips another instance was planning as this one started: when its note goes and the trip still
+    says "planning", that instance died in the middle — and nothing else would ever notice."""
+    for _ in range(RECHECK_TIMES):
+        await asyncio.sleep(RUN_TTL_S)
+        try:
+            async with AsyncSessionLocal() as db:
+                still = (
+                    (await db.execute(select(Trip.id).where(Trip.id.in_(trip_ids), Trip.status == TripStatus.PLANNING)))
+                    .scalars()
+                    .all()
+                )
+                alive = await _being_planned_elsewhere(still)
+                abandoned = [trip_id for trip_id in still if trip_id not in alive]
+                if abandoned:
+                    logger.warning("[STARTUP RECOVERY] %d run(s) died with the instance that had them", len(abandoned))
+                    await _mark_interrupted(db, abandoned)
+        except Exception as exc:
+            logger.warning("[STARTUP RECOVERY] could not look again: %s", exc)
+            continue
+        trip_ids = sorted(alive, key=str)
+        if not trip_ids:
+            return
 
 
 async def _regenerate_embeddings(itinerary_ids: list) -> None:
@@ -120,6 +215,18 @@ async def _regenerate_embeddings(itinerary_ids: list) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _show_app_logs()
+    error_reporting.quiet_access_log()  # Phase 27: a login token in an address is not written to the log
+    # Phase 27: in production, refuse to serve from settings that are not fit to — and say all of it at once.
+    report = preflight.enforce(settings, mcp_settings)
+    for problem in report.warnings if report.production else []:
+        logger.warning("[PREFLIGHT] %s", problem)
+    logger.info(
+        "[STARTUP] %s — database %s, Redis %s",
+        settings.APP_ENV,
+        database_at(settings.DATABASE_URL),
+        redis_db.where(settings.REDIS_URL),
+    )
+    error_reporting.configure(settings, mcp_settings)  # Phase 27: Sentry — on only with a DSN
     tracing.configure(settings)  # Phase 26: LangSmith tracing — on only with the switch and a key
     redis = await init_redis()
     try:
@@ -129,10 +236,13 @@ async def lifespan(app: FastAPI):
     await _recover_after_restart()
     yield
     try:
+        # The plans in flight first — they need Redis and the tool server, which are closed next.
+        await finish_runs(settings.SHUTDOWN_GRACE_SECONDS)
         await close_redis()
         await close_session()
     finally:
         tracing.shutdown()  # the last traces, sent — for a few seconds at most, whatever else failed to close
+        error_reporting.shutdown()  # and the last error reports
 
 
 # ── App ────────────────────────────────────────────────────────────────────
@@ -141,7 +251,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Trip Planner",
     description="Multi-agent AI travel planner — flights, hotels, activities & itineraries.",
-    version="0.26.0",
+    version=__version__,
     lifespan=lifespan,
 )
 
@@ -151,12 +261,44 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,  # Phase 27: a host with an address per deployment
     allow_methods=["*"],
     allow_headers=["*"],
     # The PDF export names its file and says whether the map made it in (Phase 19). A page on
     # another origin cannot read either header unless it is listed here.
     expose_headers=["Content-Disposition", "X-Itinerary-Map"],
 )
+
+
+class NoStoreByDefault:
+    """Every answer says `Cache-Control: no-store` unless its route said something else (Phase 27).
+
+    In production the frontend's host proxies /api/* to this server, and a CDN
+    in front of a proxy caches what it is allowed to. Nothing here may be: every
+    answer is one traveller's, behind their token. Said by the origin, it does
+    not depend on how any proxy is set up. (Plain ASGI, not BaseHTTPMiddleware:
+    that one wraps the response's body, and the event stream must not be wrapped.)
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_header(message) -> None:
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                if not any(name.lower() == b"cache-control" for name, _ in headers):
+                    headers.append((b"cache-control", b"no-store"))
+            await send(message)
+
+        await self.app(scope, receive, send_with_header)
+
+
+app.add_middleware(NoStoreByDefault)
 
 
 # ── Error envelope (Phase 17) ──────────────────────────────────────────────
@@ -185,6 +327,20 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
             "detail": jsonable_encoder(exc.errors()),
             "error": {"code": "VALIDATION_ERROR", "message": message},
         },
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    """Phase 27 — a 500 in the same envelope as every other error, and saying nothing of what went wrong.
+
+    The error itself goes where it can be read: this handler's caller raises it
+    again once the answer is sent, into the log and into Sentry.
+    """
+    message = "Something went wrong on our side. It has been reported."
+    return JSONResponse(
+        status_code=500,
+        content={"detail": message, "error": {"code": "INTERNAL_SERVER_ERROR", "message": message}},
     )
 
 

@@ -12,7 +12,13 @@ Keys (24 h TTL):
   trip:{id}:planning_state   the last SUCCESSFUL orchestrator state — what
                              POST /refine carries forward
   trip:{id}:current_run      {turn, refinement_type?, retry?, choice?} — set when a
-                             run starts, deleted when it ends (1 h TTL)
+                             run starts, deleted when it ends
+
+Phase 27: the note of the run in flight is also its sign of life. It lives for
+          RUN_TTL_S seconds and the run writes it again every RUN_BEAT_S, so a
+          note that is there means a process is at work on that trip — this one
+          or, during a deploy, the one being replaced. A note that is gone
+          while the trip still says "planning" is a run that died.
 """
 
 import json
@@ -23,7 +29,8 @@ import redis.asyncio as aioredis
 logger = logging.getLogger(__name__)
 
 _TTL = 86_400  # 24 h — same as JWT expiry
-_RUN_TTL = 3_600  # a run takes seconds and deletes its own note; this is for a process that died first
+RUN_BEAT_S = 15  # how often a run in flight writes its note again
+RUN_TTL_S = 45  # how long a note lives without that: three beats, so one that fails changes nothing
 
 
 # ── Key helpers ───────────────────────────────────────────────────────────
@@ -99,7 +106,13 @@ async def save_trip_state(r: aioredis.Redis, trip_id: str, state: dict) -> None:
 
 
 async def save_current_run(r: aioredis.Redis, trip_id: str, run: dict) -> None:
-    await r.set(_run_key(trip_id), json.dumps(run, default=str), ex=_RUN_TTL)
+    """Note the run in flight. Called as it starts, and again every RUN_BEAT_S while it lasts."""
+    await r.set(_run_key(trip_id), json.dumps(run, default=str), ex=RUN_TTL_S)
+
+
+async def run_in_flight(r: aioredis.Redis, trip_id: str) -> bool:
+    """Is some process at work on this trip right now? Its note says so for as long as it is kept up."""
+    return bool(await r.exists(_run_key(trip_id)))
 
 
 async def clear_current_run(r: aioredis.Redis, trip_id: str) -> None:

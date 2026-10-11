@@ -6,14 +6,33 @@ GET /ping
 → { "postgres": "error: <msg>", "redis": "ok" } partial failure
 
 Per roadmap spec: errors go in body, never in HTTP status.
+
+GET /ready   (Phase 27)
+→ the same body; 200 when both are ok, 503 otherwise — a platform's health check.
 """
 
-from fastapi import APIRouter
+import logging
 
+from fastapi import APIRouter, Response
+
+from app.core.config import settings
 from app.db.redis import get_redis
 from app.db.session import get_db_raw
 
 router = APIRouter(tags=["health"])
+logger = logging.getLogger(__name__)
+
+
+def _problem(what: str, exc: Exception) -> str:
+    """What went wrong, as anyone may read it: in production the kind of error, and the rest in the log.
+
+    The full text of a connection error names hosts, ports and users — fine on a laptop, not on a
+    public address that needs no login.
+    """
+    if settings.APP_ENV == "production":
+        logger.warning("Health check: %s is not answering: %s", what, exc)
+        return f"error: {type(exc).__name__}"
+    return f"error: {exc}"
 
 
 @router.get("/ping")
@@ -24,7 +43,7 @@ async def ping() -> dict[str, str]:
         await get_db_raw()
         results["postgres"] = "ok"
     except Exception as exc:
-        results["postgres"] = f"error: {exc}"
+        results["postgres"] = _problem("Postgres", exc)
 
     try:
         r = await get_redis()
@@ -32,6 +51,20 @@ async def ping() -> dict[str, str]:
             raise RuntimeError("PING returned falsy")
         results["redis"] = "ok"
     except Exception as exc:
-        results["redis"] = f"error: {exc}"
+        results["redis"] = _problem("Redis", exc)
 
+    return results
+
+
+@router.get("/ready")
+async def ready(response: Response) -> dict[str, str]:
+    """Phase 27 — /ping's findings as a status: 200 when Postgres and Redis both answer, 503 when one does not.
+
+    For a platform's health check, which reads the status and nothing else: a
+    deployment whose database or Redis cannot be reached must not be the one
+    that goes live. (/ping keeps answering 200 with the errors in its body.)
+    """
+    results = await ping()
+    if any(state != "ok" for state in results.values()):
+        response.status_code = 503
     return results

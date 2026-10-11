@@ -3,17 +3,31 @@
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.db.url import async_engine_arguments
 
-_async_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(
-    _async_url,
-    echo=settings.APP_ENV == "development",
-    pool_pre_ping=True,
-)
+def make_engine(database_url: str) -> AsyncEngine:
+    """The app's engine for a database URL as it is handed out.
+
+    Phase 27: app/db/url.py turns libpq's parameters into asyncpg's and keeps no
+    prepared statement, so that a connection pooler can sit in between.
+    """
+    url, connect_args = async_engine_arguments(database_url)
+    return create_async_engine(
+        url,
+        echo=settings.APP_ENV == "development",
+        connect_args=connect_args,
+        # A serverless Postgres sleeps when nobody asks it anything, and its connections die with it:
+        # one is tried before it is used, and none is kept past the five minutes after which it may be gone.
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
+
+
+engine = make_engine(settings.DATABASE_URL)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,

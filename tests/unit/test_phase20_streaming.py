@@ -567,7 +567,9 @@ async def test_the_run_in_flight_is_noted_and_forgotten():
     assert await get_current_run(redis, "t") is None
     await save_current_run(redis, "t", {"turn": 2, "refinement_type": "targeted_hotel"})
     assert await get_current_run(redis, "t") == {"turn": 2, "refinement_type": "targeted_hotel"}
-    assert set(redis.ttl.values()) == {3600}  # a process that dies mid-run must not leave it for ever
+    assert set(redis.ttl.values()) == {
+        45
+    }  # a process that dies mid-run leaves it for seconds: a live run renews it (Phase 27)
     await clear_current_run(redis, "t")
     assert await get_current_run(redis, "t") is None
 

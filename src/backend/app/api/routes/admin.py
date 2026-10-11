@@ -3,21 +3,24 @@ Operational endpoints.
 
 GET /admin/embedding-health   embedding pipeline backlog (Phase 14)
 GET /admin/cost-summary       tokens and model cost, by agent and by day (Phase 26)
+GET /admin/sentry-test        fails on purpose, to see error reporting work (Phase 27; needs OPS_TOKEN)
 
 Any authenticated user may call these for now — there is no admin role until
 the admin dashboard phase. Both report on the whole system, not on the
 caller's own trips; neither shows anything of anyone's trip.
 """
 
+import hmac
 from datetime import date, datetime, time, timedelta, timezone
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import Date, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import get_current_user, get_redis_dep
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.agent_run import AgentRun
 from app.models.embedding import Embedding
@@ -105,3 +108,30 @@ async def cost_summary(
         by_agent=[AgentCost(agent=name, **_line(*rest)) for name, *rest in by_agent],
         by_date=[DayCost(date=on, **_line(*rest)) for on, *rest in by_date],
     )
+
+
+# ── GET /admin/sentry-test ─────────────────────────────────────────────────
+
+
+class DeliberateError(RuntimeError):
+    """Raised on purpose, by GET /admin/sentry-test — never a sign that something is wrong."""
+
+
+@router.get("/sentry-test")
+async def sentry_test(
+    marker: str = Query("no-marker", pattern=r"^[A-Za-z0-9_-]{1,64}$", description="Put in the error, to find it by."),
+    x_ops_token: str | None = Header(None),
+) -> None:
+    """Phase 27 — fail on purpose, so that error reporting can be seen to work.
+
+    Answers 500, and the error — `DeliberateError: deliberate test error <marker>`
+    — is in Sentry a moment later (search for the marker). It is not for anyone
+    who happens to have an account: every call is an error against the Sentry
+    project's quota. So it takes the deployment's `OPS_TOKEN`, as the
+    X-Ops-Token header; without one configured, or with the wrong one, the route
+    answers as if it were not there.
+    """
+    expected = settings.OPS_TOKEN
+    if not expected or not hmac.compare_digest((x_ops_token or "").encode(), expected.encode()):
+        raise HTTPException(status_code=404, detail="Not Found")
+    raise DeliberateError(f"deliberate test error {marker}")

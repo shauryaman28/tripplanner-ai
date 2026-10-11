@@ -25,6 +25,7 @@ the itinerary as it is written (`builder_token`, Phase 20). Only one run per
 trip at a time — starting another while one is in flight is a 409.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -37,11 +38,14 @@ from urllib.parse import quote
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep, get_redis_or_none
+from app.core import error_reporting
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.agent_run import AgentRun
@@ -72,6 +76,7 @@ from src.ai.embeddings.embedder import EMBEDDING_MODEL, embed_query
 from src.ai.orchestrator.orchestrator import RETRY_REFINEMENTS, TRIP_FIELDS, OrchestratorAgent
 from src.ai.orchestrator.warming import start_cache_warming
 from src.ai.utils.conversation import (
+    RUN_BEAT_S,
     append_history,
     clear_current_run,
     get_current_run,
@@ -124,8 +129,85 @@ def _trip_state(trip: Trip) -> dict:
     return state
 
 
+STREAM_WAIT_S = 10.0  # how long the event stream waits for a message before it looks at its connection again
+
+# The planning runs this process is making. A run is a task of this process and nothing else's: when
+# the server stops they are waited for, and those that do not finish are given up (finish_runs).
+_runs: set[asyncio.Task] = set()
+
+# What the traveller is told when a run was cut short by the server stopping — a deploy, most often.
+INTERRUPTED = "The server was restarted while this trip was being planned. Nothing is lost — please start it again."
+
+
+async def _keep_noted(redis: aioredis.Redis, trip_id: uuid.UUID, note: dict) -> None:
+    """While a run lasts, write its note again and again: the note is how anyone else knows it is alive.
+
+    "Anyone else" is another instance of this server — during a deploy the new
+    one starts while the old one is still planning, and at startup an instance
+    fails every trip left "planning" by a process that died (main.py). A note
+    kept up tells it that this one did not die.
+    """
+    while True:
+        await asyncio.sleep(RUN_BEAT_S)
+        try:
+            await save_current_run(redis, str(trip_id), note)
+        except Exception:
+            logger.debug("Could not renew the run note of trip %s", trip_id, exc_info=True)
+
+
+async def _give_up(trip_id: uuid.UUID, turn: int, has_itinerary: bool, publish: Callable) -> None:
+    """A run cut short because the server is stopping: tell the page, and do not leave the trip "planning"."""
+    try:
+        await publish({"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": INTERRUPTED})
+    except Exception:
+        logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
+    try:
+        async with AsyncSessionLocal() as db:  # a session of its own: the run's is in the middle of something
+            trip = await db.get(Trip, trip_id)
+            if trip is not None and trip.status == TripStatus.PLANNING:
+                trip.status = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
+                db.add(
+                    AgentRun(
+                        trip_id=trip_id,
+                        agent_name="interrupted",
+                        status="failed",
+                        turn=turn,
+                        input={},
+                        output={"reason": INTERRUPTED},
+                        duration_ms=0,
+                    )
+                )
+                await db.commit()
+    except Exception:
+        logger.warning("Could not mark the interrupted run of trip %s", trip_id, exc_info=True)
+
+
+async def finish_runs(grace_seconds: float) -> int:
+    """As the server stops: wait for the runs in flight, give up those that are not done in time.
+
+    Returns how many were given up. A plan takes ten to thirty seconds, so with
+    a grace period longer than that a deploy costs no traveller a plan.
+    """
+    running = [task for task in _runs if not task.done()]
+    if not running:
+        return 0
+    logger.info("[SHUTDOWN] %d planning run(s) in flight — waiting up to %.0f s for them", len(running), grace_seconds)
+    _, unfinished = await asyncio.wait(running, timeout=grace_seconds)
+    for task in unfinished:
+        task.cancel()
+    if unfinished:
+        await asyncio.wait(unfinished, timeout=10)
+        logger.warning("[SHUTDOWN] %d planning run(s) could not finish in time and were given up", len(unfinished))
+    return len(unfinished)
+
+
 async def _run_orchestrator(
-    trip_id: uuid.UUID, redis: aioredis.Redis, run: OrchestratorCall, turn: int = 1, has_itinerary: bool = False
+    trip_id: uuid.UUID,
+    redis: aioredis.Redis,
+    run: OrchestratorCall,
+    turn: int = 1,
+    has_itinerary: bool = False,
+    note: dict | None = None,
 ) -> None:
     """Background task behind /plan, /clarify, /replan and /refine.
 
@@ -135,6 +217,11 @@ async def _run_orchestrator(
     never stays stuck in "planning": a crash marks it failed and tells the SSE
     stream. A trip that already has an itinerary (a refinement) falls back to
     "completed", because the previous itinerary still stands.
+
+    Phase 27: the same holds when the run does not crash but is cut short — the
+    server is stopping, and the task is cancelled (`_give_up`). And while the
+    run lasts its `note` in Redis is kept up, so that another instance starting
+    beside this one leaves the trip alone.
     """
 
     async def publish(event: dict) -> None:
@@ -145,12 +232,22 @@ async def _run_orchestrator(
         total = (state.get("draft_itinerary") or {}).get("total_cost") or 0
         await append_history(redis, str(trip_id), "assistant", f"Itinerary ready (₹{total:,.0f}).", turn)
 
+    this_run = asyncio.current_task()
+    if this_run is not None:
+        _runs.add(this_run)
+    alive = spawn(_keep_noted(redis, trip_id, note)) if note is not None else None
     try:
         async with AsyncSessionLocal() as db:
             try:
-                result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
+                with error_reporting.run_scope(trip_id, turn):  # an error reported from here on names its trip
+                    result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
+            except asyncio.CancelledError:
+                logger.warning("Planning run for trip %s was cut short: the server is stopping", trip_id)
+                await asyncio.shield(_give_up(trip_id, turn, has_itinerary, publish))
+                raise
             except Exception as exc:
-                logger.exception("Planning run crashed for trip %s", trip_id)
+                with error_reporting.run_scope(trip_id, turn):
+                    logger.exception("Planning run crashed for trip %s", trip_id)
                 fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
                 try:
                     await publish(
@@ -170,6 +267,9 @@ async def _run_orchestrator(
                     trip.status = fallback
                     await db.commit()
     finally:
+        _runs.discard(this_run)
+        if alive is not None:
+            alive.cancel()
         try:
             await clear_current_run(redis, str(trip_id))
         except Exception:
@@ -190,7 +290,8 @@ async def _start_run(
     db.add(trip)
     await db.commit()
 
-    await save_current_run(redis, str(trip.id), {"turn": turn, **event_extra})
+    note = {"turn": turn, **event_extra}
+    await save_current_run(redis, str(trip.id), note)
     await redis.publish(
         _events_channel(trip.id),
         json.dumps(
@@ -204,7 +305,7 @@ async def _start_run(
             }
         ),
     )
-    spawn(_run_orchestrator(trip.id, redis, run, turn=turn, has_itinerary=has_itinerary))
+    spawn(_run_orchestrator(trip.id, redis, run, turn=turn, has_itinerary=has_itinerary, note=note))
 
 
 def _ensure_not_planning(trip: Trip) -> None:
@@ -671,20 +772,35 @@ async def stream_trip_events(
     await db.close()  # the stream can stay open for minutes — don't pin a pooled DB connection to it
 
     async def generator() -> AsyncGenerator:
+        """The trip's channel, as server-sent events — for as long as Redis can be reached.
+
+        Phase 27: a hosted Redis closes connections (idle ones after an hour, every one when its
+        proxy is redeployed). Waiting on the subscription in one endless read meant that the first
+        such close ended the stream with an error. So the wait is in pieces, each through the
+        client's retry: a subscription that finds its connection closed connects and subscribes
+        again — the page's stream stays open, and only what was published in between is missed
+        (the page asks GET /status for that). When Redis cannot be reached again at all, the stream
+        ends, and the browser's EventSource keeps trying by itself.
+        """
         pubsub = redis.pubsub()
-        await pubsub.subscribe(_events_channel(trip_id))
-        # Pub/sub has no replay: `trip_status` tells a late (re)connecting client where the run stands.
-        yield {
-            "event": "connected",
-            "data": json.dumps({"trip_id": str(trip_id), "status": "listening", "trip_status": trip_status}),
-        }
         try:
-            async for message in pubsub.listen():
-                if message["type"] == "message":
+            await pubsub.subscribe(_events_channel(trip_id))
+            # Pub/sub has no replay: `trip_status` tells a late (re)connecting client where the run stands.
+            yield {
+                "event": "connected",
+                "data": json.dumps({"trip_id": str(trip_id), "status": "listening", "trip_status": trip_status}),
+            }
+            while True:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=STREAM_WAIT_S)
+                if message is not None and message["type"] == "message":
                     yield {"event": "agent_update", "data": message["data"]}
+        except (RedisConnectionError, RedisTimeoutError) as lost:
+            logger.warning("Event stream of trip %s: Redis could not be reached again (%s) — closing it", trip_id, lost)
         finally:
-            await pubsub.unsubscribe(_events_channel(trip_id))
-            await pubsub.aclose()
+            try:
+                await pubsub.aclose()
+            except Exception:  # the connection is the thing that is broken
+                pass
 
     return EventSourceResponse(generator())
 
@@ -736,7 +852,8 @@ async def get_trip_status(
     result = await db.execute(select(AgentRun).where(AgentRun.trip_id == trip_id).order_by(AgentRun.created_at.asc()))
     runs = list(result.scalars().all())
     # Every run ends with an "orchestrator" row, so those rows mark where one run stops and the next starts.
-    run_ends = [i for i, run in enumerate(runs) if run.agent_name == "orchestrator"]
+    # A run the server stopped under (Phase 27) never wrote one: its "interrupted" row is its end.
+    run_ends = [i for i, run in enumerate(runs) if run.agent_name in ("orchestrator", "interrupted")]
     since_last_end = runs[run_ends[-1] + 1 :] if run_ends else runs  # the run in flight, or one that crashed
 
     conflict = failure_reason = None
@@ -749,8 +866,8 @@ async def get_trip_status(
                 "options": output.get("options", []),
                 "estimate": output.get("estimate"),  # Phase 21: the trip as asked, priced
             }
-        elif (output := latest_run.get("nothing_found")) is not None:
-            failure_reason = output.get("reason")
+        elif (output := latest_run.get("nothing_found") or latest_run.get("interrupted")) is not None:
+            failure_reason = output.get("reason")  # "interrupted" (Phase 27): the server stopped under the run
         elif (output := latest_run.get("builder_failed")) is not None:
             failure_reason = (output.get("builder_error") or {}).get("error") or "; ".join(
                 failure.get("detail", "") for failure in output.get("evaluator_failures") or []
@@ -981,6 +1098,7 @@ _AGENT_LABELS: dict[str, str] = {
     "nothing_found": "Nothing found for the destination — no plan built",
     "preference_extractor": "Learned traveller preferences from the trip",
     "refinement_classifier": "Read what the change asks for",
+    "interrupted": "Stopped: the server was restarted",  # Phase 27
     "orchestrator": "Finished planning run",
 }
 

@@ -26,6 +26,17 @@ _client = None  # lazy singleton
 _client_lock = threading.Lock()
 
 
+def _where(redis_url: str) -> str:
+    """A Redis as it may be logged: scheme, host and port — never the password in its URL."""
+    from urllib.parse import urlsplit
+
+    try:
+        parts = urlsplit(redis_url)
+        return f"{parts.scheme}://{parts.hostname or '?'}{f':{parts.port}' if parts.port else ''}"
+    except ValueError:
+        return "an unreadable URL"
+
+
 def _get_client():
     """Return a live sync Redis client, or None if Redis is unreachable."""
     global _client
@@ -37,15 +48,24 @@ def _get_client():
             return _client
         try:
             import redis  # sync client
+            from redis.backoff import ExponentialBackoff
+            from redis.retry import Retry
 
+            # Phase 27: a hosted Redis closes idle connections. A command that finds its connection
+            # closed is sent again on a new one; one that has been idle for a while is pinged first.
             c = redis.from_url(
                 mcp_settings.REDIS_URL,
                 decode_responses=True,
                 socket_connect_timeout=2,
+                socket_keepalive=True,
+                health_check_interval=30,
+                retry=Retry(ExponentialBackoff(cap=1.0, base=0.05), 3),
+                retry_on_error=[redis.exceptions.ConnectionError],
             )
             c.ping()
             _client = c
-            logger.info("MCP cache: Redis connected at %s", mcp_settings.REDIS_URL)
+            # The host only: a hosted Redis's URL has its password in it.
+            logger.info("MCP cache: Redis connected at %s", _where(mcp_settings.REDIS_URL))
             return _client
         except Exception as exc:
             logger.warning("MCP cache: Redis unavailable (%s) — caching disabled.", exc)
