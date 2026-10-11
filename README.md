@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 25 / 50 — Group Trip Intelligence**
+**Status: Phase 26 / 50 — LangSmith Tracing & Token Costs**
 
 ---
 
@@ -33,6 +33,10 @@ User → Next.js 14 → FastAPI Gateway → OrchestratorAgent (LangGraph)
 Every saved itinerary is embedded (Gemini, 1536 dimensions, pgvector). GET /trips/{id}/similar ranks a
 traveller's other trips by cosine similarity to this one; GET /trips/search?q=… ranks them against a
 typed query. Both search only the caller's own trips.
+
+Every run can be a LangSmith trace (off unless .env switches it on): a span for each step, model call
+and tool call, tagged with the trip and the user. Every step that asked a model records its tokens and
+their list price in agent_runs; GET /admin/cost-summary adds them up by agent and by day.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -92,10 +96,10 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 855 tests
+# Unit + contract tests (no Docker, no network) — 897 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 43 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 51 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
@@ -194,13 +198,19 @@ tripplanner-ai/
 │       │                                  Phase 25: each traveller's share
 │       ├── group.py                     ← Phase 25: who a place suits, the group score, taking places in turns,
 │       │                                  repairing a plan so every two days hold a stop for each traveller
+│       ├── tracing.py                   ← Phase 26: LangSmith on/off from the settings; a run tagged with its trip
+│       │                                  and user; spans for a re-plan, an evaluator retry, a tool call
+│       ├── usage.py                     ← Phase 26: what the models were asked (one recorder, the innermost timer),
+│       │                                  the price table, tokens → dollars
+│       ├── trace_tree.py                ← Phase 26: the runs LangSmith is sent, put back together as trees
 │       ├── mcp_server/                  ← Phase 3: server, tools, models, cache; Phase 24: rate_limiter.py (each
 │       │                                  provider's limit, a queue for the request over it), outbound.py (backoff
 │       │                                  on 429 / 5xx), the tools in threads, one search per cache key at a time
-│       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server
+│       ├── mcp_client/                  ← Phase 6: client.py talks to the MCP server; Phase 26: each call a span
 │       ├── embeddings/                  ← Phase 14: Gemini embedding writer; Phase 23: the summary text, query embedding
 │       ├── utils/
-│       │   ├── run_logger.py            ← Phase 6: writes agent_runs
+│       │   ├── run_logger.py            ← Phase 6: writes agent_runs; Phase 26: with each run's tokens and cost,
+│       │   │                              and a warning when one trip's models pass LLM_COST_ALERT_USD
 │       │   ├── conversation.py          ← Phase 7B/15: Redis history + planning state
 │       │   ├── preferences.py           ← Phase 16: preference loading / injection
 │       │   ├── failures.py              ← Phase 20: a failed search in the traveller's words; retry or not
@@ -221,7 +231,8 @@ tripplanner-ai/
 │       │                                      Phase 20: streams its reply
 │       └── orchestrator/
 │           ├── orchestrator.py          ← Phase 9–22: full graph with preference injection, refinement & loops,
-│           │                                  builder_token streaming, retry of one search, local tips
+│           │                                  builder_token streaming, retry of one search, local tips;
+│           │                                  Phase 26: every run a trace of its trip
 │           └── warming.py               ← Phase 24: a trip's opening searches, made while it is being created
 ├── migrations/                          ← Alembic migrations
 │   └── versions/
@@ -229,24 +240,29 @@ tripplanner-ai/
 │       ├── 002_add_turn_to_agent_runs.py← Phase 15: turn tracking
 │       ├── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 │       ├── 004_embedding_kind.py        ← Phase 23: embeddings.kind, HNSW index over summaries, re-embedding queued
-│       └── 005_trip_group_members.py    ← Phase 25: trips.group_members
+│       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
+│       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (847 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (889 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 43 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 51 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
 │                                          fake providers behind the real MCP tools (Phase 24), with an
-│                                          attractions catalogue that answers by kind and popularity (Phase 25)
+│                                          attractions catalogue that answers by kind and popularity (Phase 25);
+│                                          chat models that report token counts and a LangSmith that keeps
+│                                          what it is sent and sends nothing anywhere (Phase 26)
 ├── docker/
 │   └── init.sql                         ← enables pgvector extension
 ├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
 │                                          seed_demo_trips.py (a demo account with twelve embedded trips),
 │                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec),
-│                                          group_experiment.py (Phase 25: four travellers against the real search)
+│                                          group_experiment.py (Phase 25: four travellers against the real search),
+│                                          trace_receiver.py (Phase 26: a local stand-in for LangSmith — prints
+│                                          each trace it is sent; no account needed)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–25) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–26) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -289,9 +305,10 @@ tripplanner-ai/
 | 23 | pgvector similarity search — similar trips, search, the embedding experiment ([docs/phase23_build_log.md](docs/phase23_build_log.md)) | ✅ Done | 24 unit + 13 integration + 8 Playwright E2E |
 | 24 | Caching & rate limits — cache warming on trip creation, a rate limit per provider, backoff on 429, the tools side by side ([docs/phase24_build_log.md](docs/phase24_build_log.md)) | ✅ Done | 90 unit + 3 integration + 1 Playwright E2E |
 | 25 | Group trips — each traveller's interests searched on their own, a plan with a stop for everyone in every two days, each one's share of the cost ([docs/phase25_build_log.md](docs/phase25_build_log.md)) | ✅ Done | 69 unit + 4 integration + 4 Playwright E2E |
-| 26–50 | Production & Polish | ⏳ | |
+| 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — verified against a local stand-in for LangSmith; the check in LangSmith itself needs a key | 43 unit + 8 integration |
+| 27–50 | Production & Polish | ⏳ | |
 
-**Total: 855 unit + contract, 43 integration, 60 browser — all passing.** Zero network calls in CI.
+**Total: 897 unit + contract, 51 integration, 60 browser — all passing.** Zero network calls in CI.
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -329,6 +346,16 @@ turn, and one answered 429 or 5xx is tried again after a backoff. Creating a tri
 background so that planning finds them cached — `CACHE_WARMING_ENABLED=false` turns that off where a quota
 is too tight to spend on trips that may never be planned.
 
+**Tracing and costs (optional, off by default):** `LANGCHAIN_TRACING_V2=true` and a `LANGCHAIN_API_KEY`
+(https://smith.langchain.com) upload every run to LangSmith as a trace — each step, model call and tool call
+a span, tagged with `trip_id` and `user_id`, so one trip's every decision is one filter away. A trace holds
+the trip: its destination, dates, travellers' names and interests, the prompts and the plan — no keys, and
+none of it leaves the machine unless `.env` says so. Without an account, `python scripts/trace_receiver.py`
+prints the same traces locally (`HOW_TO_RUN.md`, Step 24). Whether or not tracing is on, each run that asked a
+model records its tokens and their list price: `GET /admin/cost-summary?since=2026-10-01` adds them up by
+agent and by day, and a trip whose models pass `LLM_COST_ALERT_USD` (default $0.10) is logged. The prices are
+list prices from price trackers — check them against the provider's page, and correct one with `LLM_PRICES`.
+
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.
 Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is an `.env` change.
@@ -358,7 +385,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Cache | Redis 7 |
 | ORM | SQLModel + Alembic |
 | Embeddings | Gemini `gemini-embedding-001` at 1536 dimensions (Phase 14) |
-| Observability | LangSmith, Sentry (Phase 26+) |
+| Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry (Phase 27) |
 | Deploy | Railway (backend), Vercel (frontend), Neon (DB), Upstash (Redis) |
 
 ---

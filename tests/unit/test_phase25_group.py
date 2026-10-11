@@ -809,12 +809,6 @@ def test_the_pdf_of_an_older_plan_splits_the_total_and_one_traveller_has_no_shar
     assert exported(data, travellers=4).per_traveller == carried
 
 
-def test_the_app_says_which_phase_it_is():
-    from app.main import app
-
-    assert app.version == "0.25.0"
-
-
 # ── What the API lets in ───────────────────────────────────────────────────
 
 TRIP = {"destination": "Goa", "start_date": str(START), "end_date": str(START + timedelta(days=3)), "budget": 60_000}

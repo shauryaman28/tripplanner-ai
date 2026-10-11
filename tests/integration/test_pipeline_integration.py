@@ -237,7 +237,15 @@ async def test_plan_then_refine_end_to_end(db_session):
 
         await _run_finished(client, trip_id, orchestrator_rows=2)
         turn_2 = [r["agent_name"] for r in (await client.get(f"/trips/{trip_id}/runs?turn=2")).json()]
-        assert turn_2 == ["hotel_agent", "itinerary_builder", "evaluator", "persist", "orchestrator"]
+        # Phase 26: reading the request is logged too — the classifier's row opens the turn
+        assert turn_2 == [
+            "refinement_classifier",
+            "hotel_agent",
+            "itinerary_builder",
+            "evaluator",
+            "persist",
+            "orchestrator",
+        ]
         assert tools["flight"].await_count == flight_calls  # flights carried forward, not re-searched
 
         versions = (await client.get(f"/trips/{trip_id}/itineraries")).json()
@@ -517,7 +525,8 @@ async def test_a_plan_is_whole_without_local_tips_and_gets_them_with_its_next_ch
             assert (await client.post(f"/trips/{trip_id}/refine", json={"message": "a nicer hotel"})).status_code == 200
             runs = await _run_finished(client, trip_id, orchestrator_rows=2)
         turn_2 = [r["agent_name"] for r in runs if r["turn"] == 2]
-        assert set(turn_2[:2]) == {"hotel_agent", "destination_intelligence"} and turn_2[2] == "itinerary_builder"
+        assert turn_2[0] == "refinement_classifier"  # Phase 26: the request, read
+        assert set(turn_2[1:3]) == {"hotel_agent", "destination_intelligence"} and turn_2[3] == "itinerary_builder"
         refined = (await client.get(f"/trips/{trip_id}/itinerary")).json()
         assert refined["structured_data"]["local_intelligence"] == coerce_intelligence(LOCAL_TIPS).model_dump()
 

@@ -83,6 +83,37 @@ def no_cache_warming():
 
 
 @pytest.fixture(autouse=True)
+def costs_as_shipped():
+    """The over-cost limit and the price table (Phase 26) are the code's own in every test, whatever .env says.
+
+    Someone who corrects a price in .env (LLM_PRICES), or lowers the limit to
+    see the alert fire (LLM_COST_ALERT_USD), must not find the cost tests failing.
+    """
+    from app.core.config import Settings, settings
+
+    with (
+        patch.object(settings, "LLM_COST_ALERT_USD", Settings.model_fields["LLM_COST_ALERT_USD"].default),
+        patch.object(settings, "LLM_PRICES", {}),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def no_tracing():
+    """LangSmith tracing (Phase 26) is off in every test that does not switch it on (tests/fakes.traced).
+
+    Off is said to the tracing library too: a `LANGSMITH_TRACING=true` in the
+    shell that runs the tests would otherwise upload every stubbed plan to
+    whatever project that shell's key belongs to.
+    """
+    from src.ai import tracing
+
+    tracing.use(None)
+    yield
+    tracing.use(None)
+
+
+@pytest.fixture(autouse=True)
 def no_tile_downloads():
     """The PDF export draws its map from tiles: a test stubs them (tests/fakes.fake_tile), it never fetches any."""
     refuse = AsyncMock(side_effect=RuntimeError("no tile server in tests"))

@@ -15,17 +15,39 @@ import threading
 import time
 import uuid
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, contextmanager
 from datetime import date, timedelta
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import requests
+import zstandard
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from PIL import Image
+from requests.adapters import BaseAdapter
 
 from app import search
 from app.core.config import settings
+from src.ai import llm as llm_module
+from src.ai import tracing
+from src.ai.agents import destination_intelligence, preference_extractor
 from src.ai.agents.refinement_classifier import RefinementClassification
+from src.ai.builder import builder as builder_module
+from src.ai.orchestrator import orchestrator as orchestrator_module
+from src.ai.trace_tree import SERVER_INFO, Runs, Span
+
+# The real model seams, kept before any test replaces them (`models_answer` puts them back).
+_REAL_SEAMS = {
+    "src.ai.builder.builder._call_llm": builder_module._call_llm,
+    "src.ai.agents.destination_intelligence._call_llm": destination_intelligence._call_llm,
+    "src.ai.agents.preference_extractor._call_llm": preference_extractor._call_llm,
+    "src.ai.orchestrator.orchestrator._extract_intent": orchestrator_module._extract_intent,
+    "src.ai.llm._ask_groq": llm_module._ask_groq,
+}
 
 _DEL = {"latitude": 28.5585, "longitude": 77.1002}
 _GOI = {"latitude": 15.3806, "longitude": 73.8332}
@@ -611,3 +633,234 @@ def stub_attractions(_name: str, params: dict):
             )
             place["interests"].append(interest)
     return list(found.values())[: params.get("limit", 10)]
+
+
+# ── The models, answering through LangChain; and LangSmith, receiving (Phase 26) ──
+#
+# network_stubs() replaces the functions that call a model, so nothing of LangChain runs: no callback
+# fires, no token is counted, no model call is a span. For tracing and for token costs that is the
+# very thing under test. These leave the planner's own model-calling code in place and stand in for
+# the model classes instead — and for LangSmith's server, with a transport that goes nowhere.
+
+
+class FakeChatModel(BaseChatModel):
+    """A chat model that answers as the real ones do — through LangChain, with its name and its token usage.
+
+    answer   the reply: a string, or a function of (system prompt, user prompt) — plain or async
+    model    the name it reports, which is what its tokens are priced by
+    tokens   (input, output) to report; left None they are counted from the text, four characters a token
+
+    Streamed, the reply comes in pieces and the usage with the last one, as Groq sends it.
+    """
+
+    model: str = "openai/gpt-oss-120b"
+    answer: Any = "{}"
+    tokens: tuple[int, int] | None = None
+    silent: bool = False  # a provider that reports no usage at all
+
+    @property
+    def _llm_type(self) -> str:
+        return "fake-chat-model"
+
+    async def _reply(self, messages: list[BaseMessage]) -> tuple[str, dict | None]:
+        said = [str(message.content) for message in messages]
+        system = next((str(m.content) for m in messages if m.type == "system"), "")
+        user = next((str(m.content) for m in reversed(messages) if m.type == "human"), "")
+        text = self.answer(system, user) if callable(self.answer) else self.answer
+        if asyncio.iscoroutine(text):
+            text = await text
+        if isinstance(text, Exception):
+            raise text
+        if self.silent:
+            return text, None
+        counted = self.tokens or (max(1, sum(len(piece) for piece in said) // 4), max(1, len(text) // 4))
+        usage = {"input_tokens": counted[0], "output_tokens": counted[1], "total_tokens": sum(counted)}
+        return text, usage
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        raise NotImplementedError("the planner only ever calls its models asynchronously")
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        text, usage = await self._reply(messages)
+        message = AIMessage(content=text, usage_metadata=usage, response_metadata={"model_name": self.model})
+        return ChatResult(generations=[ChatGeneration(message=message)])
+
+    async def _astream(self, messages, stop=None, run_manager=None, **kwargs) -> AsyncIterator[ChatGenerationChunk]:
+        text, usage = await self._reply(messages)
+        for start in range(0, len(text), STREAM_PIECE):
+            yield ChatGenerationChunk(message=AIMessageChunk(content=text[start : start + STREAM_PIECE]))
+            if stream_pause:
+                await asyncio.sleep(stream_pause)
+        last = AIMessageChunk(content="", usage_metadata=usage, response_metadata={"model_name": self.model})
+        yield ChatGenerationChunk(message=last)
+
+
+NO_PREFERENCES = '{"travel_style": null, "dietary_restrictions": [], "preferred_airlines": [], "home_city": null}'
+
+
+async def _the_stand_ins_answer(system: str, user_prompt: str) -> str:
+    """What the stand-in models say, by who is asking: the builder its plan, the local guide its tips."""
+    if system == builder_module._SYSTEM_PROMPT:
+        return await fake_builder_llm(system, user_prompt)
+    if system == destination_intelligence._SYSTEM_PROMPT:
+        return await fake_intelligence_llm(system, user_prompt)
+    if system == preference_extractor._SYSTEM_PROMPT:
+        return NO_PREFERENCES
+    return "{}"  # a short prompt (intent parsing, the refinement classifier): nothing to add
+
+
+@contextmanager
+def models_answer(large: Any = _the_stand_ins_answer, short: Any = "{}", **model_options):
+    """The planner's own model calls, answered by FakeChatModels. Yields the models made, in order.
+
+    Inside it every call the planner makes to Groq or Gemini runs its real
+    code up to the model class, and goes through LangChain: callbacks fire,
+    tokens are reported, the call is a span. Nothing reaches a provider.
+
+    `large` answers what is asked of Groq (the builder, the local tips, the
+    preference extractor); `short` what is asked of Gemini (intent parsing, the
+    refinement classifier). Works inside network_stubs(), whose replacements of
+    the model-calling functions it undoes for as long as it is open.
+    """
+    made: list[FakeChatModel] = []
+
+    def groq(**options):
+        made.append(FakeChatModel(model=options.get("model", "openai/gpt-oss-120b"), answer=large, **model_options))
+        return made[-1]
+
+    def gemini(**options):
+        made.append(FakeChatModel(model=options.get("model", "gemini-3.5-flash-lite"), answer=short, **model_options))
+        return made[-1]
+
+    patches = [patch(seam, real) for seam, real in _REAL_SEAMS.items()]
+    patches += [
+        patch("langchain_groq.ChatGroq", groq),
+        patch("src.ai.llm.ChatGoogleGenerativeAI", gemini),
+        patch.object(settings, "GROQ_API_KEY", "test-key"),
+        patch.object(settings, "GOOGLE_API_KEY", "test-key"),
+    ]
+    for each in patches:
+        each.start()
+    try:
+        yield made
+    finally:
+        for each in reversed(patches):
+            each.stop()
+
+
+class _LangSmithTransport(BaseAdapter):
+    """Where the tracing library's requests end up in a test: answered here, sent nowhere."""
+
+    def __init__(self, server: "FakeLangSmith") -> None:
+        super().__init__()
+        self.server = server
+
+    def send(self, request, **_kwargs) -> requests.Response:
+        body = request.body() if callable(request.body) else request.body
+        if hasattr(body, "read"):  # a compressed upload is handed over as a stream
+            body = body.read()
+        if request.headers.get("Content-Encoding") == "zstd":
+            body = zstandard.ZstdDecompressor().decompressobj().decompress(body)
+        self.server.requests.append((request.method, request.path_url, dict(request.headers), body))
+        response = requests.Response()
+        response.request, response.url = request, request.url
+        response.headers["Content-Type"] = "application/json"
+        if request.method == "GET":
+            response.status_code, answer = 200, self.server.info if request.path_url.startswith("/info") else {}
+        elif self.server.down:
+            response.status_code, answer = 500, {"detail": "the trace server is down"}
+        else:
+            if request.path_url.startswith("/runs/batch"):
+                self.server.runs.take(json.loads(body))
+            elif request.path_url.startswith("/runs/multipart"):
+                for run in _runs_of_a_multipart_upload(body, request.headers["Content-Type"]):
+                    self.server.runs.take_one(run)
+            response.status_code, answer = 202, {}
+        response._content = json.dumps(answer).encode()
+        return response
+
+    def close(self) -> None:
+        pass
+
+
+def _runs_of_a_multipart_upload(body: bytes, content_type: str) -> list[dict]:
+    """The runs in an upload as LangSmith itself is sent it: a part for each run, and one for each of its big fields.
+
+    Parts are named "post.<run id>" (the run as it started), "post.<run id>.inputs",
+    "patch.<run id>" (the same run, ended), "patch.<run id>.outputs", … — each a JSON document.
+    """
+    from requests_toolbelt.multipart.decoder import MultipartDecoder
+
+    runs: dict[str, dict] = {}
+    for part in MultipartDecoder(body, content_type).parts:
+        name = re.search(rb'name="([^"]+)"', part.headers[b"Content-Disposition"]).group(1).decode()
+        _event, run_id, *field = name.split(".")
+        run = runs.setdefault(run_id, {"id": run_id})
+        if field:
+            run[field[0]] = json.loads(part.content)
+        else:
+            run.update(json.loads(part.content))
+    return list(runs.values())
+
+
+class FakeLangSmith:
+    """LangSmith, as far as a test needs it: what the planner uploads ends up here, and nowhere else.
+
+    The client is the one the app makes (tracing.make_client) — its own
+    serialising, batching and scrubbing — with an HTTP session whose every
+    request is answered in this process. `runs` puts what arrived back together
+    (src/ai/trace_tree.py); `traces(trip_id)` is LangSmith's filter by trip.
+
+    down        answer every upload with HTTP 500: a tracing service that is not there
+    multipart   take uploads as multipart (POST /runs/multipart) — what the library sends unless a server
+                asks for the JSON batches the local stand-in asks for: the same runs, in another encoding
+    compressed  …and say, as a current LangSmith server does, that they may be zstd-compressed: the
+                library then takes a third road of its own, and `requests` holds what it sent, decompressed
+    """
+
+    HOST = "https://langsmith.test"
+    KEY = "lsv2_test_key_never_in_a_body"
+
+    def __init__(self, down: bool = False, multipart: bool = False, compressed: bool = False) -> None:
+        self.runs = Runs()
+        self.requests: list[tuple[str, str, dict, Any]] = []
+        self.down = down
+        self.info = {**SERVER_INFO, "batch_ingest_config": {**SERVER_INFO["batch_ingest_config"]}}
+        self.info["batch_ingest_config"]["use_multipart_endpoint"] = multipart or compressed
+        if compressed:
+            self.info["instance_flags"] = {"zstd_compression_enabled": True}
+        session = requests.Session()
+        session.mount(self.HOST, _LangSmithTransport(self))
+        self.client = tracing.make_client(self.KEY, self.HOST, session=session)
+
+    def flush(self, seconds: float = 10.0) -> bool:
+        """Wait for the library's sending thread to have sent everything. False if it did not in time."""
+        sender = threading.Thread(target=self.client.flush, daemon=True)
+        sender.start()
+        sender.join(seconds)
+        return not sender.is_alive()
+
+    def traces(self, trip_id: Any = None) -> list[Span]:
+        """The traces uploaded so far — or only those tagged with one trip."""
+        assert self.flush(), "the tracing library did not finish sending"
+        return self.runs.traces(str(trip_id) if trip_id is not None else None)
+
+    def uploaded(self) -> str:
+        """Every request body sent, as one text: what left the process."""
+        self.flush()
+        return "\n".join(
+            body.decode(errors="replace") if isinstance(body, bytes) else str(body or "")
+            for _m, _p, _h, body in self.requests
+        )
+
+
+@contextmanager
+def traced(server: FakeLangSmith | None = None, project: str = "tests"):
+    """Tracing on, into a FakeLangSmith, for as long as the block lasts."""
+    server = server or FakeLangSmith()
+    tracing.use(server.client, project)
+    try:
+        yield server
+    finally:
+        server.flush()
+        tracing.use(None)

@@ -243,5 +243,6 @@ class PreferenceExtractor:
             duration_ms=timer.duration_ms,
             status="completed",
             turn=turn,
+            usage=timer.usage,
         )
         return changes
