@@ -8,6 +8,10 @@ open, and a row logged with that `usage` carries the tokens and what they cost
 (src/ai/usage.py). A row for work that asked no model has neither. When a
 trip's rows add up to more than LLM_COST_ALERT_USD, that is logged — once, as
 the total passes it.
+
+Phase 29: timed_run("flight_agent") names whose work it measures — the name its
+row is logged under. The model calls made meanwhile are counted for that agent,
+and the work is a span of the trace under way: every agent_runs row a span.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from src.ai.usage import Usage, metered
+from src.telemetry import traces
 
 try:
     from app.core.config import settings
@@ -117,8 +122,12 @@ def _dollars(amount: float) -> str:
 
 
 @asynccontextmanager
-async def timed_run():
-    """Measures a stretch of work: how long it took, and what it asked of the models (`timer.usage`, Phase 26)."""
+async def timed_run(agent: str | None = None):
+    """Measures a stretch of work: how long it took, and what it asked of the models (`timer.usage`, Phase 26).
+
+    `agent` is the name the work is logged under (Phase 29): its model calls are counted for it,
+    and it is a span of that name. Without one, the work is timed and metered and nothing more.
+    """
 
     class _Timer:
         duration_ms: int = 0
@@ -126,10 +135,14 @@ async def timed_run():
 
     t = _Timer()
     start = time.monotonic()
-    with metered() as usage:
+    with metered(agent) as usage:
         t.usage = usage
         try:
-            yield t
+            if agent is None:
+                yield t
+            else:
+                with traces.span(agent, {"agent.name": agent}):
+                    yield t
         finally:
             t.duration_ms = int((time.monotonic() - start) * 1000)
 

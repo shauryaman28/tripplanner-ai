@@ -90,6 +90,8 @@ from src.ai.utils.conversation import (
 from src.ai.utils.failures import can_retry, failure_words
 from src.ai.utils.run_logger import log_agent_run, timed_run
 from src.ai.utils.tasks import spawn
+from src.telemetry import context as telemetry_context
+from src.telemetry import metrics, traces
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +210,7 @@ async def _run_orchestrator(
     turn: int = 1,
     has_itinerary: bool = False,
     note: dict | None = None,
+    kind: str = "plan",
 ) -> None:
     """Background task behind /plan, /clarify, /replan and /refine.
 
@@ -235,45 +238,57 @@ async def _run_orchestrator(
     this_run = asyncio.current_task()
     if this_run is not None:
         _runs.add(this_run)
-    alive = spawn(_keep_noted(redis, trip_id, note)) if note is not None else None
-    try:
-        async with AsyncSessionLocal() as db:
-            try:
-                with error_reporting.run_scope(trip_id, turn):  # an error reported from here on names its trip
-                    result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
-            except asyncio.CancelledError:
-                logger.warning("Planning run for trip %s was cut short: the server is stopping", trip_id)
-                await asyncio.shield(_give_up(trip_id, turn, has_itinerary, publish))
-                raise
-            except Exception as exc:
-                with error_reporting.run_scope(trip_id, turn):
-                    logger.exception("Planning run crashed for trip %s", trip_id)
-                fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
-                try:
-                    await publish(
-                        {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": str(exc)}
-                    )
-                except Exception:
-                    logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
-            else:
-                if result.get("itinerary_id"):
-                    return
-                fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed
-
-            if fallback is not None:
-                await db.rollback()
-                trip = await db.get(Trip, trip_id)
-                if trip is not None:
-                    trip.status = fallback
-                    await db.commit()
-    finally:
-        _runs.discard(this_run)
-        if alive is not None:
-            alive.cancel()
+    # Phase 29: the run is timed (`planning_run_duration_seconds` — the request that started it was
+    # answered at once, so its own duration says nothing about how long a plan takes) and is one span,
+    # under the request that started it: what the run does is that request's trace, to the last row.
+    telemetry_context.bind(trip_id=trip_id)
+    with (
+        metrics.planning_run(kind) as measured,
+        traces.span("planning run", {"run.kind": kind, "run.turn": turn}) as span,
+    ):
+        alive = spawn(_keep_noted(redis, trip_id, note)) if note is not None else None
         try:
-            await clear_current_run(redis, str(trip_id))
-        except Exception:
-            logger.warning("Could not clear the run note of trip %s", trip_id, exc_info=True)
+            async with AsyncSessionLocal() as db:
+                try:
+                    with error_reporting.run_scope(trip_id, turn):  # an error reported from here on names its trip
+                        result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
+                except asyncio.CancelledError:
+                    logger.warning("Planning run for trip %s was cut short: the server is stopping", trip_id)
+                    await asyncio.shield(_give_up(trip_id, turn, has_itinerary, publish))
+                    raise
+                except Exception as exc:
+                    with error_reporting.run_scope(trip_id, turn):
+                        logger.exception("Planning run crashed for trip %s", trip_id)
+                    measured.outcome = "crashed"  # the error is dealt with here, so the block is told
+                    span.record_exception(exc)
+                    traces.fail(span, f"{type(exc).__name__}: {exc}")
+                    fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
+                    try:
+                        await publish(
+                            {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": str(exc)}
+                        )
+                    except Exception:
+                        logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
+                else:
+                    if result.get("itinerary_id"):
+                        return
+                    measured.outcome = "no_plan"  # it ended, and with no itinerary: nothing found, or a question back
+                    fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed
+
+                if fallback is not None:
+                    await db.rollback()
+                    trip = await db.get(Trip, trip_id)
+                    if trip is not None:
+                        trip.status = fallback
+                        await db.commit()
+        finally:
+            _runs.discard(this_run)
+            if alive is not None:
+                alive.cancel()
+            try:
+                await clear_current_run(redis, str(trip_id))
+            except Exception:
+                logger.warning("Could not clear the run note of trip %s", trip_id, exc_info=True)
 
 
 async def _start_run(
@@ -291,6 +306,16 @@ async def _start_run(
     await db.commit()
 
     note = {"turn": turn, **event_extra}
+    # What the run is counted as (Phase 29): a retried search, a refinement, a way out of a budget conflict, a plan.
+    kind = (
+        "retry"
+        if event_extra.get("retry")
+        else "refine"
+        if event_extra.get("refinement_type")
+        else "replan"
+        if event_extra.get("choice")
+        else "plan"
+    )
     await save_current_run(redis, str(trip.id), note)
     await redis.publish(
         _events_channel(trip.id),
@@ -305,7 +330,7 @@ async def _start_run(
             }
         ),
     )
-    spawn(_run_orchestrator(trip.id, redis, run, turn=turn, has_itinerary=has_itinerary, note=note))
+    spawn(_run_orchestrator(trip.id, redis, run, turn=turn, has_itinerary=has_itinerary, note=note, kind=kind))
 
 
 def _ensure_not_planning(trip: Trip) -> None:
@@ -359,6 +384,7 @@ async def create_trip(
     db.add(trip)
     await db.commit()
     await db.refresh(trip)
+    telemetry_context.bind(trip_id=trip.id)  # Phase 29: the address had no trip in it — there was none yet
     if settings.CACHE_WARMING_ENABLED:
         # Phase 24 — the searches planning opens with, started now: by the time the traveller has said
         # what they want, the answers are cached. In the background: the trip is created either way.
@@ -644,7 +670,7 @@ async def refine_trip(
     turn = max(await get_current_turn(redis, str(trip_id)), 1) + 1  # the initial plan is always turn 1
     # Phase 26: reading the request is a model call like any other — a trace of this trip, and a row
     # of its own in agent_runs with what it cost. (Until now its tokens were counted nowhere.)
-    async with timed_run() as timer:
+    async with timed_run("refinement_classifier") as timer:
         with tracing.root(
             "classify refinement", "classify", trip_id, current_user.id, turn, inputs={"message": body.message}
         ) as trace:

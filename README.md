@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 28 / 50 — CI/CD Pipeline**
+**Status: Phase 29 / 50 — Observability: Prometheus, Grafana & OpenTelemetry**
 
 ---
 
@@ -50,6 +50,13 @@ frontend's (types, lint, a production build). On main, a third job follows only 
 the backend to Railway and waits until the public addresses answer GET /version with the merged commit.
 Every night at 02:00 UTC the integration tests run on a real Postgres and Redis, and the result is one
 comment on the repository's "Nightly test results" issue.
+
+Seen from outside (Phase 29): GET /metrics for Prometheus — every request counted and timed per endpoint,
+and the app's own numbers: model calls by agent and model, the tool server's cache hits, itineraries built,
+how long a plan takes. One OpenTelemetry trace per request, from the request through every SQL statement
+and Redis command, into the tool server's process and back, to the row that is written. Every log line a
+JSON object carrying trip_id, user_id and its trace. One trip id finds all three; a Grafana dashboard
+shows them.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -109,10 +116,10 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 1,010 tests
+# Unit + contract tests (no Docker, no network) — 1,094 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 60 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 64 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
@@ -218,6 +225,12 @@ tripplanner-ai/
 │   │           ├── formatting.py, theme.py ← ₹ / dates / labels, and the site's colours and day palette
 │   │           └── fonts/               ← Inter + Fraunces, and Noto for 13 scripts (noto/), all OFL,
 │   │                                      with the script that builds them
+│   ├── telemetry/                       ← Phase 29: what the running system says about itself — used by the API
+│   │   │                                  server and by the tool server, importing neither
+│   │   ├── context.py                   ← which trip, and whose, the work under way is for: two context variables
+│   │   ├── metrics.py                   ← the app's own Prometheus metrics; every request counted per endpoint
+│   │   ├── traces.py                    ← OpenTelemetry: one trace from the request to the row; scrubbed on export
+│   │   └── logs.py                      ← every log line a JSON object with trip_id, user_id and its trace
 │   └── ai/
 │       ├── llm.py                       ← model IDs + tolerant JSON parsing of LLM replies
 │       ├── pricing.py                   ← Phase 21: seasons by destination, typical costs, the estimate arithmetic;
@@ -269,9 +282,9 @@ tripplanner-ai/
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
 │       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (1,002 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (1,086 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 60 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 64 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
@@ -290,8 +303,10 @@ tripplanner-ai/
 ├── docker/
 │   ├── init.sql                         ← enables pgvector extension (local development only: migration 001 does
 │   │                                      it for a database that was just created)
-│   └── prodlike/                        ← Phase 27: a production-like stack — the deployed image against a TLS-only
-│                                          Postgres behind a pooler in transaction mode and a TLS-only Redis
+│   ├── prodlike/                        ← Phase 27: a production-like stack — the deployed image against a TLS-only
+│   │                                      Postgres behind a pooler in transaction mode and a TLS-only Redis
+│   └── observability/                   ← Phase 29: Prometheus, Grafana, Jaeger, Loki and Alloy — what reads the
+│                                          app's metrics, traces and log lines; the dashboard, as a file
 ├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
 │                                          seed_demo_trips.py (a demo account with twelve embedded trips),
 │                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec),
@@ -304,9 +319,12 @@ tripplanner-ai/
 │                                          freeze_constraints.py (Phase 27: writes constraints.txt again),
 │                                          wait_for_release.py (Phase 28: waits until a deployment answers with
 │                                          the commit that was merged), nightly_summary.py + nightly_post.sh
-│                                          (Phase 28: the night's test reports as one comment, and its posting)
+│                                          (Phase 28: the night's test reports as one comment, and its posting),
+│                                          observability.py (Phase 29: the observability stack up and down),
+│                                          observability_check.py (Phase 29: plans a trip, then asks Prometheus,
+│                                          Jaeger, Loki and Grafana what they saw of it)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–28) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–29) + phase1-17_audit.md
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -354,9 +372,10 @@ tripplanner-ai/
 | 26 | LangSmith tracing & token costs — every run a trace filterable by trip, re-plans and evaluator retries as spans of their own, tokens and list price on every agent run, a cost summary and an over-cost alert ([docs/phase26_build_log.md](docs/phase26_build_log.md)) | ✅ Done — read back from LangSmith itself on 2026-10-11 | 46 unit + 8 integration |
 | 27 | Production infrastructure — the image, Neon's URL and pooler, Upstash over TCP, Sentry with scrubbed reports, runs that survive a deploy, a pre-start check ([docs/phase27_build_log.md](docs/phase27_build_log.md)) | ✅ Built, and verified on a production-like stack — **not yet deployed**: that needs accounts on the five services | 80 unit + 9 integration + 1 browser check of a running deployment |
 | 28 | CI/CD pipeline — two checks on every push, a deploy on main only after both, a wait until the merged commit is live, the integration tests every night with one comment about them ([docs/phase28_build_log.md](docs/phase28_build_log.md)) | ✅ Built, and every job run by a local runner on the workflow files as they are — **not yet seen on GitHub**, and the deploy has no target yet: see the build log | 30 unit |
-| 29–50 | Production & Polish | ⏳ | |
+| 29 | Observability — Prometheus metrics per endpoint and of the app's own (model calls, cache hits, builds, plan durations), one OpenTelemetry trace from the request through both processes to the row, JSON log lines searchable by trip, a Grafana dashboard ([docs/phase29_build_log.md](docs/phase29_build_log.md)) | ✅ Built, and verified on the production-like stack with Prometheus, Grafana, Jaeger and Loki beside it — **not on a deployment**: there is none yet | 84 unit + 4 integration |
+| 30–50 | Production & Polish | ⏳ | |
 
-**Total: 1,010 unit + contract, 60 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,094 unit + contract, 64 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -415,7 +434,7 @@ deploy to the real services.
 
 **CI/CD (Phase 28).** `.github/workflows/ci.yml` runs on every push: the `backend` job (lint, the migrations
 against a real Postgres — `alembic check` fails the build when a model says something no migration does —
-and the 1,010 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
+and the 1,094 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
 the `deploy` job follows only when both pass. It needs four things set in the repository — the secret
 `RAILWAY_TOKEN` and the variables `RAILWAY_SERVICE`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` — and until
 they are it says "Nothing was deployed" and passes. The frontend is deployed by Vercel's own GitHub
@@ -425,6 +444,17 @@ integration. `scripts/wait_for_release.py` then asks `GET /version` at the backe
 `nightly`. Two things are settings, not files: requiring the two checks before a merge to `main` (branch
 protection — on a private repository that needs GitHub Pro), and the four values above. `HOW_TO_RUN.md`,
 Step 26.
+
+**Observability (Phase 29).** `GET /metrics` is always there — open in development, behind `OPS_TOKEN` in
+production. Traces are sent when `OTEL_EXPORTER_OTLP_ENDPOINT` says where (OTLP over HTTP), and log lines
+are JSON when `LOG_FORMAT=json` (the default in production); both are scrubbed of secrets like the error
+reports. `python scripts/observability.py up` starts Prometheus, Grafana (http://localhost:3001), Jaeger
+(http://localhost:16686), Loki and Alloy on this machine, and `python scripts/observability_check.py`
+plans a trip and asks all four what they saw: the request rate, error rate and duration per endpoint,
+`llm_calls_total` / `mcp_cache_hit_ratio` / `itinerary_builds_total`, one connected trace from the
+request to the `INSERT` of the itinerary across both processes, and the trip's log lines from both
+services. Nothing here alerts yet (Phase 34), and none of it has run against a deployment.
+`HOW_TO_RUN.md`, Step 27.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
 A missing key degrades one part of the plan (no flights, no hotel, …) — it never crashes a run.
@@ -455,7 +485,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Cache | Redis 7 |
 | ORM | SQLModel + Alembic |
 | Embeddings | Gemini `gemini-embedding-001` at 1536 dimensions (Phase 14) |
-| Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry, with reports scrubbed of secrets (Phase 27) |
+| Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry, with reports scrubbed of secrets (Phase 27); Prometheus metrics, OpenTelemetry traces (Jaeger), JSON logs (Loki), Grafana (Phase 29) |
 | Deploy | Railway (backend, Docker), Vercel (frontend), Neon (Postgres + pgvector, pooled), Upstash (Redis over TCP + TLS) — Phase 27 |
 | CI/CD | GitHub Actions: checks on every push, deploy on `main` after them, integration tests nightly — Phase 28 |
 

@@ -2,11 +2,18 @@
 
 from collections.abc import AsyncGenerator
 
+import sqlalchemy.ext.asyncio
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import settings
 from app.db.url import async_engine_arguments
+from src.telemetry import traces
+
+# Phase 29: every statement an engine runs is a span of the trace under way. What is instrumented is
+# the making of an engine, so this comes before any is made — and `make_engine` asks the module for
+# `create_async_engine` when it is called, which is by then the instrumented one.
+traces.instrument_sqlalchemy()
 
 
 def make_engine(database_url: str) -> AsyncEngine:
@@ -16,7 +23,7 @@ def make_engine(database_url: str) -> AsyncEngine:
     prepared statement, so that a connection pooler can sit in between.
     """
     url, connect_args = async_engine_arguments(database_url)
-    return create_async_engine(
+    return sqlalchemy.ext.asyncio.create_async_engine(
         url,
         echo=settings.APP_ENV == "development",
         connect_args=connect_args,

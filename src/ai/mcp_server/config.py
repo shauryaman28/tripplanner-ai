@@ -20,6 +20,14 @@ class MCPSettings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379"
 
+    # Phase 29 — the tool server logs and traces as its own service, by the same settings as the app
+    # that starts it (src/backend/app/core/config.py says what each one means).
+    APP_ENV: str = "development"
+    LOG_FORMAT: str = ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
+    OTEL_EXPORTER_OTLP_HEADERS: str = ""
+    OTEL_TRACES_SAMPLE_RATIO: float = 1.0
+
     # Duffel (flights)
     DUFFEL_ACCESS_TOKEN: str = ""
 

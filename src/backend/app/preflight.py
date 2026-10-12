@@ -106,6 +106,16 @@ def check(settings, providers=None) -> Report:
     if not settings.GROQ_API_KEY:
         wrong("GROQ_API_KEY is empty: the itinerary is written by a Groq model — no plan could be made")
 
+    # Phase 29 — where traces go, when they go anywhere
+    traces_to = (getattr(settings, "OTEL_EXPORTER_OTLP_ENDPOINT", "") or "").strip()
+    if traces_to and _scheme(traces_to) not in ("http", "https"):
+        wrong(
+            "OTEL_EXPORTER_OTLP_ENDPOINT is not an http:// or https:// URL: traces are sent as OTLP over HTTP "
+            "(a collector's port 4318) — a bare host, or a gRPC address, cannot be sent to"
+        )
+    if not 0.0 <= float(getattr(settings, "OTEL_TRACES_SAMPLE_RATIO", 1.0)) <= 1.0:
+        wrong("OTEL_TRACES_SAMPLE_RATIO is not between 0 and 1: it is the share of requests that are traced")
+
     # ── what it runs without, worse ──
     if not settings.GOOGLE_API_KEY:
         weak(
@@ -122,12 +132,27 @@ def check(settings, providers=None) -> Report:
                 weak(f"{name} is empty: {what}")
     if not settings.SENTRY_DSN:
         weak("SENTRY_DSN is empty: errors are logged and reported to nobody")
-    if settings.SENTRY_DSN and not settings.OPS_TOKEN:
-        weak("OPS_TOKEN is empty: GET /admin/sentry-test is switched off, so error reporting cannot be tried out")
+    if not settings.OPS_TOKEN:
+        weak(
+            "OPS_TOKEN is empty: GET /metrics answers nobody, so Prometheus cannot read this deployment"
+            + (
+                " — and GET /admin/sentry-test is switched off, so error reporting cannot be tried out"
+                if settings.SENTRY_DSN
+                else ""
+            )
+        )
     if settings.OPS_TOKEN and len(settings.OPS_TOKEN) < MIN_SECRET_LENGTH:
         weak(f"OPS_TOKEN is shorter than {MIN_SECRET_LENGTH} characters")
     if settings.LANGCHAIN_TRACING_V2 and not settings.LANGCHAIN_API_KEY:
         weak("LANGCHAIN_TRACING_V2 is true and LANGCHAIN_API_KEY is empty: no trace is uploaded")
+    if not traces_to:
+        weak(
+            "OTEL_EXPORTER_OTLP_ENDPOINT is empty: no request is traced — a slow plan cannot be followed through the system"
+        )
+    elif traces_to.rstrip("/").endswith(":4317"):
+        weak("OTEL_EXPORTER_OTLP_ENDPOINT ends in :4317, a collector's gRPC port: OTLP over HTTP is usually :4318")
+    if str(getattr(settings, "LOG_FORMAT", "") or "").strip().lower() == "text":
+        weak("LOG_FORMAT is text: the log lines cannot be searched by trip_id — leave it empty, or json")
     return report
 
 

@@ -82,10 +82,28 @@ class Settings(BaseSettings):
     # says what a report may and may not carry). One request in ten is also sent as a performance trace.
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
-    # A secret for operating the deployment, sent as the X-Ops-Token header. Today it opens one door:
-    # GET /admin/sentry-test, which fails on purpose so that error reporting can be seen to work.
-    # Empty: that route does not exist (404). Set: openssl rand -hex 32
+    # A secret for operating the deployment. It opens two doors: GET /admin/sentry-test (as the
+    # X-Ops-Token header), which fails on purpose so that error reporting can be seen to work — empty,
+    # that route does not exist (404) — and GET /metrics (Phase 29, as `Authorization: Bearer …`, which
+    # is what Prometheus sends): set, the metrics are for whoever has it; empty, they are open in
+    # development and closed in production. Set: openssl rand -hex 32
     OPS_TOKEN: str = ""
+
+    # Phase 29 — what the running system says about itself (src/telemetry/).
+    # LOG_FORMAT: "json" makes every log line one JSON object carrying trip_id, user_id and the trace
+    # it belongs to — what a log store searches by; "text" is the console as a person reads it.
+    # Empty: json where APP_ENV is production, text anywhere else.
+    LOG_FORMAT: str = ""
+    # Where traces are sent, as OTLP over HTTP: Jaeger's http://localhost:4318 (scripts/observability.py
+    # starts one), or a hosted backend's address. Empty: nothing is traced and nothing is sent.
+    # A trace holds what the system did — which requests, which SQL (never its values), which Redis
+    # commands (never their arguments), which tools and models and how long each took — tagged with
+    # the trip's id and the user's. Not what was asked or answered: that is LangSmith's, above.
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
+    # Headers for that endpoint, as name=value,name=value — a hosted backend's key goes here.
+    OTEL_EXPORTER_OTLP_HEADERS: str = ""
+    # The share of requests traced, 0 to 1. A health check never is.
+    OTEL_TRACES_SAMPLE_RATIO: float = 1.0
     # Phase 28 — which commit this deployment was built from. The pipeline that deploys sets it, and
     # GET /version says it: that is how a deploy is known to be live, and not merely to have been started.
     # (A platform that builds from GitHub itself says the same under a name of its own — see `commit`.)

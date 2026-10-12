@@ -444,7 +444,7 @@ class EvaluatorAgent:
         group_members: list[dict] | None = None,
     ) -> EvaluatorVerdict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
-        async with timed_run() as timer:
+        async with timed_run("evaluator") as timer:
             verdict = evaluate_itinerary(
                 draft=draft,
                 trip_start=trip_start,

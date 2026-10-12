@@ -72,6 +72,7 @@ from src.ai.utils.preferences import (
 )
 from src.ai.utils.run_logger import log_agent_run, timed_run
 from src.ai.utils.tasks import spawn
+from src.telemetry import metrics, traces
 
 try:
     from app.models.itinerary import Itinerary
@@ -525,7 +526,7 @@ async def intent_parsing_node(state: OrchestratorState) -> OrchestratorState:
     extracted: dict = {}
     status = "completed"
 
-    async with timed_run() as timer:
+    async with timed_run("intent_parsing") as timer:
         if message:
             try:
                 parsed = await _extract_intent(message)
@@ -578,7 +579,7 @@ async def apply_preferences_node(state: OrchestratorState) -> OrchestratorState:
         if user_id is None:
             return state
 
-        async with timed_run() as timer:
+        async with timed_run("preferences") as timer:
             prefs = await load_preferences(db, user_id)
             snapshot = preferences_to_dict(prefs)
             updates = build_preference_updates(state, snapshot) if prefs is not None else {}
@@ -663,7 +664,7 @@ async def budget_decision_node(state: OrchestratorState) -> OrchestratorState:
     total_budget = state.get("budget") or 0.0
     replan_attempts = state.get("replan_attempts", 0)
 
-    async with timed_run() as timer:
+    async with timed_run("budget_decision") as timer:
         decision = make_budget_decision(flights, total_budget, replan_attempts, state.get("flight_error"))
         budget_estimate: dict | None = None
         budget_conflict_options: list[dict] | None = None
@@ -715,7 +716,7 @@ async def escalate_node(state: OrchestratorState) -> OrchestratorState:
     options = state.get("budget_conflict_options") or []
     reason = bd.get("reason") or "Flights exceed the available budget."
 
-    async with timed_run() as timer:
+    async with timed_run("escalate") as timer:
         await _set_trip_status(state, TripStatus.FAILED)
 
     await _log(
@@ -786,10 +787,13 @@ class _TokenStream:
         if not self._pieces:
             return
         token, self._pieces = "".join(self._pieces), []
-        await _publish(
-            self._state,
-            {"event": "builder_token", "agent": "itinerary_builder", "token": token, "seq": self._seq},
-        )
+        # Phase 29: twenty of these a second for as long as the model writes. Each is a Redis command,
+        # and as spans they would be most of a plan's trace and say nothing: published, not recorded.
+        with traces.unrecorded():
+            await _publish(
+                self._state,
+                {"event": "builder_token", "agent": "itinerary_builder", "token": token, "seq": self._seq},
+            )
         self._seq += 1
         self._flushed_at = time.monotonic()
 
@@ -881,6 +885,7 @@ async def retry_dispatch_node(state: OrchestratorState) -> OrchestratorState:
     failures = (state.get("evaluator_verdict") or {}).get("failures", [])
     agent_to_retry = next_agent_for_failures([EvaluatorFailure(**f) for f in failures]) or "activities_agent"
     attempt = state.get("evaluator_retry_count", 0) + 1
+    metrics.itinerary_build("retry")  # Phase 29: the build before this was sent back, and is built again
 
     with tracing.span(
         f"evaluator retry {attempt}",
@@ -934,6 +939,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     draft = state.get("draft_itinerary") or {}
 
     if db is None or trip_id is None:
+        metrics.itinerary_build("success")  # it passed; there is nowhere to save it (the agent run on its own)
         return {**state, "itinerary_id": None}
 
     # Phase 18: a missing coordinate is worth knowing about, never worth failing a trip for.
@@ -941,7 +947,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     if unmapped:
         logger.warning("Itinerary for trip %s has activities without coordinates: %s", trip_id, unmapped)
 
-    async with timed_run() as timer:
+    async with timed_run("persist") as timer:
         itinerary = Itinerary(trip_id=trip_id, structured_data=draft, total_cost=draft.get("total_cost"))
         trip = await db.get(Trip, trip_id)
         if trip is not None:
@@ -951,6 +957,7 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
         db.add(itinerary)
         await db.commit()
         await db.refresh(itinerary)
+    metrics.itinerary_build("success")  # Phase 29: counted once it is saved — a build is a plan somebody has
 
     await _log(
         state,
@@ -990,7 +997,7 @@ async def nothing_found_node(state: OrchestratorState) -> OrchestratorState:
         "so there is nothing to build a plan from."
     )
 
-    async with timed_run() as timer:
+    async with timed_run("nothing_found") as timer:
         await _set_trip_status(state, TripStatus.FAILED)
 
     await _log(
@@ -1014,8 +1021,9 @@ async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
         or "; ".join(f["detail"] for f in failures)
         or "Itinerary could not be built after maximum retries."
     )
+    metrics.itinerary_build("failure")  # Phase 29
 
-    async with timed_run() as timer:
+    async with timed_run("builder_failed") as timer:
         await _set_trip_status(state, TripStatus.FAILED)
 
     await _log(
@@ -1269,7 +1277,7 @@ class OrchestratorAgent:
             traced = tracing.run_config(
                 _trace_name(kind, detail), kind, full_state["trip_id"], await _user_of(full_state), turn, detail=detail
             )
-        async with timed_run() as timer:
+        async with timed_run("orchestrator") as timer:
             result = await self._graph.ainvoke(full_state, config=traced)
 
         await _log(
@@ -1419,7 +1427,7 @@ class OrchestratorAgent:
         # called below is made the span the graph would have made of it (tracing.step).
         kind, detail = ("retry", retry_of) if retry_of else ("refine", refinement_type)
         user_id = await _user_of(state) if tracing.enabled() else None
-        async with timed_run() as timer:
+        async with timed_run("orchestrator") as timer:
             with tracing.root(
                 _trace_name(kind, detail), kind, trip_id, user_id, turn, inputs={"request": request}, detail=detail
             ) as trace:

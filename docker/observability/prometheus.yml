@@ -1,0 +1,37 @@
+# What Prometheus reads (Phase 29): GET /metrics of the backend, wherever it is running.
+global:
+  scrape_interval: 5s # a laptop, and someone watching: a production setup would say 15s or 30s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The backend as it is run for development — `uvicorn … --port 8000` on this machine. No token:
+  # outside production the metrics are open unless OPS_TOKEN is set.
+  - job_name: tripplanner-dev
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          service: tripplanner-backend
+
+  # The production-like stack's backend (python scripts/prodlike.py up → port 8200). In production
+  # the metrics are for whoever has the deployment's OPS_TOKEN; scripts/observability.py copies the
+  # stack's into the file below.
+  - job_name: tripplanner-prodlike
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/ops_token
+    static_configs:
+      - targets: ["host.docker.internal:8200"]
+        labels:
+          service: tripplanner-backend
+
+  # A deployment is read the same way — its address, https, and its token:
+  #
+  # - job_name: tripplanner-production
+  #   scheme: https
+  #   authorization:
+  #     type: Bearer
+  #     credentials_file: /etc/prometheus/secrets/production_ops_token
+  #   static_configs:
+  #     - targets: ["<the backend's address, without https://>"]
+  #       labels:
+  #         service: tripplanner-backend

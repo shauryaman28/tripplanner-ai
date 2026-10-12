@@ -219,7 +219,7 @@ class PreferenceExtractor:
         turn: int = 1,
     ) -> dict[str, Any]:
         """Return the fields that were actually written ({} if nothing changed)."""
-        async with timed_run() as timer:
+        async with timed_run("preference_extractor") as timer:
             facts = build_trip_facts(state)
             extracted = await extract_preferences(facts)
 

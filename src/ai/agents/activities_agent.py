@@ -220,7 +220,7 @@ class ActivitiesAgent:
         turn: int = 1,
     ) -> dict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1."""
-        async with timed_run() as timer:
+        async with timed_run("activities_agent") as timer:
             # named, so the trace says which agent this is (Phase 26)
             result = await self._graph.ainvoke(input_state, config={"run_name": "activities_agent"})
 

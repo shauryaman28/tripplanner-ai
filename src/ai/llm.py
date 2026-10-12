@@ -8,6 +8,8 @@ from typing import Any
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from src.telemetry import metrics
+
 try:
     from app.core.config import settings
 except ImportError:
@@ -18,6 +20,24 @@ logger = logging.getLogger(__name__)
 GEMINI_MODEL = settings.GEMINI_MODEL
 GROQ_MODEL = settings.GROQ_MODEL
 GROQ_SMALL_MODEL = settings.GROQ_SMALL_MODEL
+
+# Who asks which model (Phase 29), by the name its work is logged under. A short prompt goes to Gemini
+# and, when that cannot answer, to Groq's small model (`ask`); the long ones go to Groq's large one.
+# The list makes each caller's `llm_calls_total` exist at zero — errors too — before its first call
+# (src/telemetry/metrics.py says why that matters). A test holds it to who really asks.
+_SHORT, _LONG = (GEMINI_MODEL, GROQ_SMALL_MODEL), (GROQ_MODEL,)
+ASKED_BY: dict[str, tuple[str, ...]] = {
+    "intent_parsing": _SHORT,
+    "refinement_classifier": _SHORT,
+    "flight_agent": _SHORT,
+    "hotel_agent": _SHORT,
+    "activities_agent": _SHORT,
+    "orchestrator": _SHORT,  # a refinement's request, read for new interests: no row of its own
+    "itinerary_builder": _LONG,
+    "destination_intelligence": _LONG,
+    "preference_extractor": _LONG,
+}
+metrics.expect_llm_calls(ASKED_BY)
 
 SHORT_PROMPT_TIMEOUT_S = 15
 

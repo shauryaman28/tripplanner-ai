@@ -221,7 +221,7 @@ class DestinationIntelligenceAgent:
         turn: int = 1,
     ) -> dict:
         facts = build_facts(input_state)
-        async with timed_run() as timer:
+        async with timed_run(AGENT_NAME) as timer:
             # Phase 26: not a graph of its own, so it would be an unnamed model call in a trace — this names it
             with tracing.span(AGENT_NAME, inputs=facts, needs_parent=True) as span:
                 intelligence, error = await gather_intelligence(facts)

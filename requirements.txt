@@ -39,6 +39,14 @@ langchain-groq>=0.2.0          # ItineraryBuilder + PreferenceExtractor (Groq, f
 langsmith>=0.10    # imported directly by src/ai/tracing.py (it also comes with langchain-core); tested on 0.10.17 and 0.14.7
 
 # ── Error reporting (Phase 27) ────────────────────────────────
+prometheus-fastapi-instrumentator>=8.1   # Phase 29: GET /metrics — every request counted and timed, per endpoint
+prometheus-client>=0.26                  # imported directly by src/telemetry/metrics.py (the app's own counters)
+opentelemetry-sdk>=1.44                  # Phase 29: traces. The versions below are the ones the suites ran on:
+opentelemetry-exporter-otlp-proto-http>=1.44      # the instrumentation packages only exist as betas, and a
+opentelemetry-instrumentation-fastapi>=0.65b0     # newer one may write a span's attributes differently
+opentelemetry-instrumentation-sqlalchemy>=0.65b0
+opentelemetry-instrumentation-redis>=0.65b0
+python-json-logger>=4.2                  # Phase 29: every log line a JSON object (src/telemetry/logs.py)
 sentry-sdk>=2.0,<3  # on only with SENTRY_DSN; 3.x is untested here (the scrubbing hooks are the part that must not change unseen)
 
 # ── External APIs (Phase 3) ───────────────────────────────────

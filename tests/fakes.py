@@ -534,9 +534,11 @@ async def tool_server(providers: FakeProviders | None = None):
     """
     from mcp.shared.memory import create_connected_server_and_client_session
 
+    from src.ai.mcp_client.client import _on_server_log
     from src.ai.mcp_server.server import mcp
 
-    async with create_connected_server_and_client_session(mcp) as session:
+    # logging_callback: what the real client's session is made with (Phase 29) — the server's cache reports
+    async with create_connected_server_and_client_session(mcp, logging_callback=_on_server_log) as session:
         with (
             providers_faked(providers or FakeProviders()) as faked,
             patch("src.ai.mcp_client.client.get_session", AsyncMock(return_value=session)),

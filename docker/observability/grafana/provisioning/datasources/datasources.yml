@@ -1,0 +1,30 @@
+# The two places Grafana reads from (Phase 29): Prometheus for the numbers, Loki for the log lines.
+#
+# The traces are looked at in Jaeger's own UI (http://localhost:16686). Grafana has a Jaeger data
+# source, and it is not set up here: it asks Jaeger for routes (/api/services, /api/traces?service=…)
+# that Jaeger 2.22 no longer serves — its health check answers "404 Not Found", and a data source
+# that half works is worse than a link. So a log line's trace_id is a link to that trace in Jaeger.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 5s # as often as Prometheus reads the app (prometheus.yml)
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: trace
+          matcherType: label
+          matcherRegex: trace_id
+          url: "http://localhost:16686/trace/$${__value.raw}"
+          urlDisplayLabel: Open the trace in Jaeger

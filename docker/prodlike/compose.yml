@@ -104,6 +104,11 @@ services:
       SHUTDOWN_GRACE_SECONDS: ${PRODLIKE_SHUTDOWN_GRACE_SECONDS:-40}
       # Which commit this "deployment" is (Phase 28) — what the deploy pipeline sets, and GET /version answers.
       GIT_COMMIT_SHA: ${PRODLIKE_COMMIT:-}
+      # Where the deployment sends its traces (Phase 29): in production a tracing backend's OTLP
+      # address; here the observability stack's Jaeger, when it is up —
+      #   PRODLIKE_OTLP_ENDPOINT=http://host.docker.internal:4318 python scripts/prodlike.py up
+      # Empty: nothing is traced. (The log lines are JSON here without being asked: APP_ENV is production.)
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${PRODLIKE_OTLP_ENDPOINT:-}
       # The providers — each one a variable the platform must be given.
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}

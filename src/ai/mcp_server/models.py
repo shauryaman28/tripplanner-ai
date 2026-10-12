@@ -135,3 +135,17 @@ class BudgetEstimate(BaseModel):
 class ToolError(BaseModel):
     error: str
     code: str
+
+
+# Phase 29 — besides its answer, the tool server tells its caller what its cache did for the call:
+# one of the protocol's own log messages, sent under this logger name, with
+# {"lookups": {"flights": {"hit": 1}, "geocode": {"hit": 2}}} as its data. The caller counts them
+# (mcp_cache_lookups_total): the cache is in the tool server's process, and the metrics are read
+# from the caller's.
+CACHE_REPORT = "tripplanner.cache"
+
+# The tools, and the caches they keep (the name in a cache key: mcp:<cache>[:version]:<digest>) — listed
+# for the caller, which counts calls and lookups by these names and wants each counter to exist before
+# its first event (src/telemetry/metrics.py says why). A test holds both lists to what the server has.
+TOOL_NAMES = ("search_flights", "search_hotels", "get_attractions", "get_weather", "estimate_budget")
+CACHES = ("flights", "hotels", "attractions", "weather", "geocode")

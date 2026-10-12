@@ -29,6 +29,7 @@ from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.config import settings
+from src.telemetry import traces
 
 redis_client: aioredis.Redis | None = None
 
@@ -78,6 +79,7 @@ def where(redis_url: str) -> str:
 async def init_redis() -> aioredis.Redis:
     global redis_client
     redis_client = aioredis.from_url(settings.REDIS_URL, **connection_options())
+    traces.instrument_redis(redis_client)  # Phase 29: every command a span — its name, never its arguments
     return redis_client
 
 
