@@ -6,6 +6,7 @@ Access anywhere: from app.core.config import settings
 import os
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -30,9 +31,24 @@ class Settings(BaseSettings):
     # Optional: the same database's direct, un-pooled address. Only the migrations use it — a pooler
     # in transaction mode is the wrong road for anything that needs one session from start to end.
     DATABASE_URL_UNPOOLED: str = ""
+    # Phase 30 — how many database connections this process may hold: DB_POOL_SIZE are kept open, and
+    # up to DB_MAX_OVERFLOW more are opened when those are all in use and closed when they are given
+    # back. Past the two together a request waits for a connection — 30 s, then it fails. The defaults
+    # are SQLAlchemy's own, which is what the app ran on until a load test said what they meant
+    # (docs/load-test-report.md). Behind a pooler, every instance's two numbers have to fit in what the
+    # pooler lends one user of one database — and two instances are alive at once during a deploy.
+    DB_POOL_SIZE: int = Field(default=5, ge=1)
+    DB_MAX_OVERFLOW: int = Field(default=10, ge=0)
     # Redis over TCP: redis://, or rediss:// (TLS) for a hosted one. Never a REST URL — the event
     # stream is a subscription, and a REST API cannot subscribe.
     REDIS_URL: str = "redis://localhost:6379"
+    # Phase 30 — how many connections to Redis this process may open. Every open trip page keeps one
+    # for as long as it is open (its event stream is a subscription), and every command borrows one
+    # for a moment — so this is, near enough, how many pages one instance can have open at once. Past
+    # it nothing waits: the next command fails ("Too many connections"), and with it whatever needed
+    # it. The default is the Redis library's own, which the app ran on unsaid until a load test opened
+    # the 101st page. A hosted Redis has a limit of concurrent connections of its own: stay under it.
+    REDIS_MAX_CONNECTIONS: int = Field(default=100, ge=1)
 
     # Comma-separated browser origins allowed by CORS (Phase 17). In production: the frontend's
     # origin — the page opens its event stream straight from the browser to this API.

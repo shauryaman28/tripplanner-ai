@@ -1,0 +1,307 @@
+{
+ "api": "http://localhost:8200",
+ "destination": "Jaipur",
+ "trip_id": "515ceb8a-2c44-4f7e-91f8-d24bc0d63733",
+ "asked": 202,
+ "plan_seconds": 11.61,
+ "events": [
+  {
+   "t": 0.012,
+   "event": "planning_started"
+  },
+  {
+   "t": 2.503,
+   "event": "flight_agent: completed"
+  },
+  {
+   "t": 2.52,
+   "event": "hotel_agent: completed"
+  },
+  {
+   "t": 2.521,
+   "event": "activities_agent: completed"
+  },
+  {
+   "t": 11.61,
+   "event": "planning_complete"
+  }
+ ],
+ "pieces": {
+  "count": 39,
+  "from_s": 9.425,
+  "to_s": 11.596
+ },
+ "steps": [
+  {
+   "step": "intent_parsing",
+   "status": "completed",
+   "ms": 2456,
+   "tokens": 338
+  },
+  {
+   "step": "preferences",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "step": "flight_agent",
+   "status": "completed",
+   "ms": 10,
+   "tokens": null
+  },
+  {
+   "step": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "step": "hotel_agent",
+   "status": "completed",
+   "ms": 9,
+   "tokens": null
+  },
+  {
+   "step": "activities_agent",
+   "status": "completed",
+   "ms": 10,
+   "tokens": null
+  },
+  {
+   "step": "destination_intelligence",
+   "status": "completed",
+   "ms": 1140,
+   "tokens": 587
+  },
+  {
+   "step": "itinerary_builder",
+   "status": "completed",
+   "ms": 7927,
+   "tokens": 3867
+  },
+  {
+   "step": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "step": "persist",
+   "status": "completed",
+   "ms": 5,
+   "tokens": null
+  },
+  {
+   "step": "preference_extractor",
+   "status": "completed",
+   "ms": 918,
+   "tokens": 520
+  },
+  {
+   "step": "orchestrator",
+   "status": "completed",
+   "ms": 12517,
+   "tokens": null
+  }
+ ],
+ "a_connection_idle_in_transaction": null,
+ "postgres": [
+  {
+   "t": 0.08,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 0.68,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 1.29,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 1.87,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 2.48,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 3.08,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 3.68,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 4.29,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 4.89,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 5.49,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 6.07,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 6.66,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 7.26,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 7.86,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 8.47,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 9.08,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 9.69,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 10.28,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 10.88,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 11.49,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 12.09,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 12.69,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 13.28,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 13.89,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 14.5,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 15.11,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 15.72,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 16.3,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  }
+ ]
+}

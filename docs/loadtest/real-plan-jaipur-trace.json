@@ -1,0 +1,515 @@
+[
+ {
+  "root": "GET /trips/{trip_id}/itinerary",
+  "spans": 5,
+  "kinds": {
+   "sql": 4,
+   "other": 1
+  },
+  "services": {
+   "tripplanner-backend": 5
+  },
+  "tree": [
+   {
+    "name": "GET /trips/{trip_id}/itinerary",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 19,
+    "service": "tripplanner-backend",
+    "sql": 4,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "GET /trips/{trip_id}/runs",
+  "spans": 5,
+  "kinds": {
+   "sql": 4,
+   "other": 1
+  },
+  "services": {
+   "tripplanner-backend": 5
+  },
+  "tree": [
+   {
+    "name": "GET /trips/{trip_id}/runs",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 7,
+    "service": "tripplanner-backend",
+    "sql": 4,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "GET /trips/{trip_id}/similar",
+  "spans": 6,
+  "kinds": {
+   "sql": 5,
+   "other": 1
+  },
+  "services": {
+   "tripplanner-backend": 6
+  },
+  "tree": [
+   {
+    "name": "GET /trips/{trip_id}/similar",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 17,
+    "service": "tripplanner-backend",
+    "sql": 5,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "POST /trips/{trip_id}/plan",
+  "spans": 105,
+  "kinds": {
+   "sql": 65,
+   "redis": 16,
+   "other": 24
+  },
+  "services": {
+   "tripplanner-backend": 99,
+   "tripplanner-mcp": 6
+  },
+  "tree": [
+   {
+    "name": "POST /trips/{trip_id}/plan",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 29,
+    "service": "tripplanner-backend",
+    "sql": 4,
+    "redis": 3
+   },
+   {
+    "name": "planning run",
+    "depth": 1,
+    "offset_ms": 29,
+    "ms": 13558,
+    "service": "tripplanner-backend",
+    "sql": 3,
+    "redis": 1
+   },
+   {
+    "name": "orchestrator",
+    "depth": 2,
+    "offset_ms": 43,
+    "ms": 13538,
+    "service": "tripplanner-backend",
+    "sql": 50,
+    "redis": 9
+   },
+   {
+    "name": "intent_parsing",
+    "depth": 3,
+    "offset_ms": 46,
+    "ms": 4594,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "llm gemini-3.5-flash-lite",
+    "depth": 4,
+    "offset_ms": 57,
+    "ms": 4582,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "preferences",
+    "depth": 3,
+    "offset_ms": 4662,
+    "ms": 1,
+    "service": "tripplanner-backend",
+    "sql": 1,
+    "redis": 0
+   },
+   {
+    "name": "flight_agent",
+    "depth": 3,
+    "offset_ms": 4670,
+    "ms": 14,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "mcp.call search_flights",
+    "depth": 4,
+    "offset_ms": 4672,
+    "ms": 12,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call search_flights",
+    "depth": 5,
+    "offset_ms": 4673,
+    "ms": 1,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 1
+   },
+   {
+    "name": "budget_decision",
+    "depth": 3,
+    "offset_ms": 4688,
+    "ms": 0,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "hotel_agent",
+    "depth": 3,
+    "offset_ms": 4693,
+    "ms": 56,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "mcp.call search_hotels",
+    "depth": 4,
+    "offset_ms": 4738,
+    "ms": 9,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call search_hotels",
+    "depth": 5,
+    "offset_ms": 4738,
+    "ms": 1,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 1
+   },
+   {
+    "name": "activities_agent",
+    "depth": 3,
+    "offset_ms": 4695,
+    "ms": 55,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "mcp.call get_attractions",
+    "depth": 4,
+    "offset_ms": 4738,
+    "ms": 11,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call get_attractions",
+    "depth": 5,
+    "offset_ms": 4739,
+    "ms": 3,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 1
+   },
+   {
+    "name": "destination_intelligence",
+    "depth": 3,
+    "offset_ms": 4695,
+    "ms": 2563,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "llm openai/gpt-oss-120b",
+    "depth": 4,
+    "offset_ms": 4735,
+    "ms": 2522,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "itinerary_builder",
+    "depth": 3,
+    "offset_ms": 7264,
+    "ms": 5313,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "llm openai/gpt-oss-120b",
+    "depth": 4,
+    "offset_ms": 7270,
+    "ms": 5304,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "evaluator",
+    "depth": 3,
+    "offset_ms": 12590,
+    "ms": 0,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "persist",
+    "depth": 3,
+    "offset_ms": 12595,
+    "ms": 15,
+    "service": "tripplanner-backend",
+    "sql": 5,
+    "redis": 0
+   },
+   {
+    "name": "preference_extractor",
+    "depth": 3,
+    "offset_ms": 12626,
+    "ms": 947,
+    "service": "tripplanner-backend",
+    "sql": 2,
+    "redis": 0
+   },
+   {
+    "name": "llm openai/gpt-oss-120b",
+    "depth": 4,
+    "offset_ms": 12632,
+    "ms": 932,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "GET /trips/{trip_id}/stream",
+  "spans": 4,
+  "kinds": {
+   "sql": 3,
+   "other": 1
+  },
+  "services": {
+   "tripplanner-backend": 4
+  },
+  "tree": [
+   {
+    "name": "GET /trips/{trip_id}/stream",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 20744,
+    "service": "tripplanner-backend",
+    "sql": 3,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "GET /trips/{trip_id}/status",
+  "spans": 5,
+  "kinds": {
+   "sql": 4,
+   "other": 1
+  },
+  "services": {
+   "tripplanner-backend": 5
+  },
+  "tree": [
+   {
+    "name": "GET /trips/{trip_id}/status",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 5,
+    "service": "tripplanner-backend",
+    "sql": 4,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "GET /trips/{trip_id}",
+  "spans": 4,
+  "kinds": {
+   "sql": 3,
+   "other": 1
+  },
+  "services": {
+   "tripplanner-backend": 4
+  },
+  "tree": [
+   {
+    "name": "GET /trips/{trip_id}",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 31,
+    "service": "tripplanner-backend",
+    "sql": 3,
+    "redis": 0
+   }
+  ]
+ },
+ {
+  "root": "POST /trips",
+  "spans": 32,
+  "kinds": {
+   "sql": 7,
+   "other": 15,
+   "redis": 10
+  },
+  "services": {
+   "tripplanner-backend": 12,
+   "tripplanner-mcp": 20
+  },
+  "tree": [
+   {
+    "name": "POST /trips",
+    "depth": 0,
+    "offset_ms": 0,
+    "ms": 7,
+    "service": "tripplanner-backend",
+    "sql": 7,
+    "redis": 0
+   },
+   {
+    "name": "mcp.call search_flights",
+    "depth": 1,
+    "offset_ms": 30,
+    "ms": 3970,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call search_flights",
+    "depth": 2,
+    "offset_ms": 550,
+    "ms": 3435,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 2
+   },
+   {
+    "name": "provider duffel",
+    "depth": 3,
+    "offset_ms": 609,
+    "ms": 3361,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "mcp.call search_hotels",
+    "depth": 1,
+    "offset_ms": 30,
+    "ms": 6286,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call search_hotels",
+    "depth": 2,
+    "offset_ms": 551,
+    "ms": 5759,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 2
+   },
+   {
+    "name": "provider liteapi",
+    "depth": 3,
+    "offset_ms": 615,
+    "ms": 5655,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "mcp.call get_weather",
+    "depth": 1,
+    "offset_ms": 30,
+    "ms": 592,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call get_weather",
+    "depth": 2,
+    "offset_ms": 552,
+    "ms": 65,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 2
+   },
+   {
+    "name": "mcp.call get_attractions",
+    "depth": 1,
+    "offset_ms": 30,
+    "ms": 5501,
+    "service": "tripplanner-backend",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "tools/call get_attractions",
+    "depth": 2,
+    "offset_ms": 552,
+    "ms": 4964,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 4
+   },
+   {
+    "name": "provider nominatim",
+    "depth": 3,
+    "offset_ms": 610,
+    "ms": 2163,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "provider opentripmap",
+    "depth": 3,
+    "offset_ms": 2774,
+    "ms": 1194,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "provider opentripmap",
+    "depth": 3,
+    "offset_ms": 3969,
+    "ms": 772,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 0
+   },
+   {
+    "name": "provider opentripmap",
+    "depth": 3,
+    "offset_ms": 4741,
+    "ms": 774,
+    "service": "tripplanner-mcp",
+    "sql": 0,
+    "redis": 0
+   }
+  ]
+ }
+]

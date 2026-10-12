@@ -1,0 +1,192 @@
+{
+ "what": "every plan Jaeger traced during the baseline's 0.4 and 0.8 visits-a-second steps (1 request in 10 is traced): where each run's time went",
+ "plans": [
+  {
+   "trip_id": "288c500f-e9ab-423e-906c-973bc0788ad7",
+   "trace_id": "390b92e85f52798e18dc9d545a058d25",
+   "run_s": 132.5,
+   "in_models_s": 15.3,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 122.8,
+   "in_statements_s": 8.0,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "a05d8a12-14e4-4113-a498-a6236e5ba4e3",
+   "trace_id": "9357204be28d4c6411c4ac0e73001c22",
+   "run_s": 120.2,
+   "in_models_s": 11.5,
+   "in_tool_calls_s": 3.4,
+   "getting_a_connection_s": 111.5,
+   "in_statements_s": 6.3,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "b38fa4e6-d8fe-4649-9f30-1baaf878d6fa",
+   "trace_id": "6a8d55677b33539914489b7d9cf0796d",
+   "run_s": 112.4,
+   "in_models_s": 13.2,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 106.7,
+   "in_statements_s": 5.3,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "a411d501-59b2-4f49-bc4d-ec0bbc18065e",
+   "trace_id": "41cdefab2a5daed1135043322e4745f5",
+   "run_s": 98.0,
+   "in_models_s": 14.5,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 86.4,
+   "in_statements_s": 4.2,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "f111f51f-b959-4f08-9987-31e143556060",
+   "trace_id": "35b618fb807c629918df2a8abe740f20",
+   "run_s": 69.8,
+   "in_models_s": 13.3,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 56.5,
+   "in_statements_s": 4.0,
+   "statements": 43,
+   "connects": 16
+  },
+  {
+   "trip_id": "7ef339d0-af58-43b0-9af8-39257c1b2c99",
+   "trace_id": "26288e06629f567017b497d17c880f22",
+   "run_s": 52.2,
+   "in_models_s": 11.9,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 44.7,
+   "in_statements_s": 1.9,
+   "statements": 43,
+   "connects": 16
+  },
+  {
+   "trip_id": "93d0fd6c-c4b1-426b-b9b1-ba9cfe45ccc5",
+   "trace_id": "ac459ccb06cf059c1564d544ffd0e2a1",
+   "run_s": 42.6,
+   "in_models_s": 12.3,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 24.2,
+   "in_statements_s": 9.1,
+   "statements": 43,
+   "connects": 16
+  },
+  {
+   "trip_id": "6dd34572-6d44-46be-857a-6ef1a6a461b8",
+   "trace_id": "3c2dd7f494d143b50a8ac5530471b14a",
+   "run_s": 38.7,
+   "in_models_s": 12.5,
+   "in_tool_calls_s": 5.5,
+   "getting_a_connection_s": 21.8,
+   "in_statements_s": 1.9,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "d55f01e2-079c-4fd7-a9d2-f3f3982b8145",
+   "trace_id": "6aa31e87463506a40c013cd65d220a7c",
+   "run_s": 37.3,
+   "in_models_s": 12.0,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 22.8,
+   "in_statements_s": 6.7,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "f625568b-9cbb-4bb8-bb55-357bd28834a8",
+   "trace_id": "4a7659fef67b85140250e1c89539c93d",
+   "run_s": 36.7,
+   "in_models_s": 12.5,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 25.7,
+   "in_statements_s": 2.9,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "8f32b280-9f3a-4605-8028-b65ab1ba7aef",
+   "trace_id": "6b9a445f88ff073f0f7ce4a196f65d4d",
+   "run_s": 30.5,
+   "in_models_s": 13.8,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 8.3,
+   "in_statements_s": 12.6,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "6dc40571-7082-4178-831d-ff3e5c7f4a8b",
+   "trace_id": "e1917df0e38a70a20b75cfe8c8dbcfc9",
+   "run_s": 29.7,
+   "in_models_s": 13.0,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 18.4,
+   "in_statements_s": 3.5,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "86f88082-86f3-41fd-bf06-1eadbdabb934",
+   "trace_id": "906fccc44c0036c6133f155c704daebb",
+   "run_s": 27.1,
+   "in_models_s": 13.9,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 8.1,
+   "in_statements_s": 7.8,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "ca2822bf-da30-48a2-8212-29ed318c04ee",
+   "trace_id": "d8bdb40e8a9e1f86084e0d14a44cb3d9",
+   "run_s": 25.4,
+   "in_models_s": 15.4,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 6.3,
+   "in_statements_s": 6.6,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "3ae2640a-257d-4180-99bf-750f160f8042",
+   "trace_id": "f0d4d21cfeb6e3690133969b4238a221",
+   "run_s": 22.6,
+   "in_models_s": 12.6,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 9.9,
+   "in_statements_s": 3.6,
+   "statements": 42,
+   "connects": 15
+  },
+  {
+   "trip_id": "dc681d05-4ef7-4cbc-a06e-f3f28160df8d",
+   "trace_id": "83bd9136516440751705e8c063dd7523",
+   "run_s": 15.7,
+   "in_models_s": 12.0,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 1.1,
+   "in_statements_s": 3.4,
+   "statements": 43,
+   "connects": 16
+  },
+  {
+   "trip_id": "b5ac60e8-7d33-48b7-9626-878159232680",
+   "trace_id": "6836eeaff000bbfc0c3abca53e064b7a",
+   "run_s": 12.6,
+   "in_models_s": 12.2,
+   "in_tool_calls_s": 0.0,
+   "getting_a_connection_s": 0.1,
+   "in_statements_s": 0.6,
+   "statements": 43,
+   "connects": 16
+  }
+ ]
+}

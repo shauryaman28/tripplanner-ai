@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 29 / 50 — Observability: Prometheus, Grafana & OpenTelemetry**
+**Status: Phase 30 / 50 — Load Testing & Performance Baseline**
 
 ---
 
@@ -57,6 +57,12 @@ how long a plan takes. One OpenTelemetry trace per request, from the request thr
 and Redis command, into the tool server's process and back, to the row that is written. Every log line a
 JSON object carrying trip_id, user_id and its trace. One trip id finds all three; a Grafana dashboard
 shows them.
+
+Under load (Phase 30): a planning run holds no database connection while it waits for a model or a provider —
+every read's transaction is ended first — so the connections in use follow the statements being run, not the
+plans in flight. The database pool and the Redis pool are settings (DB_POOL_SIZE, DB_MAX_OVERFLOW,
+REDIS_MAX_CONNECTIONS), and GET /metrics says how full each is and how late the event loop runs. Measured on
+one laptop with stand-ins for the models and providers: 3.2 visits a second, each one a plan, on one process.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -116,10 +122,10 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 1,094 tests
+# Unit + contract tests (no Docker, no network) — 1,200 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 64 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 65 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
@@ -208,7 +214,7 @@ tripplanner-ai/
 │   │       │   ├── error_reporting.py   ← Phase 27: Sentry — on with a DSN — and what is scrubbed out of a report
 │   │       │   └── security.py         ← JWT + password hashing
 │   │       ├── db/
-│   │       │   ├── session.py           ← async SQLAlchemy
+│   │       │   ├── session.py           ← async SQLAlchemy; Phase 30: the pool is a setting, and is reported
 │   │       │   ├── url.py               ← Phase 27: a hosted Postgres's URL, as each driver needs it; nothing
 │   │       │   │                          prepared is kept, so a pooler can sit in between
 │   │       │   └── redis.py             ← async Redis singleton; Phase 27: retries a closed connection, pings an idle one
@@ -228,7 +234,8 @@ tripplanner-ai/
 │   ├── telemetry/                       ← Phase 29: what the running system says about itself — used by the API
 │   │   │                                  server and by the tool server, importing neither
 │   │   ├── context.py                   ← which trip, and whose, the work under way is for: two context variables
-│   │   ├── metrics.py                   ← the app's own Prometheus metrics; every request counted per endpoint
+│   │   ├── metrics.py                   ← the app's own Prometheus metrics; every request counted per endpoint;
+│   │   │                                  Phase 30: what runs out — the database pool, the Redis pool, the event loop
 │   │   ├── traces.py                    ← OpenTelemetry: one trace from the request to the row; scrubbed on export
 │   │   └── logs.py                      ← every log line a JSON object with trip_id, user_id and its trace
 │   └── ai/
@@ -249,7 +256,9 @@ tripplanner-ai/
 │       ├── embeddings/                  ← Phase 14: Gemini embedding writer; Phase 23: the summary text, query embedding
 │       ├── utils/
 │       │   ├── run_logger.py            ← Phase 6: writes agent_runs; Phase 26: with each run's tokens and cost,
-│       │   │                              and a warning when one trip's models pass LLM_COST_ALERT_USD
+│       │   │                              and a warning when one trip's models pass LLM_COST_ALERT_USD; Phase 30:
+│       │   │                              a row is written and its transaction is over — hand_back() for the places
+│       │   │                              that read and then wait
 │       │   ├── conversation.py          ← Phase 7B/15: Redis history + planning state
 │       │   ├── preferences.py           ← Phase 16: preference loading / injection
 │       │   ├── failures.py              ← Phase 20: a failed search in the traveller's words; retry or not
@@ -284,7 +293,7 @@ tripplanner-ai/
 ├── tests/
 │   ├── unit/                            ← Fast, no network, mock everything (1,086 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 64 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 65 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
@@ -305,8 +314,16 @@ tripplanner-ai/
 │   │                                      it for a database that was just created)
 │   ├── prodlike/                        ← Phase 27: a production-like stack — the deployed image against a TLS-only
 │   │                                      Postgres behind a pooler in transaction mode and a TLS-only Redis
-│   └── observability/                   ← Phase 29: Prometheus, Grafana, Jaeger, Loki and Alloy — what reads the
-│                                          app's metrics, traces and log lines; the dashboard, as a file
+│   ├── observability/                   ← Phase 29: Prometheus, Grafana, Jaeger, Loki and Alloy — what reads the
+│   │                                      app's metrics, traces and log lines; the dashboard, as a file
+│   └── loadtest/                        ← Phase 30: the image the load test runs — the deployed one with the
+│                                          stand-ins added — and the stack it is laid over
+├── loadtest/                            ← Phase 30: what loads the app, and what stands in for the world outside it
+│   ├── k6/traveller.js                  ← one traveller's visit, as the trip page makes its requests; visits start
+│   │                                      at a fixed rate; a plan's duration is measured to its event on the stream
+│   └── standins/                        ← what answers for the models and the five providers while a load test runs,
+│                                          each taking as long as the real one does. Not in the image that is deployed,
+│                                          and it refuses a database that is not on this machine
 ├── scripts/                             ← run by hand: embedding_experiment.py (Phase 23's experiment, real model),
 │                                          seed_demo_trips.py (a demo account with twelve embedded trips),
 │                                          cache_ttls.py (Phase 24: every cached key's TTL against the spec),
@@ -322,9 +339,12 @@ tripplanner-ai/
 │                                          (Phase 28: the night's test reports as one comment, and its posting),
 │                                          observability.py (Phase 29: the observability stack up and down),
 │                                          observability_check.py (Phase 29: plans a trip, then asks Prometheus,
-│                                          Jaeger, Loki and Grafana what they saw of it)
+│                                          Jaeger, Loki and Grafana what they saw of it),
+│                                          loadtest.py (Phase 30: the load test's stack, the load, and what the stack
+│                                          did under it — every run kept as a file in docs/loadtest/)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–29) + phase1-17_audit.md
+├── docs/                                ← phase build logs (1–30) + phase1-17_audit.md + load-test-report.md
+│                                          (Phase 30: before, the bottleneck, after) + loadtest/ (every run it is made of)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -373,9 +393,10 @@ tripplanner-ai/
 | 27 | Production infrastructure — the image, Neon's URL and pooler, Upstash over TCP, Sentry with scrubbed reports, runs that survive a deploy, a pre-start check ([docs/phase27_build_log.md](docs/phase27_build_log.md)) | ✅ Built, and verified on a production-like stack — **not yet deployed**: that needs accounts on the five services | 80 unit + 9 integration + 1 browser check of a running deployment |
 | 28 | CI/CD pipeline — two checks on every push, a deploy on main only after both, a wait until the merged commit is live, the integration tests every night with one comment about them ([docs/phase28_build_log.md](docs/phase28_build_log.md)) | ✅ Built, and every job run by a local runner on the workflow files as they are — **not yet seen on GitHub**, and the deploy has no target yet: see the build log | 30 unit |
 | 29 | Observability — Prometheus metrics per endpoint and of the app's own (model calls, cache hits, builds, plan durations), one OpenTelemetry trace from the request through both processes to the row, JSON log lines searchable by trip, a Grafana dashboard ([docs/phase29_build_log.md](docs/phase29_build_log.md)) | ✅ Built, and verified on the production-like stack with Prometheus, Grafana, Jaeger and Loki beside it — **not on a deployment**: there is none yet | 84 unit + 4 integration |
-| 30–50 | Production & Polish | ⏳ | |
+| 30 | Load testing & performance baseline — k6 visits (create, stream, plan, itinerary) against the deployed image with stand-ins for the models and providers; before: 1.3 req/s at 210 ms p99, the bottleneck database connections held idle inside a transaction by every plan in flight; after: 43 req/s at 206 ms p99 ([docs/load-test-report.md](docs/load-test-report.md), [docs/phase30_build_log.md](docs/phase30_build_log.md)) | ✅ Measured on one laptop that ran both the load and the system — **not on a deployment**: there is none yet | 106 unit + 1 integration |
+| 31–50 | Production & Polish | ⏳ | |
 
-**Total: 1,094 unit + contract, 64 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,200 unit + contract, 65 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -434,7 +455,7 @@ deploy to the real services.
 
 **CI/CD (Phase 28).** `.github/workflows/ci.yml` runs on every push: the `backend` job (lint, the migrations
 against a real Postgres — `alembic check` fails the build when a model says something no migration does —
-and the 1,094 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
+and the 1,200 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
 the `deploy` job follows only when both pass. It needs four things set in the repository — the secret
 `RAILWAY_TOKEN` and the variables `RAILWAY_SERVICE`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` — and until
 they are it says "Nothing was deployed" and passes. The frontend is deployed by Vercel's own GitHub
@@ -454,6 +475,18 @@ plans a trip and asks all four what they saw: the request rate, error rate and d
 `llm_calls_total` / `mcp_cache_hit_ratio` / `itinerary_builds_total`, one connected trace from the
 request to the `INSERT` of the itinerary across both processes, and the trip's log lines from both
 services. Nothing here alerts yet (Phase 34), and none of it has run against a deployment.
+
+**Load testing (Phase 30).** `python scripts/loadtest.py k6` builds a k6 that can read an event stream;
+`up` starts the deployed image on the production-like stack with stand-ins for the models and the providers
+— a different program, not a setting: there is nothing to switch on in a deployment — and
+`ladder --name <a name>` starts visits at a fixed rate, one rate after another, while it watches the pooler,
+Postgres, the backend's `/metrics` and Docker. What it found is [docs/load-test-report.md](docs/load-test-report.md):
+the stack as Phase 29 left it held one visit every ten seconds (1.3 requests a second at 210 ms p99) because
+every plan in flight kept a database connection idle inside a transaction; with that fixed in the code, the
+pools made settings and the pooler lending what a hosted one lends, it holds 3.2 visits a second (43 requests
+a second at 206 ms p99), and what limits it then is one process on one core. All of it on one laptop that
+ran both the load and the system: where the app runs out first, not what a deployment will do.
+`HOW_TO_RUN.md`, Step 28.
 `HOW_TO_RUN.md`, Step 27.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.
@@ -488,6 +521,7 @@ Model IDs are settings too (`GEMINI_MODEL`, `GROQ_MODEL`), so a retired model is
 | Observability | LangSmith traces + per-run token costs in `agent_runs` (Phase 26); Sentry, with reports scrubbed of secrets (Phase 27); Prometheus metrics, OpenTelemetry traces (Jaeger), JSON logs (Loki), Grafana (Phase 29) |
 | Deploy | Railway (backend, Docker), Vercel (frontend), Neon (Postgres + pgvector, pooled), Upstash (Redis over TCP + TLS) — Phase 27 |
 | CI/CD | GitHub Actions: checks on every push, deploy on `main` after them, integration tests nightly — Phase 28 |
+| Load testing | k6 with the `xk6-sse` extension, an open model (visits at a fixed rate); stand-ins for the models and providers that are not in the deployed image — Phase 30 |
 
 ---
 

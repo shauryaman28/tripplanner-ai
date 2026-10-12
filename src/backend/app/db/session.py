@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import settings
 from app.db.url import async_engine_arguments
-from src.telemetry import traces
+from src.telemetry import metrics, traces
 
 # Phase 29: every statement an engine runs is a span of the trace under way. What is instrumented is
 # the making of an engine, so this comes before any is made — and `make_engine` asks the module for
@@ -31,10 +31,16 @@ def make_engine(database_url: str) -> AsyncEngine:
         # one is tried before it is used, and none is kept past the five minutes after which it may be gone.
         pool_pre_ping=True,
         pool_recycle=300,
+        # Phase 30: how many connections the pool keeps, and how many more it may open — said, not left
+        # to the library (core/config.py says what to set them to).
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
     )
 
 
 engine = make_engine(settings.DATABASE_URL)
+# Phase 30: how many of the pool's connections are lent out, and how many it may open — GET /metrics.
+metrics.watch_db_pool(lambda: engine.pool)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,

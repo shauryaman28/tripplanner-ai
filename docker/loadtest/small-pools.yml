@@ -1,0 +1,16 @@
+# The baseline's connections, put back (Phase 30): 4 at the pooler and 15 in the app — what the
+# stack had when it could not make more than a plan every five seconds. Laid over the other two —
+#
+#     python scripts/loadtest.py up --small-pools
+#
+# — to ask one question: does the code still need a connection for every plan in flight? With these
+# numbers the baseline fell over at 0.4 visits a second (docs/load-test-report.md).
+services:
+  backend:
+    environment:
+      DB_POOL_SIZE: "5"
+      DB_MAX_OVERFLOW: "10"
+  pooler:
+    volumes:
+      # the stack's own pgbouncer.ini with one number changed; written by scripts/loadtest.py (git-ignored)
+      - ../../.loadtest/pgbouncer-small-pools.ini:/etc/pgbouncer/pgbouncer.ini:ro

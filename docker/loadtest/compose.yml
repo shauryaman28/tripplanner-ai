@@ -1,0 +1,26 @@
+# The load test's stack (Phase 30): the production-like stack of Phase 27, with stand-ins where the
+# models and the providers are. Laid over docker/prodlike/compose.yml —
+#
+#     docker compose -f docker/prodlike/compose.yml -f docker/loadtest/compose.yml up -d
+#                                                              (python scripts/loadtest.py up)
+#
+# — so everything this file does not name is that stack's: the TLS-only Postgres, the pooler in
+# transaction mode in front of it, the TLS-only Redis, and every setting of the backend but these.
+name: tripplanner-prodlike
+
+services:
+  backend:
+    # The deployed image and one directory more (docker/loadtest/Dockerfile); built by scripts/loadtest.py.
+    image: tripplanner-loadtest-backend
+    build: !reset null
+    environment:
+      # Not one real key. The stand-ins need none, the settings check wants the names filled in, and
+      # a stack that was never given a key cannot spend one — whatever else goes wrong.
+      GOOGLE_API_KEY: standin-not-a-key
+      GROQ_API_KEY: standin-not-a-key
+      DUFFEL_ACCESS_TOKEN: standin-not-a-key
+      LITEAPI_API_KEY: standin-not-a-key
+      OPENTRIPMAP_API_KEY: standin-not-a-key
+      OPENWEATHER_API_KEY: standin-not-a-key
+      # One request in ten is traced while the load runs — docs/load-test-report.md says why.
+      OTEL_TRACES_SAMPLE_RATIO: ${LOADTEST_TRACE_RATIO:-0.1}

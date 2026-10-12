@@ -5,6 +5,8 @@ Skipped unless RUN_INTEGRATION=1. tests/conftest.py has already pointed
 can touch dev data.
 """
 
+import asyncio
+
 import pytest
 import pytest_asyncio
 from sqlalchemy import make_url, text
@@ -12,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
+from src.ai.utils import tasks
 from tests.database import create_and_migrate
 
 
@@ -34,6 +37,13 @@ async def db_session() -> AsyncSession:
     )
     async with async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)() as session:
         yield session
+
+    # What the test left running in the background — a saved plan's embedding job, a trip's cache
+    # warming — writes to these tables too. Emptying them under it is a deadlock (seen in Phase 30,
+    # when the job's last write moved a round trip later): it is given a moment to finish first.
+    still_running = [task for task in tasks._tasks if not task.done()]
+    if still_running:
+        await asyncio.wait(still_running, timeout=10)
 
     async with engine.begin() as conn:
         await conn.execute(text("TRUNCATE users CASCADE"))  # every other table hangs off users

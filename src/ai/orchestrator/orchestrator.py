@@ -70,7 +70,7 @@ from src.ai.utils.preferences import (
     preferences_to_dict,
     preferred_airlines_from,
 )
-from src.ai.utils.run_logger import log_agent_run, timed_run
+from src.ai.utils.run_logger import hand_back, log_agent_run, timed_run
 from src.ai.utils.tasks import spawn
 from src.telemetry import metrics, traces
 
@@ -221,6 +221,8 @@ async def _user_of(state: OrchestratorState) -> uuid.UUID | None:
         return await get_trip_user_id(db, trip_id)
     except Exception:
         return None
+    finally:
+        await hand_back(db)  # Phase 30: the run that follows waits for models — not with a connection in hand
 
 
 def _trace_name(kind: str, detail: str | None) -> str:
@@ -1085,6 +1087,7 @@ async def extract_preferences_node(state: OrchestratorState) -> OrchestratorStat
 
     try:
         user_id = await get_trip_user_id(db, trip_id)
+        await hand_back(db)  # Phase 30: the extractor asks a model first — a second without a connection in hand
         if user_id is not None:
             await PreferenceExtractor().run(state, db=db, user_id=user_id, trip_id=trip_id, turn=state.get("turn", 1))
     except Exception:

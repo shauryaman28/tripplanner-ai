@@ -12,6 +12,14 @@ the total passes it.
 Phase 29: timed_run("flight_agent") names whose work it measures — the name its
 row is logged under. The model calls made meanwhile are counted for that agent,
 and the work is a span of the trace under way: every agent_runs row a span.
+
+Phase 30: a row is written and its transaction is over — nothing is read back
+afterwards. Reading it back began a new transaction that nobody ended until the
+next step committed, seconds later, after a model had answered: a planning run
+held a database connection for its whole length without using it, and the
+number of plans that could be made at once was the number of connections
+(docs/load-test-report.md). hand_back() is for the other places that read and
+then wait.
 """
 
 from __future__ import annotations
@@ -77,10 +85,30 @@ async def log_agent_run(
     async with _session_locks.setdefault(db, asyncio.Lock()):
         db.add(run)
         await db.commit()
-        await db.refresh(run)
+        # Not read back: every column is set here, and a SELECT would begin a transaction that stays
+        # open — and keeps the connection — until whoever logs next commits.
         if run.cost_usd:
             await _warn_if_over(db, trip_id, run.cost_usd)
+            await hand_back(db)  # the two sums it read began one too
     return run
+
+
+async def hand_back(db: AsyncSession) -> None:
+    """End the transaction a read began, so that its connection goes back to the pool — before a wait.
+
+    A session takes a connection at its first statement and keeps it until the transaction ends.
+    After a read nothing ends it: the connection stays lent, idle inside a transaction, for as long
+    as the code then waits for a model or a provider — and behind a pooler it keeps one of the
+    pooler's server connections lent as well. Call this between the read and the wait.
+
+    It commits; with nothing written that only ends the transaction. Rows already loaded stay as
+    they are (the app's sessions do not expire them on commit). Never raises: what the caller does
+    next is what matters, and if the connection is gone the next statement will say so.
+    """
+    try:
+        await db.commit()
+    except Exception:
+        logger.warning("A read's transaction could not be ended", exc_info=True)
 
 
 async def _warn_if_over(db: AsyncSession, trip_id: uuid.UUID, added: float) -> None:

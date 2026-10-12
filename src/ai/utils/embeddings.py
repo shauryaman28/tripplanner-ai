@@ -53,6 +53,7 @@ async def generate_embeddings(itinerary_id: uuid.UUID) -> None:
             from src.backend.app.models.trip import Trip
 
         from src.ai.embeddings.embedder import write_embedding_rows
+        from src.ai.utils.run_logger import hand_back
 
         async with AsyncSessionLocal() as db:
             itinerary = await db.get(Itinerary, itinerary_id)
@@ -61,6 +62,9 @@ async def generate_embeddings(itinerary_id: uuid.UUID) -> None:
                 return
 
             trip = await db.get(Trip, itinerary.trip_id)
+            # Phase 30: the embedding API is asked next, for seconds — the two reads' transaction ends
+            # here, so that this job does not keep a connection while it waits.
+            await hand_back(db)
             await write_embedding_rows(
                 itinerary_id=itinerary_id,
                 structured_data=itinerary.structured_data or {},

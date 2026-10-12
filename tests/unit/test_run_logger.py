@@ -48,7 +48,9 @@ async def test_log_agent_run_create():
     assert res == db_run
 
     mock_session.commit.assert_called_once()
-    mock_session.refresh.assert_called_once_with(res)
+    # Phase 30: the row is not read back. That SELECT began a transaction nobody ended until the next
+    # step committed — a planning run kept a database connection for its whole length without using it.
+    mock_session.refresh.assert_not_called()
 
 
 @pytest.mark.asyncio

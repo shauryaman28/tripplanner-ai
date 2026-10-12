@@ -252,7 +252,9 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("Redis unavailable at startup: %s", exc)
         await _recover_after_restart()
+    watching = spawn(metrics.watch_event_loop())  # Phase 30: how late the event loop runs what is due
     yield
+    watching.cancel()
     try:
         # The plans in flight first — they need Redis and the tool server, which are closed next.
         await finish_runs(settings.SHUTDOWN_GRACE_SECONDS)

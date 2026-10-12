@@ -88,7 +88,7 @@ from src.ai.utils.conversation import (
     start_history,
 )
 from src.ai.utils.failures import can_retry, failure_words
-from src.ai.utils.run_logger import log_agent_run, timed_run
+from src.ai.utils.run_logger import hand_back, log_agent_run, timed_run
 from src.ai.utils.tasks import spawn
 from src.telemetry import context as telemetry_context
 from src.telemetry import metrics, traces
@@ -452,6 +452,7 @@ async def search_my_trips(
     query = " ".join(q.split())
     if len(query) < 2:
         raise HTTPException(status_code=422, detail="Type at least two characters to search.")
+    await hand_back(db)  # Phase 30: the query is embedded next — up to 8 s — and not with a connection in hand
     try:
         vector = await _query_vector(query, cache)
     except Exception as exc:
@@ -668,6 +669,7 @@ async def refine_trip(
         )
 
     turn = max(await get_current_turn(redis, str(trip_id)), 1) + 1  # the initial plan is always turn 1
+    await hand_back(db)  # Phase 30: a model reads the request next — not with a connection in hand
     # Phase 26: reading the request is a model call like any other — a trace of this trip, and a row
     # of its own in agent_runs with what it cost. (Until now its tokens were counted nowhere.)
     async with timed_run("refinement_classifier") as timer:

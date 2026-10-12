@@ -29,7 +29,7 @@ from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from app.core.config import settings
-from src.telemetry import traces
+from src.telemetry import metrics, traces
 
 redis_client: aioredis.Redis | None = None
 
@@ -78,8 +78,13 @@ def where(redis_url: str) -> str:
 
 async def init_redis() -> aioredis.Redis:
     global redis_client
-    redis_client = aioredis.from_url(settings.REDIS_URL, **connection_options())
+    # Phase 30: how many connections it may open is said (core/config.py), not left to the library.
+    redis_client = aioredis.from_url(
+        settings.REDIS_URL, max_connections=settings.REDIS_MAX_CONNECTIONS, **connection_options()
+    )
     traces.instrument_redis(redis_client)  # Phase 29: every command a span — its name, never its arguments
+    # Phase 30: how many of its connections are in use — an open event stream holds one — and how many it may open.
+    metrics.watch_redis_pool(lambda: redis_client.connection_pool)
     return redis_client
 
 
