@@ -50,3 +50,6 @@ test-results/
 playwright-report/
 *.tsbuildinfo
 next-env.d.ts
+
+# Phase 29: the production-like stack's operations token, copied for Prometheus by scripts/observability.py
+docker/observability/secrets/

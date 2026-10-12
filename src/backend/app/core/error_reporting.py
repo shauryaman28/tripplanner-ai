@@ -50,7 +50,8 @@ FLUSH_SECONDS = 2.0  # how long shutdown waits for the last reports to be sent
 MIN_SECRET_LENGTH = 6  # shorter values are not taken out by value: "postgres" would vanish from every sentence
 
 # A setting whose name says it is a secret. The DSN is not one: it only allows sending.
-_SECRET_NAME = re.compile(r"KEY|SECRET|TOKEN|PASSWORD|PASSWD", re.I)
+# (…OTLP_HEADERS, Phase 29: where a hosted tracing backend's key goes.)
+_SECRET_NAME = re.compile(r"KEY|SECRET|TOKEN|PASSWORD|PASSWD|OTLP_HEADERS", re.I)
 _URL_SETTINGS = ("DATABASE_URL", "DATABASE_URL_UNPOOLED", "REDIS_URL")
 
 # name=value in a query string, a form body, a header dump — when the name says the value is a secret

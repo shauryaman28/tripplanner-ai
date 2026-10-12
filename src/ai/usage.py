@@ -21,6 +21,13 @@ The prices are list prices in US dollars per million tokens. On a free tier
 nothing is charged: `cost_usd` is what the tokens would cost, which is what a
 budget has to be planned around. A model with no price on record has its
 tokens counted and its cost left out — never guessed.
+
+Phase 29: the same handler is where a model call is counted for Prometheus
+(`llm_calls_total{agent, model, status}`, its tokens and their price) and made
+a span of the trace under way. The agent is the one whose meter is open:
+`metered("flight_agent")`. The model in the label is the one that was *asked
+for* — a provider answers under a dated name of its own, and a call that failed
+has no answer to read a name from.
 """
 
 from __future__ import annotations
@@ -30,10 +37,14 @@ import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 from langchain_core.tracers.context import register_configure_hook
+from opentelemetry.trace import SpanKind
+
+from src.telemetry import metrics, traces
 
 try:
     from app.core.config import settings
@@ -77,9 +88,13 @@ def price_of(model: str) -> tuple[float, float] | None:
 
 
 class Usage:
-    """The tokens asked of each model over a stretch of work. Safe to add to from several tasks or threads."""
+    """The tokens asked of each model over a stretch of work. Safe to add to from several tasks or threads.
 
-    def __init__(self) -> None:
+    `agent`: whose work it is — what its model calls are counted under (Phase 29).
+    """
+
+    def __init__(self, agent: str | None = None) -> None:
+        self.agent = agent
         self.by_model: dict[str, list[int]] = {}  # model → [input tokens, output tokens]
         self._lock = threading.Lock()
 
@@ -124,25 +139,82 @@ class Usage:
 _meter: ContextVar[Usage | None] = ContextVar("usage_meter", default=None)
 
 
+MAX_CALLS_UNDER_WAY = 1000  # a call whose end was never reported is forgotten rather than kept for ever
+
+
+def _asked_for(kwargs: dict) -> str:
+    """The model a call was made to, as it was asked for — LangChain names it for every chat model."""
+    named = (kwargs.get("metadata") or {}).get("ls_model_name")
+    params = kwargs.get("invocation_params") or {}
+    return str(named or params.get("model") or params.get("model_name") or "unknown").removeprefix("models/")
+
+
 class _Recorder(BaseCallbackHandler):
-    """Credits each model reply's tokens to the meter open where the model was asked."""
+    """Credits each model reply's tokens to the meter open where the model was asked.
+
+    Phase 29: and counts the call, and makes it a span — begun when the model is asked, ended when
+    it answers or fails. Nothing here may fail a model call: LangChain logs what a handler raises
+    and goes on.
+    """
 
     run_inline = True  # called in the asking task itself: no trip through a thread pool to add two numbers
 
-    def on_llm_end(self, response: LLMResult, **kwargs) -> None:
+    def __init__(self) -> None:
+        self._under_way: dict[Any, tuple[str, str, Any]] = {}  # run id → (agent, model asked for, its span)
+
+    def _begin(self, run_id: Any, kwargs: dict) -> None:
         meter = _meter.get()
-        if meter is None:
-            return
+        agent = (meter.agent if meter is not None else None) or "unmetered"
+        model = _asked_for(kwargs)
+        span = traces.start(
+            f"llm {model}",
+            {"gen_ai.operation.name": "chat", "gen_ai.request.model": model, "agent.name": agent},
+            kind=SpanKind.CLIENT,
+        )
+        if len(self._under_way) >= MAX_CALLS_UNDER_WAY:
+            self._under_way.pop(next(iter(self._under_way)))
+        self._under_way[run_id] = (agent, model, span)
+
+    def on_chat_model_start(self, serialized: Any, messages: Any, *, run_id: Any = None, **kwargs) -> None:
+        self._begin(run_id, kwargs)
+
+    def on_llm_start(self, serialized: Any, prompts: Any, *, run_id: Any = None, **kwargs) -> None:
+        self._begin(run_id, kwargs)
+
+    def on_llm_error(self, error: BaseException, *, run_id: Any = None, **kwargs) -> None:
+        agent, model, span = self._under_way.pop(run_id, ("unmetered", "unknown", None))
+        metrics.llm_call(agent, model, ok=False)
+        if span is not None:
+            traces.finish(span, error=error)
+
+    def on_llm_end(self, response: LLMResult, *, run_id: Any = None, **kwargs) -> None:
+        agent, asked_for, span = self._under_way.pop(run_id, ("unmetered", "unknown", None))
+        model, tokens_in, tokens_out = None, 0, 0
         try:
             message = response.generations[0][0].message  # a chat model's reply
         except (AttributeError, IndexError):
-            return
-        counted = getattr(message, "usage_metadata", None)
-        if not counted:
-            return  # the provider said nothing: no row should claim tokens it cannot show
-        named = (getattr(message, "response_metadata", None) or {}).get("model_name")
-        model = named or (response.llm_output or {}).get("model_name") or "unknown"
-        meter.add(model, counted.get("input_tokens", 0), counted.get("output_tokens", 0))
+            message = None
+        counted = getattr(message, "usage_metadata", None) if message is not None else None
+        if counted:  # a provider that said nothing: no row should claim tokens it cannot show
+            named = (getattr(message, "response_metadata", None) or {}).get("model_name")
+            model = named or (response.llm_output or {}).get("model_name") or "unknown"
+            tokens_in, tokens_out = int(counted.get("input_tokens") or 0), int(counted.get("output_tokens") or 0)
+            meter = _meter.get()
+            if meter is not None:
+                meter.add(model, tokens_in, tokens_out)
+
+        price = price_of(model) if model else None
+        cost = (tokens_in * price[0] + tokens_out * price[1]) / 1_000_000 if price else None
+        metrics.llm_call(agent, asked_for, ok=True, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
+        if span is not None:
+            traces.finish(
+                span,
+                {
+                    "gen_ai.response.model": model,
+                    "gen_ai.usage.input_tokens": tokens_in or None,
+                    "gen_ai.usage.output_tokens": tokens_out or None,
+                },
+            )
 
 
 # One recorder for the whole process. A ContextVar's default is seen in every context — every task,
@@ -152,9 +224,9 @@ register_configure_hook(_recorder, inheritable=True)
 
 
 @contextmanager
-def metered() -> Iterator[Usage]:
-    """Count what the models are asked from here until the block ends."""
-    usage = Usage()
+def metered(agent: str | None = None) -> Iterator[Usage]:
+    """Count what the models are asked from here until the block ends. `agent`: whose work the block is."""
+    usage = Usage(agent)
     token = _meter.set(usage)
     try:
         yield usage

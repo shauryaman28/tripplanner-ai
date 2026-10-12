@@ -21,6 +21,10 @@ time, and three more of those would hold a traveller for minutes.
 Every wait is logged, because a retry nobody can see looks like a slow search:
 
     [BACKOFF] duffel: HTTP 429 — waiting 1.30 s before attempt 2 of 4
+
+Phase 29: each send() is a span of the trace under way — "provider duffel",
+with how many attempts it took and the status it ended with. Never the address:
+some providers take their key in it.
 """
 
 from __future__ import annotations
@@ -32,9 +36,11 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
 import httpx
+from opentelemetry.trace import SpanKind
 from tenacity import RetryCallState, Retrying, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 
 from src.ai.mcp_server.rate_limiter import StillLimited, limiter
+from src.telemetry import traces
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +113,11 @@ def send(provider: str, request: Callable[[], httpx.Response]) -> httpx.Response
             ATTEMPTS,
         )
 
+    attempts = 0
+
     def attempt() -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
         limiter(provider).acquire()
         response = request()
         response.raise_for_status()
@@ -121,9 +131,15 @@ def send(provider: str, request: Callable[[], httpx.Response]) -> httpx.Response
         sleep=lambda seconds: _sleep(seconds),
         reraise=True,
     )
-    try:
-        return retrying(attempt)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 429:
-            raise StillLimited(provider, ATTEMPTS) from exc
-        raise
+    with traces.span(f"provider {provider}", {"peer.service": provider}, kind=SpanKind.CLIENT) as span:
+        try:
+            response = retrying(attempt)
+            span.set_attribute("http.response.status_code", response.status_code)
+            return response
+        except httpx.HTTPStatusError as exc:
+            span.set_attribute("http.response.status_code", exc.response.status_code)
+            if exc.response.status_code == 429:
+                raise StillLimited(provider, ATTEMPTS) from exc
+            raise
+        finally:
+            span.set_attribute("provider.attempts", attempts)

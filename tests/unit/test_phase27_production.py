@@ -90,7 +90,8 @@ def test_nothing_prepared_is_kept_so_that_a_pooler_can_sit_in_between():
     name = connect_args["prepared_statement_name_func"]
     assert name() != name() and re.fullmatch(r"__asyncpg_[0-9a-f]{32}__", name())  # never the same name twice
     # …and the app's own engine is made with them
-    with patch.object(db_session_module, "create_async_engine") as create:
+    # (asked of the module when the engine is made — Phase 29 instruments it there, src/telemetry/traces.py)
+    with patch("sqlalchemy.ext.asyncio.create_async_engine") as create:
         db_session_module.make_engine(NEON)
     (url,), made_with = create.call_args.args, create.call_args.kwargs
     assert url.drivername == "postgresql+asyncpg" and dict(url.query) == {}
@@ -156,6 +157,10 @@ GOOD = {
     "OPS_TOKEN": "o" * 64,
     "LANGCHAIN_TRACING_V2": False,
     "LANGCHAIN_API_KEY": "",
+    # Phase 29: a deployment that has everything has somewhere to send its traces
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otlp.example.com",
+    "OTEL_EXPORTER_OTLP_HEADERS": "",
+    "LOG_FORMAT": "",
 }
 PROVIDERS = {
     "DUFFEL_ACCESS_TOKEN": "duffel-token-value-0003",

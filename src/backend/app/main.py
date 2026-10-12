@@ -7,8 +7,11 @@ FastAPI application entry point.
 
 import asyncio
 import logging
+import re
+import uuid
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -20,6 +23,7 @@ from sqlmodel import select, update
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__, preflight
+from app.api.deps import may_read_metrics
 from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
@@ -28,6 +32,7 @@ from app.api.routes.trips import router as trips_router
 from app.api.routes.users import router as users_router
 from app.core import error_reporting
 from app.core.config import settings
+from app.core.security import decode_access_token
 from app.db import redis as redis_db
 from app.db.redis import close_redis, init_redis
 from app.db.session import AsyncSessionLocal
@@ -43,8 +48,16 @@ from src.ai.mcp_server.config import mcp_settings
 from src.ai.utils.conversation import RUN_TTL_S, run_in_flight
 from src.ai.utils.embeddings import EMBEDDINGS_PENDING_KEY, generate_embeddings
 from src.ai.utils.tasks import spawn
+from src.telemetry import context as telemetry_context
+from src.telemetry import logs, metrics, traces
 
 logger = logging.getLogger(__name__)
+
+# Phase 29: with LOG_FORMAT=json (the default in production) every line this process logs is one JSON
+# object. Here, as the module is loaded, because the web server's own first lines come before the
+# app's startup does — and a log store should not have to cope with two kinds of line.
+_scrub = error_reporting.Scrubber(error_reporting.secrets_of(settings, mcp_settings)).text
+logs.configure(logs.chosen(settings.LOG_FORMAT, settings.APP_ENV), traces.BACKEND, scrub=_scrub)
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -228,12 +241,17 @@ async def lifespan(app: FastAPI):
     )
     error_reporting.configure(settings, mcp_settings)  # Phase 27: Sentry — on only with a DSN
     tracing.configure(settings)  # Phase 26: LangSmith tracing — on only with the switch and a key
-    redis = await init_redis()
-    try:
-        await redis.delete(EMBEDDINGS_PENDING_KEY)
-    except Exception as exc:
-        logger.warning("Redis unavailable at startup: %s", exc)
-    await _recover_after_restart()
+    # Phase 29: OpenTelemetry — on only with an endpoint; every span scrubbed like an error report before it leaves
+    traces.configure(settings, traces.BACKEND, __version__, scrub=_scrub)
+    metrics.build_info(__version__, settings.commit)
+    # One span around what startup does: its queries are then one trace, not a trace each.
+    with traces.span("startup"):
+        redis = await init_redis()
+        try:
+            await redis.delete(EMBEDDINGS_PENDING_KEY)
+        except Exception as exc:
+            logger.warning("Redis unavailable at startup: %s", exc)
+        await _recover_after_restart()
     yield
     try:
         # The plans in flight first — they need Redis and the tool server, which are closed next.
@@ -242,6 +260,7 @@ async def lifespan(app: FastAPI):
         await close_session()
     finally:
         tracing.shutdown()  # the last traces, sent — for a few seconds at most, whatever else failed to close
+        traces.shutdown()  # the last spans
         error_reporting.shutdown()  # and the last error reports
 
 
@@ -301,6 +320,57 @@ class NoStoreByDefault:
 app.add_middleware(NoStoreByDefault)
 
 
+# ── Whose a request is (Phase 29) ──────────────────────────────────────────
+
+_TRIP_IN_PATH = re.compile(r"^/trips/([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})(?:/|$)")
+
+
+def _user_of(scope) -> str | None:
+    """The user a request's login token names: from the Authorization header, or ?token= (an event stream's).
+
+    None for no token, and for one that does not hold up — this only says whose the request claims
+    to be, for the log; whether it may do what it asks is still the route's to decide.
+    """
+    token = None
+    for name, value in scope.get("headers") or []:
+        if name == b"authorization" and value[:7].lower() == b"bearer ":
+            token = value[7:].decode("latin-1")
+            break
+    if token is None:
+        token = parse_qs(scope.get("query_string", b"").decode("latin-1")).get("token", [None])[0]
+    if not token:
+        return None
+    try:
+        return str(uuid.UUID(decode_access_token(token).get("sub", "")))
+    except Exception:
+        return None
+
+
+class RequestContext:
+    """Says which trip a request is about, and whose it is, before anything handles it.
+
+    The trip from the address (/trips/<id>/…), the user from the login token. Both go into two
+    context variables (src/telemetry/context.py), which is all it takes: every log line written
+    while the request is handled carries them, every span is tagged with them, and so is everything
+    the request starts and leaves behind — a planning run begins with a copy of this context.
+    Plain ASGI, like the middleware above: the event stream must not be wrapped.
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        about = _TRIP_IN_PATH.match(scope.get("path", ""))
+        with telemetry_context.scope(trip_id=about.group(1).lower() if about else None, user_id=_user_of(scope)):
+            await self.app(scope, receive, send)
+
+
+app.add_middleware(RequestContext)
+
+
 # ── Error envelope (Phase 17) ──────────────────────────────────────────────
 # Every error body carries {"error": {"code", "message"}} for the frontend, next
 # to FastAPI's own "detail" so existing clients keep working.
@@ -349,3 +419,8 @@ app.include_router(auth_router)
 app.include_router(trips_router)
 app.include_router(users_router)  # Phase 16
 app.include_router(admin_router)  # Phase 14
+
+# Phase 29 — the two outermost layers, in this order: a request is counted (GET /metrics says how many,
+# how many failed, how long) inside the span that is the root of its trace.
+metrics.instrument_app(app, may_read_metrics)
+traces.instrument_app(app)

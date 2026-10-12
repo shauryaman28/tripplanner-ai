@@ -22,6 +22,7 @@ annotated-doc==0.0.5
 annotated-types==0.8.0
 anthropic==1.7.0
 anyio==4.14.2
+asgiref==3.12.1
 asyncpg==0.31.0
 attrs==26.1.0
 bcrypt==4.0.1
@@ -39,6 +40,7 @@ fastapi==0.141.1
 filetype==1.2.0
 google-auth==2.56.3
 google-genai==2.19.0
+googleapis-common-protos==1.75.5
 googlemaps==4.10.0
 greenlet==3.5.4
 groq==0.37.1
@@ -74,6 +76,17 @@ mcp-types==2.0.0
 mcp==1.29.0
 mdurl==0.1.2
 opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp-proto-common==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-instrumentation-asgi==0.65b0
+opentelemetry-instrumentation-fastapi==0.65b0
+opentelemetry-instrumentation-redis==0.65b0
+opentelemetry-instrumentation-sqlalchemy==0.65b0
+opentelemetry-instrumentation==0.65b0
+opentelemetry-proto==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-semantic-conventions==0.65b0
+opentelemetry-util-http==0.65b0
 orjson==3.11.9
 ormsgpack==1.12.2
 packaging==26.3
@@ -81,6 +94,9 @@ passlib==1.7.4
 pgvector==0.5.0
 pillow==12.3.0
 pluggy==1.6.0
+prometheus-fastapi-instrumentator==8.1.0
+prometheus_client==0.26.0
+protobuf==7.36.2
 psycopg2-binary==2.9.12
 pyasn1==0.6.4
 pyasn1_modules==0.4.2
@@ -95,6 +111,7 @@ pytest-asyncio==1.4.0
 pytest==9.1.1
 python-dotenv==1.2.2
 python-jose==3.5.0
+python-json-logger==4.2.0
 python-multipart==0.0.32
 PyYAML==6.0.3
 redis==8.1.0
@@ -126,5 +143,6 @@ uvicorn==0.52.1
 uvloop==0.22.1
 watchfiles==1.2.0
 websockets==15.0.1
+wrapt==2.5.0
 xxhash==3.8.1
 zstandard==0.25.0

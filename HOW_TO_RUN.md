@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–28
+# How to Run & Verify — Phases 1–29
 
 ## What changed vs the original codebase?
 
@@ -27,6 +27,7 @@
 | 26 | `run_logger.py` (`timed_run` meters what the models are asked; a row carries `token_count` and `cost_usd`; the over-cost alert), `orchestrator.py` (a run tagged with its trip and user; "re-plan N" and "evaluator retry N" spans; a change to a plan as a trace), `mcp_client/client.py` (a span per tool call), the three search agents, `builder.py`, `destination_intelligence.py`, `preference_extractor.py`, `trips.py` (the refinement classifier timed, traced and logged), `admin.py` (`GET /admin/cost-summary`), `config.py`, `main.py`, `models/agent_run.py`, `schemas/agent_run.py`, `.env.example`, `lib/types.ts`, `tests/fakes.py`, `tests/conftest.py` — see `docs/phase26_build_log.md` | `src/ai/tracing.py`, `src/ai/usage.py`, `src/ai/trace_tree.py`, `scripts/trace_receiver.py`, `schemas/cost.py`, migration 006, `tests/unit/test_phase26_tracing.py`, `test_phase26_costs.py`, `test_version.py`, `tests/integration/test_phase26_tracing_integration.py` |
 | 27 | `Dockerfile` (listens on `$PORT`, `exec`s the server, pinned installs, not root), `main.py` (the pre-start check, Sentry, recovery that leaves another instance's runs alone, waiting for plans at shutdown, `no-store`, a JSON 500), `trips.py` (a run's note kept up; a run cut short tidied up; the event stream's wait), `session.py` + `migrations/env.py` (a hosted Postgres's URL), `db/redis.py` + `mcp_server/cache.py` (retries, health checks, no password in a log), `health.py` (`GET /ready`), `admin.py` (`GET /admin/sentry-test`), `config.py`, `conversation.py`, `requirements.txt` (`sentry-sdk`), `ci.yml`, `next.config.mjs`, `lib/sse.ts`, `.env.example`, `.gitignore`, `tests/conftest.py` — see `docs/phase27_build_log.md` | `app/preflight.py`, `app/db/url.py`, `app/core/error_reporting.py`, `constraints.txt`, `railway.json`, `docker/prodlike/` (the production-like stack), `scripts/prodlike.py`, `scripts/prod_check.py`, `scripts/sentry_receiver.py`, `scripts/freeze_constraints.py`, `playwright.production.config.ts`, `e2e-production/smoke.spec.ts`, three unit test files and one integration test file |
 | 28 | `.github/workflows/ci.yml` (two jobs, pushes only, the migrations up / checked / down / up, a deploy on `main` after both), `health.py` (`GET /version`), `config.py` (`GIT_COMMIT_SHA`, `settings.commit`), `error_reporting.py` (a report's release from the same commit), `next.config.mjs` (the build told its commit), `docker/prodlike/compose.yml`, `.env.example` — see `docs/phase28_build_log.md` | `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`, `.github/nightly-issue.md`, `scripts/wait_for_release.py`, `scripts/nightly_summary.py`, `scripts/nightly_post.sh`, `src/frontend/src/app/version/route.ts`, `tests/ci/fake_gh.sh`, `tests/unit/test_phase28_pipeline.py` |
+| 29 | `main.py` (logging set up as the module loads, the `RequestContext` middleware, `GET /metrics`, tracing), `deps.py` (`may_read_metrics`), `trips.py` (a planning run timed, counted and one span), `session.py` / `redis.py` (statements and commands as spans), `preflight.py`, `config.py` (4 settings), `error_reporting.py` (a tracing backend's key is a secret too), `usage.py` + `run_logger.py` + `llm.py` (model calls counted per agent, every agent a span), `orchestrator.py` (builds counted), `mcp_client/client.py` + `mcp_server/server.py` + `cache.py` + `outbound.py` (the trace and the trip carried to the tool server, the cache's tally carried back), every agent's `timed_run("<its name>")`, `docker/prodlike/compose.yml`, `requirements.txt` + `constraints.txt` (18 new pins), `.env.example`, `tests/conftest.py`, `tests/fakes.py` — see `docs/phase29_build_log.md` | `src/telemetry/` (`context.py`, `metrics.py`, `traces.py`, `logs.py`), `docker/observability/` (compose, Prometheus, Alloy, Grafana's data sources and dashboard), `scripts/observability.py`, `scripts/observability_check.py`, `tests/unit/test_phase29_telemetry.py`, `test_phase29_wiring.py`, `test_phase29_stack.py`, `tests/integration/test_phase29_observability_integration.py` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -311,7 +312,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–28 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–29 check
 
 Run from the **project root**:
 
@@ -319,7 +320,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **1010 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **1094 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -328,7 +329,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **60 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **64 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -1265,7 +1266,7 @@ what only GitHub can show — and the three things only you can set — are at t
 ```bash
 # the backend job — lint and tests (about 25 seconds on a laptop); its migrations step is below
 ruff check . && ruff format --check .
-pytest tests/unit/ tests/contract/ -v          # 1010 passed
+pytest tests/unit/ tests/contract/ -v          # 1094 passed
 
 # the frontend job
 cd src/frontend && npm ci && npx tsc --noEmit && npm run lint && npm run build
@@ -1350,7 +1351,7 @@ python scripts/nightly_summary.py /tmp/an-empty-directory --require integration 
 
 **Every push** shows two checks, `backend` and `frontend`, on the commit and on its pull request (Actions tab
 → CI). To see one fail: push a branch with `assert 1 + 1 == 3` in a new test; the commit gets a red cross
-and the run's log ends `1 failed, 1010 passed`. Delete the branch afterwards.
+and the run's log ends `1 failed, 1094 passed`. Delete the branch afterwards.
 
 **1. Make a red cross block the merge.** Settings → Branches → Add branch ruleset (or "Add classic branch
 protection rule") for `main` → *Require status checks to pass* → add `backend` and `frontend` → also
@@ -1392,6 +1393,122 @@ which leaves room for some 380 pushes a month — an estimate until GitHub has r
 Usage has the figure.
 
 **The tests:** `pytest tests/unit/test_phase28_pipeline.py -v` (30).
+
+---
+
+## Step 27 — Verify Phase 29: metrics, traces, log lines
+
+Needs Docker and nothing else: no account, no key beyond the ones in `.env`. Three things come out of the
+app — numbers at `GET /metrics`, traces, and log lines as JSON — and five programs on your machine read them.
+
+### A. The stack
+
+```bash
+python scripts/observability.py up
+# waiting for Prometheus, Grafana, Jaeger and Loki to answer…
+# ready.
+#   Grafana      http://localhost:3001
+#   Prometheus   http://localhost:9090/targets
+#   Jaeger       http://localhost:16686
+```
+
+The first time it downloads five images, about 1 GB. Nothing in it is in the app's path: with the stack
+down the app runs exactly as before.
+
+### B. Your backend, watched
+
+`GET /metrics` is always there. The other two are settings — where traces go, and that log lines are JSON —
+and the lines have to be somewhere the stack can read: `./logs`. Stop the backend of Step 5 (Ctrl-C) and
+start it like this, from the project root:
+
+```bash
+mkdir -p logs
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 LOG_FORMAT=json \
+  uvicorn app.main:app --app-dir src/backend --port 8000 2>&1 | tee logs/backend.log
+# {"timestamp": "2026-10-12T13:20:04.118+00:00", "level": "info", "logger": "src.telemetry.traces",
+#  "message": "[OTEL] tracing is on — service 'tripplanner-backend', sent to http://localhost:4318, 100% of requests",
+#  "service": "tripplanner-backend", "trip_id": null, "user_id": null, "trace_id": null, "span_id": null}
+```
+
+(Or put the two settings in `.env`. Without them: no traces, and the console as it always was.)
+
+Then, in another terminal — this plans **a real trip** with your keys, and asks the four programs what they
+saw of it:
+
+```bash
+python scripts/observability_check.py
+# 1. The stack answers
+# 2. The backend shows its metrics, and Prometheus reads them
+# 3. A trip is planned
+#      trip 77bd4592-950c-4239-bd27-0272fb51b327          ← keep this id
+# 4. Prometheus: rate, errors and duration per endpoint; the models, the cache, the builds
+# 5. Jaeger: one connected trace, from the request to the row
+#   ✓ it has one root: POST /trips/{trip_id}/plan  — 106 spans in trace 1b34653d…
+#   ✓ no orphaned spans: every span's parent is in the trace
+#   ✓ it spans both processes  — tripplanner-backend 100, tripplanner-mcp 6
+# 6. Loki: the trip's log lines, from every service
+#   ✓ from every service the plan touched  — tripplanner-backend 27, tripplanner-mcp 8
+# 7. Grafana: the dashboard, and what each panel is answered
+# 44 passed, 0 failed
+```
+
+Now look yourself, with that trip's id:
+
+| Where | What to do | What you see |
+|---|---|---|
+| http://localhost:3001 | It opens on the dashboard. Paste the id into **Trip id** at the top | Six numbers; request rate, error rate and duration per endpoint, as charts and as a table; planning runs; model calls by agent; the tool server's cache. At the bottom, that trip's log lines from both services — open one for its `trip_id`, `user_id`, `trace_id` and a link to its trace |
+| http://localhost:16686 | Service `tripplanner-backend`, Tags `trip.id=<the id>`, Find Traces → the one named `POST /trips/{trip_id}/plan` | The request (a few ms), `planning run` under it (the seconds), every agent, every model call with its tokens, each tool call crossing into `tripplanner-mcp`, and near the end `persist` → `INSERT` |
+| http://localhost:9090/targets | — | `tripplanner-dev` **UP** |
+| a terminal | `curl -s localhost:8000/metrics \| grep -E "^(llm_calls_total\|mcp_cache_hit_ratio\|itinerary_builds_total)"` | the roadmap's three metrics, as text |
+| a terminal | `grep '"tripplanner-mcp"' logs/backend.log \| tail -1 \| python -m json.tool` | a line the tool server — another process — wrote, with the trip's id on it |
+
+### C. The production-like stack, watched
+
+The image that is deployed, with its metrics behind its operations token:
+
+```bash
+PRODLIKE_OTLP_ENDPOINT=http://host.docker.internal:4318 python scripts/prodlike.py up
+python scripts/observability.py up        # again: it hands Prometheus that stack's token
+python scripts/observability_check.py --prodlike
+# 2. The backend shows its metrics, and Prometheus reads them  (http://localhost:8200)
+#   ✓ GET /metrics answers in Prometheus's format — to the operations token
+#   ✓ …and to nobody without it  — HTTP 404 without the token
+# …
+# 45 passed, 0 failed
+
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8200/metrics     # 404
+```
+
+Its log lines are JSON without being asked (`APP_ENV` is production there), and reach Loki through Docker
+rather than through `./logs`.
+
+### D. On a deployment — not done from this repository
+
+There is no deployment yet (Step 25 B). When there is, three things, all settings:
+
+| What | Setting | Note |
+|---|---|---|
+| Metrics | `OPS_TOKEN` (Step 25 B already sets it) | Prometheus reads `https://<backend>/metrics` with `Authorization: Bearer <the token>` — `docker/observability/prometheus.yml` has the job, commented out. Without a token a deployment's metrics are closed to everyone |
+| Traces | `OTEL_EXPORTER_OTLP_ENDPOINT`, and `OTEL_EXPORTER_OTLP_HEADERS` for its key | Any backend that takes OTLP over HTTP. `http(s)://…`, usually port 4318 — not a gRPC address |
+| Log lines | nothing: JSON is the default in production | The platform's own log store collects them; search it for `trip_id` |
+
+`python -m app.preflight --env-file <your values> --production` says so when a deployment would send no
+traces or could not be scraped.
+
+### Stopping, and one warning
+
+```bash
+python scripts/observability.py down      # the stack, and what it kept
+```
+
+Stop a backend running on your machine with Ctrl-C. **Do not stop it with `lsof -ti tcp:8000 | xargs kill`
+while the stack is up**: Prometheus, inside Docker, holds a connection to port 8000 through Docker Desktop's
+own process — which is then on that list, and Docker Desktop goes down with every container in it. If a
+port has to be freed by hand: `lsof -ti tcp:8000 -sTCP:LISTEN | xargs kill`.
+
+**The tests:** `pytest tests/unit/test_phase29_telemetry.py tests/unit/test_phase29_wiring.py tests/unit/test_phase29_stack.py -v`
+(84), and `RUN_INTEGRATION=1 pytest tests/integration/test_phase29_observability_integration.py -v` (4 — one
+of them starts the tool server as a real second process and follows a trace into it).
 
 ---
 
@@ -1443,4 +1560,5 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
 | **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. With a LangSmith key: plan a trip and change it → both traces are in the project `tripplanner-ai`, though one is started by LangChain and the other by this app — take the tracer out of `tracing.run_config` and the plan goes to a project called `default`, where the trip's filter no longer finds it, and nothing is logged. |
 | **27 (Production)** | `python scripts/prodlike.py up`, then: `docker stop -t 70 tripplanner-prodlike-backend-1` while a trip is being planned → the log says `[SHUTDOWN] 1 planning run(s) in flight — waiting…` and the plan is there after `docker start`; `docker kill` it instead → the trip fails 45 s after the restart, with the reason on the page — never "planning" for ever. Kill Redis's connections (`redis-cli … client kill type normal`, then `type pubsub` with a trip's page open) → the next request answers 200 and the page's event stream still hears. In `docker/prodlike/compose.yml` take `CORS_ORIGIN_REGEX` out → the backend does not start: `Cannot start in production: ✗ CORS_ORIGINS names no deployed frontend` (the list has only localhost in it). Set `CORS_ORIGINS` to another site instead (`https://elsewhere.example`) → it starts, `prod_check.py` says 28 passed, 1 failed — `✗ the backend lets a page on the frontend's origin read it (CORS)` — and the browser check stops at the event stream, which never connects, while the plan itself is still made. Set `REDIS_URL` to an `https://` address → `that is a REST API, and a REST API cannot subscribe`. Set `JWT_SECRET` to the repository's default → refused. `VERCEL=1 npx next build` in `src/frontend` with no `BACKEND_URL` → the build stops and names it. `pip install sqlmodel==0.0.48` in the venv → `test_what_is_deployed_is_what_was_tested` fails: the environment is no longer the pinned one (the same version the first image installed by itself, and on which registering an account answered 500). `curl localhost:8200/admin/sentry-test` without `X-Ops-Token` → 404; with it → 500, and `curl localhost:9010/raw` shows the report with the token header `[Filtered]`. `GET /ping` with the database down → 200 and the error in the body; `GET /ready` → 503. |
-| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1010 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |
+| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1094 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |
+| **29 (Observability)** | With the stack of Step 27 up: `docker stop tripplanner-observability-jaeger-1`, then plan a trip → the plan is made as before; the log has `Transient error … encountered while exporting span batch` from the exporter and nothing else changes — nothing here is in the app's path (start it again: `python scripts/observability.py up`). `curl -s -o /dev/null -w "%{http_code}" localhost:8200/metrics` on the production-like stack → `404`: a deployment's numbers are for whoever has its token. `OTEL_EXPORTER_OTLP_ENDPOINT=collector:4318 PYTHONPATH=src/backend python -m app.preflight --production` → among what stops a deployment: `✗ OTEL_EXPORTER_OTLP_ENDPOINT is not an http:// or https:// URL`, and among what it starts without: `! OPS_TOKEN is empty: GET /metrics answers nobody`. Rename a metric in `docker/observability/grafana/dashboards/tripplanner.json` (`itinerary_builds_total` → `itinerary_build_total`) → `test_every_metric_a_panel_asks_for_is_one_the_app_exports` fails and names the panel, instead of the panel going quietly empty. Open an event stream (`curl -N "localhost:8000/trips/<id>/stream?token=<your token>"`), stop it, and look at its trace in Jaeger → `http.url` ends `?token=[Filtered]`. Why: what watches a system must not be able to break it, leak from it, or go blind without anyone noticing. |

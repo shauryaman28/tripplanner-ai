@@ -13,6 +13,16 @@ Session lifecycle notes:
 - close_session() should be wired into FastAPI's lifespan shutdown
   (same pattern as init_redis/close_redis in app.main) so the subprocess
   doesn't leak across app restarts during dev.
+
+Phase 29 — the tool server is another process, and what it does for a call is
+still part of the request that made the call:
+- every call is counted and timed (mcp_tool_calls_total, …_duration_seconds) and
+  is a span, "mcp.call <tool>";
+- the trace it belongs to, and the trip and user it is for, go with it in the
+  call's `_meta` — the tool server continues the one and logs under the others;
+- what the server's cache did for the call comes back beside the answer, as a
+  log message of the protocol's own (models.CACHE_REPORT), and is counted here:
+  mcp_cache_lookups_total, mcp_cache_hit_ratio.
 """
 
 from __future__ import annotations
@@ -21,18 +31,24 @@ import asyncio
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from opentelemetry.trace import SpanKind
 
 from src.ai import tracing
+from src.telemetry import context as telemetry_context
+from src.telemetry import metrics, traces
 
 try:
-    from src.ai.mcp_server.models import ToolError
+    from src.ai.mcp_server.models import CACHE_REPORT, CACHES, TOOL_NAMES, ToolError
 except ImportError:
-    from ai.mcp_server.models import ToolError
+    from ai.mcp_server.models import CACHE_REPORT, CACHES, TOOL_NAMES, ToolError
+
+metrics.expect_tools(TOOL_NAMES, CACHES)  # every tool's and every cache's counter exists before its first event
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
@@ -47,6 +63,26 @@ def _get_lock() -> asyncio.Lock:
     if _lock is None:
         _lock = asyncio.Lock()
     return _lock
+
+
+async def _on_server_log(params: Any) -> None:
+    """What the tool server says beside its answers. One thing is read: what its cache did for a call."""
+    if getattr(params, "logger", None) != CACHE_REPORT:
+        return
+    data = getattr(params, "data", None)
+    lookups = data.get("lookups") if isinstance(data, dict) else None
+    for cache, results in (lookups if isinstance(lookups, dict) else {}).items():
+        for result, count in (results if isinstance(results, dict) else {}).items():
+            try:
+                metrics.cache_lookups(str(cache), str(result), int(count))
+            except (TypeError, ValueError):
+                continue
+
+
+def _sent_with_call() -> dict[str, str]:
+    """What goes with a call beside its arguments: the trace to continue, and whose the work is."""
+    whose = {"trip_id": telemetry_context.trip_id(), "user_id": telemetry_context.user_id()}
+    return {**traces.inject(), **{name: value for name, value in whose.items() if value}}
 
 
 async def get_session() -> ClientSession:
@@ -77,28 +113,35 @@ async def get_session() -> ClientSession:
         # globals until every step below succeeds — if initialize() raises,
         # this local state is simply discarded and the next call retries
         # from scratch instead of reusing a broken session.
-        client_context = stdio_client(server_params)
-        read, write = await client_context.__aenter__()
-        session = None
-        try:
-            session = ClientSession(read, write)
-            await session.__aenter__()
-            await session.initialize()
+        # Phase 29: the session's own tasks — the ones that read the server's answers for as long as
+        # the process lives — start with a copy of the context they are made in. Made in the context
+        # of whichever call happened to come first, they would log under that trip, and as children
+        # of that request, for ever. So the session is made in nobody's.
+        with telemetry_context.scope(), traces.outside():
+            # errlog: where the server's own log lines go — this process's standard error, as it is now.
+            # (Left out, it is the one the library saw when it was imported.)
+            client_context = stdio_client(server_params, errlog=sys.stderr)
+            read, write = await client_context.__aenter__()
+            session = None
+            try:
+                session = ClientSession(read, write, logging_callback=_on_server_log)
+                await session.__aenter__()
+                await session.initialize()
 
-            _client_context = client_context
-            _session = session
-            return _session
-        except Exception:
-            if session is not None:
+                _client_context = client_context
+                _session = session
+                return _session
+            except Exception:
+                if session is not None:
+                    try:
+                        await session.__aexit__(None, None, None)
+                    except Exception:
+                        pass
                 try:
-                    await session.__aexit__(None, None, None)
+                    await client_context.__aexit__(None, None, None)
                 except Exception:
                     pass
-            try:
-                await client_context.__aexit__(None, None, None)
-            except Exception:
-                pass
-            raise
+                raise
 
 
 async def close_session() -> None:
@@ -148,10 +191,22 @@ async def call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
     that belongs to no run (a trip's caches being warmed) is not traced: it would be a
     trace of one span, about nothing.
     """
-    with tracing.span(f"mcp:{tool_name}", run_type="tool", inputs=params, needs_parent=True) as span:
+    with (
+        tracing.span(f"mcp:{tool_name}", run_type="tool", inputs=params, needs_parent=True) as span,
+        traces.span(
+            f"mcp.call {tool_name}",
+            {"rpc.system": "mcp", "rpc.method": "tools/call", "mcp.tool.name": tool_name},
+            kind=SpanKind.CLIENT,
+        ) as sent,
+    ):
+        started = time.perf_counter()
         result = await _call_tool(tool_name, params)
-        if isinstance(result, ToolError):
+        failed = isinstance(result, ToolError)
+        metrics.tool_call(tool_name, ok=not failed, seconds=time.perf_counter() - started)
+        if failed:
             span.end(outputs={"error": result.error, "code": result.code}, error=f"{result.code}: {result.error}")
+            sent.set_attribute("error.type", result.code)
+            traces.fail(sent, f"{result.code}: {result.error}")
         else:
             span.end(outputs={"result": result})
         return result
@@ -169,7 +224,8 @@ async def _call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
 
         # FastMCP tools wrap their inputs in an 'input' schema parameter
         arguments = params if "input" in params else {"input": params}
-        response = await session.call_tool(tool_name, arguments=arguments)
+        with_it = _sent_with_call()  # Phase 29; nothing to send → the call as it always was
+        response = await session.call_tool(tool_name, arguments=arguments, **({"meta": with_it} if with_it else {}))
 
         if getattr(response, "isError", False):
             error_msg = getattr(response.content[0], "text", str(response.content[0])) if response.content else ""

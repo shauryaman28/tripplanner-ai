@@ -7,6 +7,13 @@ ever touching dev data.
 
 import os
 
+# Phase 29: the suites say how they log and that they send no traces, whatever .env says. A developer
+# who has LOG_FORMAT=json or a trace endpoint in .env to look at their own stack must not find the
+# tests writing JSON over pytest's output, or a few thousand test requests in their Jaeger. (Before
+# the app is imported: it sets up its logging as it is loaded.)
+os.environ["LOG_FORMAT"] = "text"
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
+
 if os.getenv("RUN_INTEGRATION"):
     from tests.database import use_database
 
@@ -130,3 +137,20 @@ def no_tile_downloads():
     refuse = AsyncMock(side_effect=RuntimeError("no tile server in tests"))
     with patch("app.pdf.static_map._download_tile", refuse) as download:
         yield download
+
+
+@pytest.fixture
+def spans():
+    """Every span that ends during the test (Phase 29): `spans.get_finished_spans()`.
+
+    Nothing is sent anywhere: the spans are kept in a list. Afterwards spans go to nobody again.
+    """
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from src.telemetry import traces
+
+    kept = InMemorySpanExporter()
+    traces.use(SimpleSpanProcessor(kept))
+    yield kept
+    traces.use(None)

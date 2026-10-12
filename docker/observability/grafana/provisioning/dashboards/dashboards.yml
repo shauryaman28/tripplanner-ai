@@ -1,0 +1,11 @@
+# Dashboards kept as files in the repository (Phase 29): what is in ./dashboards is what Grafana shows.
+apiVersion: 1
+
+providers:
+  - name: tripplanner
+    folder: ""
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

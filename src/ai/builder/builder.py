@@ -483,7 +483,7 @@ class ItineraryBuilder:
         Phase 22: `local_intelligence` (the DestinationIntelligenceAgent's output) is put into the
         draft under that key once the draft has passed its checks.
         """
-        async with timed_run() as timer:
+        async with timed_run("itinerary_builder") as timer:
             result = await build_itinerary(trip_meta, flights, hotels, attractions, on_token=on_token)
             if isinstance(result, ItineraryDraft):
                 result.local_intelligence = _checked_intelligence(local_intelligence)

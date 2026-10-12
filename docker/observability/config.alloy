@@ -1,0 +1,104 @@
+// What reads the app's log lines and sends them to Loki (Phase 29).
+//
+// Two places lines come from:
+//   - the app's containers — the production-like stack's backend, found through Docker;
+//   - ./logs/*.log — a backend run on the host, with its output written there.
+//
+// A line is JSON (src/telemetry/logs.py). Two of its fields become labels — `service` and
+// `level`: few values each, what a stream is selected by. Three become structured metadata —
+// `trip_id`, `user_id`, `trace_id`: a value per trip, far too many to be labels, and exactly what a
+// line is searched for:
+//
+//     {job="tripplanner"} | trip_id="3f2a9c1d-…"
+//
+// A line that is not JSON (the container's first ones: the pre-start check and the migrations
+// are other programs) is kept as it is, under job="tripplanner" with no service.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "backend" {
+  targets = discovery.docker.containers.targets
+
+  // only the app's own: a compose service called "backend"
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "backend"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "tripplanner"
+  }
+  rule {
+    target_label = "source"
+    replacement  = "docker"
+  }
+}
+
+loki.source.docker "backend" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.backend.output
+  forward_to = [loki.process.json.receiver]
+}
+
+local.file_match "host" {
+  path_targets = [{
+    __path__ = "/var/log/tripplanner/*.log",
+    job      = "tripplanner",
+    source   = "file",
+  }]
+}
+
+loki.source.file "host" {
+  targets    = local.file_match.host.targets
+  forward_to = [loki.process.json.receiver]
+}
+
+loki.process "json" {
+  stage.json {
+    expressions = {
+      level     = "level",
+      service   = "service",
+      trip_id   = "trip_id",
+      user_id   = "user_id",
+      trace_id  = "trace_id",
+      timestamp = "timestamp",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      trip_id  = "",
+      user_id  = "",
+      trace_id = "",
+    }
+  }
+
+  // the moment the line was written, not the moment it was read
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,82 @@
+# The observability stack on this machine (Phase 29): where the app's metrics, traces and log
+# lines go, and where they are looked at.
+#
+#     python scripts/observability.py up        # this file, started and waited for
+#
+#     Grafana      http://localhost:3001        the dashboard, and Explore for the log lines — no login
+#     Prometheus   http://localhost:9090        reads GET /metrics of the backend every 5 s
+#     Jaeger       http://localhost:16686       the traces; takes them as OTLP on http://localhost:4318
+#     Loki         http://localhost:3110        the log lines (3100 is taken: the browser tests' web server)
+#     Alloy                                     reads the log lines and sends them to Loki
+#
+# Nothing here is in the app's path: with the stack down the app runs exactly as before, minus
+# anyone looking. Two of the five need the app told about them — where to send traces
+# (OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318) and to log JSON (LOG_FORMAT=json): HOW_TO_RUN.md, Step 27.
+#
+# For looking at one machine. No passwords, nothing kept beyond a week, traces in memory: not a
+# production setup, and not meant as one.
+name: tripplanner-observability
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # the production-like backend's operations token, written by scripts/observability.py (git-ignored)
+      - ./secrets:/etc/prometheus/secrets:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # the backend runs on the host, or publishes its port there
+
+  jaeger:
+    # Jaeger 2: the all-in-one configuration it starts with by default — traces kept in memory.
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "16686:16686" # the UI, and the API the check script asks
+      - "4318:4318" # OTLP over HTTP: where the app sends its spans
+
+  loki:
+    image: grafana/loki:3.7.8
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3110:3100"
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      # the log lines of the app's containers (the production-like backend)…
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # …and of a backend run on the host: its output, written into ./logs (HOW_TO_RUN.md, Step 27)
+      - ../../logs:/var/log/tripplanner:ro
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      # a dashboard on one's own machine: open it and look
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/tripplanner.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000" # 3000 is the frontend's
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+
+volumes:
+  prometheus-data:
