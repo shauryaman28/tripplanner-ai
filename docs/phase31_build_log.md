@@ -120,7 +120,7 @@ Every exercise on the tree as committed, with the machine awake (20:37–20:44 I
 
 ### Break it on purpose
 
-94 deliberate breakages, each applied to a scratch copy of the repository with a database of its own; the Phase 31 unit tests and the three older files the phase touched run on it, then the whole unit and contract suite, then the integration suite, stopping at the first that fails. **First pass: 84 caught by the unit tests, 6 only by the integration tests, 4 not at all.** Four tests were added or extended for those four, and the whole set was started again from the beginning.
+94 deliberate breakages, each applied to a scratch copy of the repository with a database of its own; the Phase 31 unit tests and the three older files the phase touched run on it, then the whole unit and contract suite, then the integration suite, stopping at the first that fails. **First pass: 84 caught by the unit tests, 6 only by the integration tests, 4 not at all. Second pass, of the whole set again after four tests were added or extended: all 94 — 87 by the unit tests, 7 only by the integration tests.**
 
 The four that survived, and what was missing:
 
@@ -143,7 +143,7 @@ The six only the integration tests caught are the ones that need the real thing:
 | the faults and the failing server | 15 | Gemini's 429 worded as something else · a request that should hang is answered · the builder's fault is everybody's · a fault's address not held to this machine · the client made without the app's options |
 | the script, its stack, the counter | 13 | things are broken on any stack · every exercise "as expected" · a trip left planning is not looked for · the tool server asked nicely · a key handed to the failing server |
 
-**The second pass was still running when this was written**: the laptop's lid had been closed again and the machine was asleep in cycles. As far as it had got — 52 of 94 — every breakage was caught, the three unit-level survivors among them, each by its new test; the fourth (`the turn …`) had not come up yet, and its new assertion passes on the unbroken tree.
+The second pass ran on a laptop whose lid had been closed again — it took four hours where the first took fifteen minutes — which matters less here than for the exercises: a test passes or fails, and the runner's time limit is counted on the clock that stops when the machine sleeps. Each of the four is caught by the test written for it; the last was checked by hand as well: with the turn taken from the lost conversation, the integration test fails at `assert … 2 == 4`. One breakage is "caught" by the tests not ending at all — no deadline for the whole reply — which is the bug, seen from the outside.
 
 ## Done criterion checklist
 
