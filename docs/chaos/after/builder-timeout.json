@@ -1,0 +1,189 @@
+{
+ "exercise": "builder-timeout",
+ "began": "2026-10-13T15:11:12+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "marked_failed_after_s": 36.4,
+ "gave_up_waiting_after_s": 150,
+ "requests_to_the_failing_server": [
+  {
+   "at": 1791904286.101,
+   "method": "POST",
+   "path": "/hang/openai/v1/chat/completions",
+   "did": "hang",
+   "provider": "groq",
+   "client_left_after_s": 20.01
+  },
+  {
+   "at": 1791904306.524,
+   "method": "POST",
+   "path": "/hang/openai/v1/chat/completions",
+   "did": "hang",
+   "provider": "groq",
+   "client_left_after_s": 9.54
+  }
+ ],
+ "builds": [
+  {
+   "agent": "itinerary_builder",
+   "status": "failed",
+   "ms": 30033,
+   "turn": 1,
+   "error": {
+    "code": "LLM_TIMEOUT",
+    "error": "The model did not answer within 30 s."
+   }
+  }
+ ],
+ "status": {
+  "status": "failed",
+  "trip_id": "51712044-6477-430c-9d5a-00886ebf54ad",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": "The plan could not be written: the model that writes it did not answer in time. Try again in a moment."
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 2716,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 17,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b915,104; \u20b954,896 (78%) remaining for hotels and activities."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 17,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 15,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 2150,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "failed",
+   "ms": 30033,
+   "turn": 1,
+   "error": {
+    "code": "LLM_TIMEOUT",
+    "error": "The model did not answer within 30 s."
+   }
+  },
+  {
+   "agent": "builder_failed",
+   "status": "failed",
+   "ms": 5,
+   "turn": 1,
+   "error": "The plan could not be written: the model that writes it did not answer in time. Try again in a moment."
+  },
+  {
+   "agent": "orchestrator",
+   "status": "failed",
+   "ms": 34999,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "asked_again_while_planning": 409,
+ "planned_again_afterwards": "completed",
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "error: ItineraryBuilder: the model did not answer within 30 s (TimeoutError)"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "the trip is marked failed \u2014 not left planning",
+   "detail": "failed after 36.4 s"
+  },
+  {
+   "ok": true,
+   "what": "\u2026within 60 seconds",
+   "detail": "36.4 s; the client asked 2 time(s) and stayed [20.01, 9.54] s"
+  },
+  {
+   "ok": true,
+   "what": "the traveller is told why in their own words",
+   "detail": "The plan could not be written: the model that writes it did not answer in time. Try again in a moment."
+  },
+  {
+   "ok": true,
+   "what": "the page is told on its stream",
+   "detail": "{'t': 43.57, 'event': 'planning_failed', 'error': 'The plan could not be written: the model that writes it did not answer in time. Try again in a moment.', 'sta"
+  },
+  {
+   "ok": true,
+   "what": "asking again while it was still trying was refused",
+   "detail": "409"
+  },
+  {
+   "ok": true,
+   "what": "asked again once the model answers, the same trip is planned",
+   "detail": "202 \u2192 completed in 13.8 s"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

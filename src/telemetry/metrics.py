@@ -91,6 +91,8 @@ LLM_TOKENS = Counter(
 )
 LLM_COST = Counter("llm_cost_usd_total", "What those tokens cost at list price, in US dollars.", ["agent", "model"])
 TOOL_CALLS = Counter("mcp_tool_calls_total", "Calls to the tool server.", ["tool", "status"])
+# Phase 31: one is this process starting its tool server; every further one is a tool server that had died.
+TOOL_SERVER_STARTS = Counter("mcp_tool_server_starts", "Times this process started its tool server.")
 TOOL_SECONDS = Histogram(
     "mcp_tool_call_duration_seconds", "How long a call to the tool server took.", ["tool"], buckets=TOOL_BUCKETS
 )

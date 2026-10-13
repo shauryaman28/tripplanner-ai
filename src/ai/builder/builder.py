@@ -27,6 +27,7 @@ Phase 25: a group trip (trip_meta["group_members"]). The model is told who trave
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -96,6 +97,9 @@ class ItineraryDraft(BaseModel):
     days: list[DaySchedule]
     total_cost: float
     currency: str = "INR"
+    # Phase 31 — set by the orchestrator when the plan is saved, never by the model: the searches this
+    # plan was made without, and why: [{"search", "what", "why", "retryable"}]. None: nothing is missing.
+    missing: list[dict] | None = None
     local_intelligence: LocalIntelligence | None = None  # Phase 22 — set by ItineraryBuilder.run, never by the model
     # Phase 25 — set by ItineraryBuilder.run as well: one traveller's share of the total; what it is
     # made of (more than one traveller); and, for a group, who got how many stops (group.summary)
@@ -261,11 +265,30 @@ def _build_user_prompt(
     )
 
 
+# Phase 31 — how long the model that writes the itinerary is waited for. It used to be made with no
+# timeout at all, so the SDK's own applied: 60 s for a read, three tries — and the orchestrator built
+# again up to three more times. A model that never answered kept a trip "planning" for twelve minutes
+# (docs/chaos-report.md). A plan is written in 5 to 9 seconds; so:
+BUILD_READ_TIMEOUT_S = 20.0  # nothing at all from the model for this long, and this try is over
+BUILD_DEADLINE_S = 30.0  # the whole reply — the first try and the one after it
+
+
+def _timed_out(exc: BaseException) -> bool:
+    """Whether a failed model call failed by not answering: the deadline here, or the client's own."""
+    return isinstance(exc, TimeoutError) or type(exc).__name__ in ("APITimeoutError", "ReadTimeout", "ConnectTimeout")
+
+
 async def _call_llm(system_prompt: str, user_prompt: str, on_token: OnToken | None = None) -> str:
     """The model's whole reply. With `on_token` it is streamed: every piece is handed over as it arrives."""
     from langchain_groq import ChatGroq
 
-    llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=8192)  # room for a long trip plus the model's reasoning
+    llm = ChatGroq(
+        model=GROQ_MODEL,
+        temperature=0,
+        max_tokens=8192,  # room for a long trip plus the model's reasoning
+        timeout=BUILD_READ_TIMEOUT_S,
+        max_retries=1,  # a 429 or a 5xx is asked once more, after what the provider says to wait
+    )
     messages = [("system", system_prompt), ("user", user_prompt)]
     if on_token is None:
         return content_to_text((await llm.ainvoke(messages)).content)
@@ -381,11 +404,18 @@ async def build_itinerary(
     user_prompt = _build_user_prompt(trip_meta, flights, hotels, attractions)
 
     try:
-        if on_token is None:
-            raw = await _call_llm(_SYSTEM_PROMPT, user_prompt)
-        else:
-            raw = await _call_llm(_SYSTEM_PROMPT, user_prompt, on_token)
+        async with asyncio.timeout(BUILD_DEADLINE_S):
+            if on_token is None:
+                raw = await _call_llm(_SYSTEM_PROMPT, user_prompt)
+            else:
+                raw = await _call_llm(_SYSTEM_PROMPT, user_prompt, on_token)
     except Exception as exc:
+        if _timed_out(exc):
+            # Phase 31: not built again — the next build would wait just as long, and the traveller with it
+            logger.error(
+                "ItineraryBuilder: the model did not answer within %.0f s (%s)", BUILD_DEADLINE_S, type(exc).__name__
+            )
+            return BuilderError(error=f"The model did not answer within {BUILD_DEADLINE_S:.0f} s.", code="LLM_TIMEOUT")
         logger.exception("ItineraryBuilder LLM call failed")
         return BuilderError(error=f"LLM call failed: {exc}", code="LLM_ERROR")
 
@@ -395,7 +425,7 @@ async def build_itinerary(
         return BuilderError(error=f"Failed to parse builder JSON: {exc}", code="JSON_PARSE_ERROR")
     if not isinstance(parsed, dict):
         return BuilderError(error="Builder reply was not a JSON object.", code="JSON_PARSE_ERROR")
-    for written_by_code in ("local_intelligence", "per_person_cost", "per_person_breakdown", "group"):
+    for written_by_code in ("local_intelligence", "per_person_cost", "per_person_breakdown", "group", "missing"):
         parsed.pop(written_by_code, None)  # what goes there is never the model's to write
 
     # Shape first: every check below can then rely on it instead of guarding against

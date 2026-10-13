@@ -1,0 +1,248 @@
+{
+ "exercise": "mcp-kill-early",
+ "began": "2026-10-13T02:14:14+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "tool_server_pids": {
+  "before": [],
+  "killed": [
+   30
+  ],
+  "right_after_the_run": [],
+  "now": []
+ },
+ "asked_at_s": 0.51,
+ "killed_at_s": 1.53,
+ "ended_at_s": 8.22,
+ "events": [
+  {
+   "t": 0.53,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 4.31,
+   "event": "flight_agent: failed",
+   "summary": "MCP client exception: ",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 4.32,
+   "event": "hotel_agent: failed",
+   "summary": "MCP client exception: ",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 4.32,
+   "event": "activities_agent: failed",
+   "summary": "MCP client exception: ",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 6.03,
+   "event": "planning_failed",
+   "error": "No flights, places to stay or things to do were found for Udaipur, so there is nothing to build a plan from.",
+   "status": "failed"
+  }
+ ],
+ "status": {
+  "status": "failed",
+  "trip_id": "a885a1cf-3f3b-49b5-bf74-78f016444b56",
+  "progress": {
+   "agents_done": 0,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "failed",
+    "hotel_agent": "failed",
+    "activities_agent": "failed"
+   },
+   "errors": {
+    "flight_agent": "MCP client exception: ",
+    "hotel_agent": "MCP client exception: ",
+    "activities_agent": "MCP client exception: "
+   },
+   "retryable": {
+    "flight_agent": true,
+    "hotel_agent": true,
+    "activities_agent": true
+   }
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": "No flights, places to stay or things to do were found for Udaipur, so there is nothing to build a plan from."
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 3736,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 2,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "failed",
+   "ms": 2,
+   "turn": 1,
+   "error": {
+    "code": "MCP_CLIENT_ERROR",
+    "error": "MCP client exception: "
+   }
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Flight search unavailable (MCP_CLIENT_ERROR) \u2014 planning hotels and activities without flights."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "failed",
+   "ms": 5,
+   "turn": 1,
+   "error": {
+    "code": "MCP_CLIENT_ERROR",
+    "error": "MCP client exception: "
+   }
+  },
+  {
+   "agent": "activities_agent",
+   "status": "failed",
+   "ms": 3,
+   "turn": 1,
+   "error": {
+    "code": "MCP_CLIENT_ERROR",
+    "error": "MCP client exception: "
+   }
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 1688,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "nothing_found",
+   "status": "failed",
+   "ms": 7,
+   "turn": 1,
+   "error": "No flights, places to stay or things to do were found for Udaipur, so there is nothing to build a plan from."
+  },
+  {
+   "agent": "orchestrator",
+   "status": "failed",
+   "ms": 5498,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "itinerary": null,
+ "the_next_plan": {
+  "trip": "9bf1b2bf-2681-4bf8-835b-e0d582771546",
+  "asked": 202,
+  "status": "failed",
+  "seconds": 7.6,
+  "searches_done": "0 of 3",
+  "errors": {
+   "flight_agent": "MCP client exception: ",
+   "hotel_agent": "MCP client exception: ",
+   "activities_agent": "MCP client exception: "
+  },
+  "failure_reason": "No flights, places to stay or things to do were found for Kochi, so there is nothing to build a plan from."
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: [COST] no price on record for model 'gemini-3.5-flash' \u2014 its tokens are counted, its cost is not. Add one with LLM_PRICES in .env.",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: /usr/local/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()`"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "the run ended \u2014 the trip is not left planning",
+   "detail": "failed 6.7 s after the kill"
+  },
+  {
+   "ok": true,
+   "what": "the searches the kill took are 'failed' rows in agent_runs",
+   "detail": "flight_agent, hotel_agent, activities_agent"
+  },
+  {
+   "ok": false,
+   "what": "\u2026each with a reason that names the cause",
+   "detail": "{\"flight_agent\": {\"code\": \"MCP_CLIENT_ERROR\", \"error\": \"MCP client exception: \"}, \"hotel_agent\": {\"code\": \"MCP_CLIENT_ERROR\", \"error\": \"MCP client exception: \"}, \"activities_agent\": {\"code\": \"MCP_CLIENT_ERROR\", \"error\": \"MCP client exception: \"}}"
+  },
+  {
+   "ok": false,
+   "what": "the traveller is told in their own words, not the program's",
+   "detail": "MCP client exception: "
+  },
+  {
+   "ok": true,
+   "what": "with no search answered there is no plan: the trip is 'failed'",
+   "detail": ""
+  },
+  {
+   "ok": false,
+   "what": "\u2026and the reason given is the search service, not the destination",
+   "detail": "No flights, places to stay or things to do were found for Udaipur, so there is nothing to build a plan from."
+  },
+  {
+   "ok": false,
+   "what": "the next plan works: a new tool server was started, and nobody restarted the backend",
+   "detail": "failed, searches 0 of 3, {\"flight_agent\": \"MCP client exception: \", \"hotel_agent\": \"MCP client exception: \", \"activities_agent\": \"MCP client exception: \"}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false
+}

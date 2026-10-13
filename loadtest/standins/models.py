@@ -34,7 +34,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 
-from loadtest.standins import timing
+from loadtest.standins import faults, timing
 
 EMBEDDING_DIMENSIONS = 1536
 # An allowance for what a reasoning model spends before it answers, so that a build's row is of the
@@ -197,14 +197,35 @@ class StandInChatModel(BaseChatModel):
         yield ChatGenerationChunk(message=last)
 
 
-def groq(**options: Any) -> StandInChatModel:
-    """What `ChatGroq(model=…, temperature=…, max_tokens=…, …)` makes while the stand-ins are in."""
-    return StandInChatModel(model=options.get("model") or "openai/gpt-oss-120b")
+def _asking() -> str | None:
+    """Whose work the model is being made for: the agent whose meter is open (src/ai/usage.py)."""
+    from src.ai import usage
+
+    return getattr(usage._meter.get(), "agent", None)
 
 
-def gemini(**options: Any) -> StandInChatModel:
-    """What `ChatGoogleGenerativeAI(model=…, …)` makes while the stand-ins are in."""
-    return StandInChatModel(model=options.get("model") or "gemini-3.5-flash")
+def groq(**options: Any) -> BaseChatModel:
+    """What `ChatGroq(model=…, temperature=…, max_tokens=…, …)` makes while the stand-ins are in.
+
+    Phase 31: with a fault on for it (faults.py), Groq's own client — given these very options —
+    talking to a server that fails.
+    """
+    from src.ai import llm
+
+    model = options.get("model") or "openai/gpt-oss-120b"
+    wrong = faults.on()
+    how = wrong.get("builder") if _asking() == "itinerary_builder" else None
+    if how is None and model == llm.GROQ_SMALL_MODEL:
+        how = wrong.get("groq_small")
+    return faults.real_groq(how, options) if how else StandInChatModel(model=model)
+
+
+def gemini(**options: Any) -> BaseChatModel:
+    """What `ChatGoogleGenerativeAI(model=…, …)` makes while the stand-ins are in — or, with a fault on, the real one."""
+    how = faults.on().get("gemini")
+    return (
+        faults.real_gemini(how, options) if how else StandInChatModel(model=options.get("model") or "gemini-3.5-flash")
+    )
 
 
 # ── The embedding model ────────────────────────────────────────────────────

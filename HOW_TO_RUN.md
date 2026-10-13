@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–30
+# How to Run & Verify — Phases 1–31
 
 ## What changed vs the original codebase?
 
@@ -29,6 +29,7 @@
 | 28 | `.github/workflows/ci.yml` (two jobs, pushes only, the migrations up / checked / down / up, a deploy on `main` after both), `health.py` (`GET /version`), `config.py` (`GIT_COMMIT_SHA`, `settings.commit`), `error_reporting.py` (a report's release from the same commit), `next.config.mjs` (the build told its commit), `docker/prodlike/compose.yml`, `.env.example` — see `docs/phase28_build_log.md` | `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`, `.github/nightly-issue.md`, `scripts/wait_for_release.py`, `scripts/nightly_summary.py`, `scripts/nightly_post.sh`, `src/frontend/src/app/version/route.ts`, `tests/ci/fake_gh.sh`, `tests/unit/test_phase28_pipeline.py` |
 | 29 | `main.py` (logging set up as the module loads, the `RequestContext` middleware, `GET /metrics`, tracing), `deps.py` (`may_read_metrics`), `trips.py` (a planning run timed, counted and one span), `session.py` / `redis.py` (statements and commands as spans), `preflight.py`, `config.py` (4 settings), `error_reporting.py` (a tracing backend's key is a secret too), `usage.py` + `run_logger.py` + `llm.py` (model calls counted per agent, every agent a span), `orchestrator.py` (builds counted), `mcp_client/client.py` + `mcp_server/server.py` + `cache.py` + `outbound.py` (the trace and the trip carried to the tool server, the cache's tally carried back), every agent's `timed_run("<its name>")`, `docker/prodlike/compose.yml`, `requirements.txt` + `constraints.txt` (18 new pins), `.env.example`, `tests/conftest.py`, `tests/fakes.py` — see `docs/phase29_build_log.md` | `src/telemetry/` (`context.py`, `metrics.py`, `traces.py`, `logs.py`), `docker/observability/` (compose, Prometheus, Alloy, Grafana's data sources and dashboard), `scripts/observability.py`, `scripts/observability_check.py`, `tests/unit/test_phase29_telemetry.py`, `test_phase29_wiring.py`, `test_phase29_stack.py`, `tests/integration/test_phase29_observability_integration.py` |
 | 30 | `run_logger.py` (a row is written and not read back; `hand_back`), `orchestrator.py` + `trips.py` + `utils/embeddings.py` + `embedder.py` (a read's transaction is ended before a model, a provider or the embedding API is waited for), `config.py` (`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `REDIS_MAX_CONNECTIONS`), `session.py` + `redis.py` (the pools made as the settings say, and reported), `main.py` (the event loop's lateness watched), `telemetry/metrics.py` (three gauges of what runs out), `docker/prodlike/pgbouncer.ini` + `compose.yml` (a pooler as large as the hosted one; the pools sized), the Grafana dashboard (a row for what runs out under load), `.env.example`, `.gitignore`, `tests/integration/conftest.py` — see `docs/phase30_build_log.md` | `loadtest/k6/traveller.js` (the load), `loadtest/standins/` (what answers for the models and providers), `docker/loadtest/` (the image and the stack they run in), `scripts/loadtest.py`, `docs/load-test-report.md`, `docs/loadtest/` (every run, as measured), four unit test files and one integration test file |
+| 31 | `mcp_client/client.py` (a dead tool server is replaced and the call asked again; one task owns its session), `builder.py` (a timeout and a deadline for the model that writes the itinerary; `missing`), `preference_extractor.py` (a timeout), `orchestrator.py` (a timed-out build is not built again; "nothing could be searched"; a partial plan says what it lacks), `utils/failures.py` (words for a dead search service), `routes/trips.py` (a run does not wait on Redis, has a deadline as a whole, is started whatever Redis does; a planned trip whose state is gone is re-planned, not refused), `main.py` (Redis away → 503 in words), `telemetry/metrics.py` (`mcp_tool_server_starts_total`) — see `docs/phase31_build_log.md` | `loadtest/standins/faults.py` + `fault_server.py` (which model goes wrong, and the far end that fails), `docker/chaos/` (one more container), `scripts/chaos.py` (the four exercises), `docs/chaos-report.md` + `docs/chaos/` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -313,7 +314,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–30 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–31 check
 
 Run from the **project root**:
 
@@ -321,7 +322,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **1200 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **1253 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -330,7 +331,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **65 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **74 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -1269,7 +1270,7 @@ what only GitHub can show — and the three things only you can set — are at t
 ```bash
 # the backend job — lint and tests (about 25 seconds on a laptop); its migrations step is below
 ruff check . && ruff format --check .
-pytest tests/unit/ tests/contract/ -v          # 1200 passed
+pytest tests/unit/ tests/contract/ -v          # 1253 passed
 
 # the frontend job
 cd src/frontend && npm ci && npx tsc --noEmit && npm run lint && npm run build
@@ -1354,7 +1355,7 @@ python scripts/nightly_summary.py /tmp/an-empty-directory --require integration 
 
 **Every push** shows two checks, `backend` and `frontend`, on the commit and on its pull request (Actions tab
 → CI). To see one fail: push a branch with `assert 1 + 1 == 3` in a new test; the commit gets a red cross
-and the run's log ends `1 failed, 1200 passed`. Delete the branch afterwards.
+and the run's log ends `1 failed, 1253 passed`. Delete the branch afterwards.
 
 **1. Make a red cross block the merge.** Settings → Branches → Add branch ruleset (or "Add classic branch
 protection rule") for `main` → *Require status checks to pass* → add `backend` and `frontend` → also
@@ -1650,6 +1651,101 @@ plan on a real database, asked at every wait whether it is holding a connection)
 
 ---
 
+## Step 29 — Verify Phase 31: chaos
+
+Needs Docker and nothing else — it is the load test's stack of Step 28 (stand-ins for the models and
+the providers, no key) with one container added. What was expected of each exercise, what happened
+on the app as it was, and what was changed is `docs/chaos-report.md`; this step is how to do it again.
+
+**Keep the machine awake** — lid open, plugged in. Two of the exercises are about how long something
+takes; a laptop that sleeps makes those numbers mean nothing, and the script says so in its record
+(`asleep_s`, `timings_hold`).
+
+**Never against a deployment.** The script refuses a stack whose log does not say `[STAND-INS]`.
+
+### A. The stack
+
+```bash
+python scripts/chaos.py up
+# building tripplanner-backend:under-test from src/backend/Dockerfile…
+# building tripplanner-loadtest-backend from docker/loadtest/Dockerfile…
+# ready: http://localhost:8200 — the models and the providers are stand-ins.
+# …and http://localhost:8209 is where a model call goes when a fault is on.  Next: python scripts/chaos.py all
+```
+
+`http://localhost:8209` is `loadtest/standins/fault_server.py`: it answers 429 or 500 in a provider's
+own words, or reads a request and never answers. Nothing talks to it until an exercise writes
+`/tmp/standin-faults.json` in the backend's container; the model named there is then the provider's
+*real* client — made with the options the app gave it — pointed at that server. `GET /log` on it says
+what each client asked, when, and how long it stayed.
+
+### B. The four exercises
+
+```bash
+python scripts/chaos.py all --label mine        # each of them, one after another: about 12 minutes
+# 7 of 7 exercises went as expected.
+```
+
+or one at a time (each starts from a backend that has just been restarted):
+
+```bash
+python scripts/chaos.py mcp-kill --when once     # the tool server killed a second into a plan
+python scripts/chaos.py mcp-kill --when early    # …and kept dead, from before any search has answered
+python scripts/chaos.py mcp-kill --when late     # …and kept dead, from the moment the flights are in
+python scripts/chaos.py gemini-429               # Gemini answers 429
+python scripts/chaos.py gemini-429 --both        # …and so does the model that is asked instead
+python scripts/chaos.py builder-timeout          # the model that writes the itinerary never answers
+python scripts/chaos.py redis-kill               # Redis killed for 30 s under 20 open event streams
+```
+
+Each says what it expects as it goes and keeps everything it saw in `docs/chaos/<label>/<exercise>.json`
+— the events on the trip's stream with their times, `GET /status`, every `agent_runs` row with its
+reason, what the failing server was asked, `CLIENT LIST`, and seven counts from Postgres of rows that
+must not exist (a trip left `planning`, an itinerary with half its embeddings, …):
+
+```
+── Exercise 1 (late): the tool server is kept dead from the moment the flights were found ──
+  ✓ the run ended — the trip is not left planning
+  ✓ the searches it took are 'failed' rows in agent_runs — activities_agent
+  ✓ …each with a reason that names the cause — {"activities_agent": {"code": "CONNECTION_REFUSED", …}}
+  ✓ the traveller is told in their own words, not the program's — The search service stopped answering. Try again in a moment.
+  ✓ the plan is made from what was found before it died — completed, 2 of 3 searches
+  ✓ …and the itinerary itself says what is missing from it, and why
+  ✓ the next plan works: a new tool server is running, and nobody restarted the backend
+  ✓ nothing in Postgres is left half-done
+  AS EXPECTED   → docs/chaos/mine/mcp-kill-late.json
+```
+
+**By hand**, to watch one happen: plan a trip (Step 28's `one-plan`, or the page on
+http://localhost:3200 as in Step 25), and while it runs
+
+```bash
+# exercise 1 — the image has no pkill: the script's own way of finding the tool server and sending it SIGKILL
+python -c "import importlib.util as u; s = u.spec_from_file_location('chaos', 'scripts/chaos.py'); m = u.module_from_spec(s); s.loader.exec_module(m); print('killed', m.tool_servers(kill=True))"
+# exercise 4
+docker kill tripplanner-prodlike-upstash-standin-1; sleep 30; docker start tripplanner-prodlike-upstash-standin-1
+```
+
+### C. What a deployment gets from this
+
+No setting. What changed is in the app: a tool server that dies is started again by the next search;
+a model that does not answer fails its trip in about half a minute, with a reason; Redis being away
+slows nothing down, and is answered 503 "try again shortly" where a request cannot begin without it.
+One number to watch once there is something to watch it with: `mcp_tool_server_starts_total` — more
+than 1 since the process started is a tool server that died.
+
+### Stopping
+
+```bash
+python scripts/chaos.py down
+```
+
+**The tests:** `pytest tests/unit/test_phase31_recovery.py tests/unit/test_phase31_harness.py -v` (53) and
+`RUN_INTEGRATION=1 pytest tests/integration/test_phase31_chaos_integration.py -v` (9 — among them the real
+tool server sent `SIGKILL` between calls, under calls, and repeatedly).
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -1698,6 +1794,6 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
 | **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. With a LangSmith key: plan a trip and change it → both traces are in the project `tripplanner-ai`, though one is started by LangChain and the other by this app — take the tracer out of `tracing.run_config` and the plan goes to a project called `default`, where the trip's filter no longer finds it, and nothing is logged. |
 | **27 (Production)** | `python scripts/prodlike.py up`, then: `docker stop -t 70 tripplanner-prodlike-backend-1` while a trip is being planned → the log says `[SHUTDOWN] 1 planning run(s) in flight — waiting…` and the plan is there after `docker start`; `docker kill` it instead → the trip fails 45 s after the restart, with the reason on the page — never "planning" for ever. Kill Redis's connections (`redis-cli … client kill type normal`, then `type pubsub` with a trip's page open) → the next request answers 200 and the page's event stream still hears. In `docker/prodlike/compose.yml` take `CORS_ORIGIN_REGEX` out → the backend does not start: `Cannot start in production: ✗ CORS_ORIGINS names no deployed frontend` (the list has only localhost in it). Set `CORS_ORIGINS` to another site instead (`https://elsewhere.example`) → it starts, `prod_check.py` says 28 passed, 1 failed — `✗ the backend lets a page on the frontend's origin read it (CORS)` — and the browser check stops at the event stream, which never connects, while the plan itself is still made. Set `REDIS_URL` to an `https://` address → `that is a REST API, and a REST API cannot subscribe`. Set `JWT_SECRET` to the repository's default → refused. `VERCEL=1 npx next build` in `src/frontend` with no `BACKEND_URL` → the build stops and names it. `pip install sqlmodel==0.0.48` in the venv → `test_what_is_deployed_is_what_was_tested` fails: the environment is no longer the pinned one (the same version the first image installed by itself, and on which registering an account answered 500). `curl localhost:8200/admin/sentry-test` without `X-Ops-Token` → 404; with it → 500, and `curl localhost:9010/raw` shows the report with the token header `[Filtered]`. `GET /ping` with the database down → 200 and the error in the body; `GET /ready` → 503. |
-| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1200 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |
+| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1253 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |
 | **29 (Observability)** | With the stack of Step 27 up: `docker stop tripplanner-observability-jaeger-1`, then plan a trip → the plan is made as before; the log has `Transient error … encountered while exporting span batch` from the exporter and nothing else changes — nothing here is in the app's path (start it again: `python scripts/observability.py up`). `curl -s -o /dev/null -w "%{http_code}" localhost:8200/metrics` on the production-like stack → `404`: a deployment's numbers are for whoever has its token. `OTEL_EXPORTER_OTLP_ENDPOINT=collector:4318 PYTHONPATH=src/backend python -m app.preflight --production` → among what stops a deployment: `✗ OTEL_EXPORTER_OTLP_ENDPOINT is not an http:// or https:// URL`, and among what it starts without: `! OPS_TOKEN is empty: GET /metrics answers nobody`. Rename a metric in `docker/observability/grafana/dashboards/tripplanner.json` (`itinerary_builds_total` → `itinerary_build_total`) → `test_every_metric_a_panel_asks_for_is_one_the_app_exports` fails and names the panel, instead of the panel going quietly empty. Open an event stream (`curl -N "localhost:8000/trips/<id>/stream?token=<your token>"`), stop it, and look at its trace in Jaeger → `http.url` ends `?token=[Filtered]`. Why: what watches a system must not be able to break it, leak from it, or go blind without anyone noticing. |
 | **30 (Load test)** | With the stack of Step 28 up: in `src/ai/utils/run_logger.py` make `log_agent_run` what it was — `await db.refresh(run)` after the commit, and no `await hand_back(db)` after `_warn_if_over` — then `python scripts/loadtest.py up --small-pools` and `python scripts/loadtest.py run --rate 0.8 --name broken` → `DOES NOT HOLD: 118 of 145 visits got a plan; 26 visits could not even start; a plan took 164 s at p95; requests took 15395 ms at p99`, `database pool 15.0/15.0`, `pooler serving 8 with 11 waiting`: every plan in flight keeps a connection again. Put back only the `refresh` and it still `HOLDS` — but with `database pool 10.0/15.0` and `5 waiting` where there were 2 and none: the read that mattered more is the one after it (both runs were made on a copy for the report: `docs/loadtest/log-agent-run-as-it-was/`, `read-back-restored/`). Without the load, either way: `RUN_INTEGRATION=1 pytest tests/integration/test_phase30_connections_integration.py` fails and names the waits — `{'flights': True, 'hotels': True, 'attractions': True, 'local tips': True, ...}`. In `docker/prodlike/compose.yml` set `REDIS_MAX_CONNECTIONS: "100"` and run 3.2 visits a second → the backend's log fills with `MaxConnectionsError: Too many connections` at the 101st open page, and plans are made that nobody hears about (seen with the library's default of 100: the report, section 7). `DATABASE_URL=postgresql://u:p@db.example.com/x REDIS_URL=redis://localhost:6379 PYTHONPATH=src/backend:. python -c "import loadtest.standins.app"` → `NotTheLoadTest: DATABASE_URL is not on this machine` — the stand-ins do not start against a database that is somewhere else. Close the laptop's lid on battery during a run → `this machine was asleep for 14 s of the run: its figures are wrong, and are not kept`. Why: a load test's result is only as good as what it refuses to count. |

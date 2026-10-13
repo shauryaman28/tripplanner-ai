@@ -1,0 +1,225 @@
+{
+ "exercise": "gemini-429",
+ "began": "2026-10-13T02:14:51+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "plan_seconds": 14.9,
+ "asked": 202,
+ "requests_to_the_failing_server": [
+  {
+   "at": 1791857699.788,
+   "method": "POST",
+   "path": "/429/v1beta/models/gemini-3.5-flash:generateContent",
+   "did": "429",
+   "provider": "gemini"
+  }
+ ],
+ "seconds_between_them": [],
+ "intent_parsing": {
+  "agent": "intent_parsing",
+  "status": "completed",
+  "ms": 3829,
+  "turn": 1,
+  "error": null
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "529ad2bd-5193-4769-a681-925c51f77198",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 3829,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 17,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b916,776; \u20b953,224 (76%) remaining for hotels and activities."
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 12,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 14,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 1521,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "completed",
+   "ms": 6840,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "persist",
+   "status": "completed",
+   "ms": 8,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preference_extractor",
+   "status": "completed",
+   "ms": 1120,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "orchestrator",
+   "status": "completed",
+   "ms": 13435,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "refinement": null,
+ "events": [
+  {
+   "t": 8.64,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 12.51,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 12.53,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 12.54,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 20.94,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: Direct use of automatic function calling (AFC) in AsyncModels.generate_content is not recommended. Instead, we recommend to use AFC in AsyncChat.send_message. Similarly, direct use of AFC in AsyncModels.generate_content_stream is not recommended. Instead, we recommend to use AFC in AsyncChat.send_me",
+  "warning: Gemini unavailable (Error calling model 'gemini-3.5-flash' (RESOURCE_EXHAUSTED): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': ) \u2014 asking Groq openai/gpt-oss-20b instead",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: /usr/local/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()`"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "Gemini's own client asked, and was told 429",
+   "detail": "1 request(s)"
+  },
+  {
+   "ok": true,
+   "what": "it did not sit out the 36 seconds the error asks for",
+   "detail": "1 to Gemini, 0 to Groq; seconds between them: []"
+  },
+  {
+   "ok": true,
+   "what": "the plan is made all the same",
+   "detail": "completed in 14.9 s"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and in a plan's usual time",
+   "detail": "14.9 s"
+  },
+  {
+   "ok": true,
+   "what": "intent parsing was done by the other model",
+   "detail": "completed"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true
+}

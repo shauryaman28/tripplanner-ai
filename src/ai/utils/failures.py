@@ -25,6 +25,10 @@ _WORDS = {
     "RATE_LIMITED": "This search is busy right now. Try again in a minute.",
     "UNKNOWN_ERROR": "The search could not be completed.",
     "AGENT_EXCEPTION": "The search could not be completed.",
+    # Phase 31: the tool server died under the search, and a new one did not answer it either
+    # (mcp_client/client.py). Until then this was "MCP client exception: " — with nothing after the colon.
+    "CONNECTION_REFUSED": "The search service stopped answering. Try again in a moment.",
+    "MCP_CLIENT_ERROR": "The search could not be completed.",
 }
 
 # Failures that come back the same on a second try: nothing about the trip has changed. Any other

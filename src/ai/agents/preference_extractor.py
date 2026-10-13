@@ -156,6 +156,9 @@ def _build_user_prompt(facts: Mapping[str, Any]) -> str:
     return f"Trip facts (JSON): {json.dumps(facts, ensure_ascii=False, default=str)}"
 
 
+EXTRACTION_TIMEOUT_S = 10.0  # Phase 31: the extractor's model answers in about a second
+
+
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
     """The single network seam. Raises if no Groq key is configured."""
     if not settings.GROQ_API_KEY:
@@ -164,7 +167,9 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
     from langchain_groq import ChatGroq
 
     # A reasoning model spends tokens thinking before it answers: 300 left nothing for the JSON.
-    llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=2048)
+    # Phase 31: asked after the plan is already the traveller's, and waited for no longer than this —
+    # with no timeout a model that did not answer kept the run alive for three minutes.
+    llm = ChatGroq(model=GROQ_MODEL, temperature=0, max_tokens=2048, timeout=EXTRACTION_TIMEOUT_S, max_retries=0)
     response = await llm.ainvoke([("system", system_prompt), ("user", user_prompt)])
     return content_to_text(response.content)
 

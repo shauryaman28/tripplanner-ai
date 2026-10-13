@@ -797,6 +797,10 @@ async def test_the_session_is_made_in_nobodys_context_whichever_request_needed_i
         async def __aenter__(self):
             return self
 
+        async def __aexit__(self, *_exc):  # Phase 31: the task that opened the session is the one that closes it
+            made_in["closed"] = (context.trip_id(), traces.current_ids()[0])
+            return False
+
         async def initialize(self) -> None:
             made_in["hello"] = (context.trip_id(), traces.current_ids()[0])
 
@@ -809,9 +813,10 @@ async def test_the_session_is_made_in_nobodys_context_whichever_request_needed_i
         with context.scope(trip_id=TRIP, user_id=USER), traces.span("the first request to search"):
             session = await mcp_client.get_session()
             assert context.trip_id() == TRIP and traces.current_ids()[0] is not None  # the request itself is as it was
+            await mcp_client.close_session()  # …and closed from inside a request too, it is closed in nobody's
 
     assert isinstance(session, Session)
-    assert made_in["pipes"] == made_in["session"] == made_in["hello"] == (None, None)
+    assert made_in["pipes"] == made_in["session"] == made_in["hello"] == made_in["closed"] == (None, None)
     assert made_in["hears"] is mcp_client._on_server_log  # and it listens for the cache's reports
     assert made_in["errlog"] is sys.stderr  # the server's log lines: to this process's standard error, as it is now
 

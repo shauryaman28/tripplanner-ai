@@ -23,20 +23,39 @@ still part of the request that made the call:
 - what the server's cache did for the call comes back beside the answer, as a
   log message of the protocol's own (models.CACHE_REPORT), and is counted here:
   mcp_cache_lookups_total, mcp_cache_hit_ratio.
+
+Phase 31 — the tool server can die, and this process must outlive it. The session
+used to be made once and kept for ever: killed in the middle of a plan
+(docs/chaos-report.md), the tool server took every later search with it — each
+failed at once with an empty "MCP client exception: ", and went on failing until
+the backend itself was restarted. Now:
+- a call that finds the connection gone forgets that session, so that the next
+  call starts a new tool server;
+- and asks once more itself, of the new one — a search changes nothing, so it
+  can be asked twice. A tool server that dies again under the second asking is
+  not asked a third time;
+- what the caller is then told has a name: CONNECTION_REFUSED, "the tool server
+  could not be reached" — whether it died under the call or would not start;
+- every start is counted (mcp_tool_server_starts_total): one is the process
+  starting, any more are a tool server that died.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
+import anyio
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.shared.exceptions import McpError
+from mcp.types import CONNECTION_CLOSED
 from opentelemetry.trace import SpanKind
 
 from src.ai import tracing
@@ -52,16 +71,52 @@ metrics.expect_tools(TOOL_NAMES, CACHES)  # every tool's and every cache's count
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
+logger = logging.getLogger(__name__)
+
+# Phase 31: what a call is told when the tool server could not be reached — it died under the call,
+# it was already dead, or a new one would not start. (The roadmap's name for it.)
+SERVER_GONE = "CONNECTION_REFUSED"
+CLEANUP_S = 5.0  # how long a dead tool server's pipes and process are given to be put away
+# What a pipe to a process that is no longer there raises, on the way in or on the way out.
+_PIPE_IS_CLOSED = (
+    anyio.ClosedResourceError,
+    anyio.BrokenResourceError,
+    anyio.EndOfStream,
+    BrokenPipeError,
+    ConnectionError,
+)
+
+
+class _ServerGone(Exception):
+    """The tool server's pipe closed — before a call was sent, or while its answer was waited for."""
+
+
+def _gone(exc: BaseException) -> bool:
+    """Whether an error from a call means the tool server is not there any more."""
+    if isinstance(exc, _ServerGone):
+        return True
+    if isinstance(exc, McpError):  # what the library answers every pending request with when the pipe closes
+        return getattr(exc.error, "code", None) == CONNECTION_CLOSED
+    return isinstance(exc, _PIPE_IS_CLOSED)
+
+
 _session: ClientSession | None = None
 _client_context: Any = None
 _lock: asyncio.Lock | None = None
+_lock_loop: asyncio.AbstractEventLoop | None = None
 
 
 def _get_lock() -> asyncio.Lock:
-    """Get or create the module-level lock lazily within the active event loop."""
-    global _lock
-    if _lock is None:
-        _lock = asyncio.Lock()
+    """The lock that guards making and letting go of the session — one per event loop.
+
+    A lock that tasks have waited on belongs to the loop they waited in. Since Phase 31 calls do
+    wait on it (three searches finding the tool server dead together), so a process that runs more
+    than one loop in its life — the test suite does — needs a lock for each.
+    """
+    global _lock, _lock_loop
+    loop = asyncio.get_running_loop()
+    if _lock is None or _lock_loop is not loop:
+        _lock, _lock_loop = asyncio.Lock(), loop
     return _lock
 
 
@@ -85,12 +140,116 @@ def _sent_with_call() -> dict[str, str]:
     return {**traces.inject(), **{name: value for name, value in whose.items() if value}}
 
 
+class _ToolServer:
+    """One tool server process and the session to it — opened, held and closed by one task of its own.
+
+    Phase 31. The pipes and the session are scopes of the library's, and a scope has to be left by
+    the task that entered it: left by another, it cancels the one that entered. That task used to
+    be whichever request needed a search first — so putting a dead tool server away in the middle
+    of things would have cancelled somebody's planning run. Here a task that does nothing else
+    enters them, waits to be told to leave, and leaves.
+
+    It is made in nobody's context (Phase 29): the session's own tasks — the ones that read the
+    server's answers for as long as it lives — start with a copy of the context they are made in.
+    Made in the context of whichever call happened to come first, they would log under that trip,
+    and as children of that request, for ever.
+    """
+
+    def __init__(self) -> None:
+        self.session: ClientSession | None = None
+        self.gone = asyncio.Event()  # its pipe has closed: the process is dead, whatever the session believes
+        self._up = asyncio.Event()  # the session is ready — or could not be made
+        self._leave = asyncio.Event()
+        self._failed: BaseException | None = None
+        self._owner: asyncio.Task | None = None
+
+    async def _pass_on(self, read: Any, heard: Any) -> None:
+        """Everything the server says, handed to the session as it comes — and the moment it stops, noticed.
+
+        The session reads the server's answers in a task of its own, and when the pipe closes it
+        fails the requests that were waiting. A request sent a moment *after* that is never
+        answered and never failed: it waits for ever (seen: a tool server killed again while it
+        was being started for three calls at once — two were told, the third hung). So the pipe
+        is watched here, by something a call can wait on beside its answer.
+        """
+        try:
+            async with heard:
+                async for message in read:
+                    await heard.send(message)
+        except Exception:  # a pipe that is being closed says so in several ways; all of them are "it stopped"
+            pass
+        finally:
+            self.gone.set()
+
+    async def _own(self) -> None:
+        # Run the server in a subprocess using the current Python executable
+        server_params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "src.ai.mcp_server.server"],
+            env=os.environ.copy(),
+            cwd=_PROJECT_ROOT,  # `-m src.ai…` only resolves from the repo root
+        )
+        try:
+            # errlog: where the server's own log lines go — this process's standard error, as it is now.
+            # (Left out, it is the one the library saw when it was imported.)
+            async with stdio_client(server_params, errlog=sys.stderr) as (read, write):
+                heard_from_here, heard = anyio.create_memory_object_stream(0)
+                relay = asyncio.create_task(self._pass_on(read, heard_from_here), name="tool server's answers")
+                try:
+                    session = ClientSession(heard, write, logging_callback=_on_server_log)
+                    async with session:
+                        await session.initialize()
+                        self.session = session
+                        self._up.set()
+                        await self._leave.wait()
+                finally:
+                    relay.cancel()
+        except asyncio.CancelledError as exc:
+            # Two things cancel this task. Somebody stopping it (stop(), or the event loop closing): that
+            # is passed on. And the library's own scope, when writing to a dead server's pipe fails in one
+            # of its tasks — it cancels its host, which is this task: that is only how the server's end
+            # reaches here, and by now the scopes above have been left as they must be.
+            self._failed = exc
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                raise
+        except Exception as exc:  # it would not start; or the pipes complained as they were closed
+            self._failed = exc
+        finally:
+            self.session = None
+            self.gone.set()
+            self._up.set()
+
+    async def start(self) -> ClientSession:
+        """The session, once the server has answered `initialize`. Raises what stopped it, with nothing left behind."""
+        with telemetry_context.scope(), traces.outside():
+            self._owner = asyncio.create_task(self._own(), name="tool server")
+        await self._up.wait()
+        if self.session is None:
+            await self.stop()
+            raise self._failed or RuntimeError("the tool server did not start")
+        return self.session
+
+    async def stop(self) -> None:
+        """Have the owning task close everything, and wait for it — a little; a dead server's pipes are not waited on for ever."""
+        self._leave.set()
+        if self._owner is not None and not self._owner.done():
+            done, _ = await asyncio.wait({self._owner}, timeout=CLEANUP_S)
+            if not done:
+                self._owner.cancel()
+
+
 async def get_session() -> ClientSession:
     """Get or create the persistent MCP client session.
 
     Fast path avoids the lock once a session exists (call_tool is called
     concurrently by fanned-out agents from Phase 9 onward). The lock only
-    guards the one-time creation race.
+    guards the creation race — the first one, and (Phase 31) each one after a
+    tool server has died.
+
+    Nothing is assigned to the module globals until the server has answered:
+    if it will not start, nothing is kept, and the next call tries from scratch
+    instead of reusing a broken session.
     """
     global _session, _client_context
 
@@ -100,66 +259,58 @@ async def get_session() -> ClientSession:
     async with _get_lock():
         if _session is not None:  # re-check after acquiring the lock
             return _session
-
-        # Run the server in a subprocess using the current Python executable
-        server_params = StdioServerParameters(
-            command=sys.executable,
-            args=["-m", "src.ai.mcp_server.server"],
-            env=os.environ.copy(),
-            cwd=_PROJECT_ROOT,  # `-m src.ai…` only resolves from the repo root
-        )
-
-        # Start stdio client connection. Nothing is assigned to the module
-        # globals until every step below succeeds — if initialize() raises,
-        # this local state is simply discarded and the next call retries
-        # from scratch instead of reusing a broken session.
-        # Phase 29: the session's own tasks — the ones that read the server's answers for as long as
-        # the process lives — start with a copy of the context they are made in. Made in the context
-        # of whichever call happened to come first, they would log under that trip, and as children
-        # of that request, for ever. So the session is made in nobody's.
-        with telemetry_context.scope(), traces.outside():
-            # errlog: where the server's own log lines go — this process's standard error, as it is now.
-            # (Left out, it is the one the library saw when it was imported.)
-            client_context = stdio_client(server_params, errlog=sys.stderr)
-            read, write = await client_context.__aenter__()
-            session = None
-            try:
-                session = ClientSession(read, write, logging_callback=_on_server_log)
-                await session.__aenter__()
-                await session.initialize()
-
-                _client_context = client_context
-                _session = session
-                return _session
-            except Exception:
-                if session is not None:
-                    try:
-                        await session.__aexit__(None, None, None)
-                    except Exception:
-                        pass
-                try:
-                    await client_context.__aexit__(None, None, None)
-                except Exception:
-                    pass
-                raise
+        server = _ToolServer()
+        session = await server.start()
+        _client_context, _session = server, session
+        metrics.TOOL_SERVER_STARTS.inc()  # Phase 31: one is this process starting; more, a tool server that died
+        return _session
 
 
 async def close_session() -> None:
     """Close the active MCP client session and clean up resources."""
     global _session, _client_context
     async with _get_lock():
-        if _session is not None:
-            try:
-                await _session.__aexit__(None, None, None)
-            except Exception:
-                pass
-            _session = None
-        if _client_context is not None:
-            try:
-                await _client_context.__aexit__(None, None, None)
-            except Exception:
-                pass
-            _client_context = None
+        server, _session, _client_context = _client_context, None, None
+    if server is not None:
+        await server.stop()
+
+
+async def _forget(session: ClientSession | None) -> None:
+    """The tool server behind `session` is gone: let go of it, so that the next call starts another.
+
+    Several calls can find the same server dead at the same moment (a plan's searches run side by
+    side). Only the first lets go; by the time the others look, the session is no longer theirs to
+    forget — it is the new one, or nothing.
+    """
+    global _session, _client_context
+    async with _get_lock():
+        if session is None or _session is not session:
+            return
+        server, _session, _client_context = _client_context, None, None
+    if server is not None:
+        await server.stop()  # its pipes, and what is left of its process
+
+
+async def _ask(session: ClientSession, tool_name: str, arguments: dict, with_it: dict[str, str]) -> Any:
+    """One call, waited for only as long as the tool server it was sent to is there."""
+    server = _client_context if getattr(_client_context, "session", None) is session else None
+    extra = {"meta": with_it} if with_it else {}  # Phase 29; nothing to send → the call as it always was
+    if server is None:  # a session nobody here is watching the pipe of
+        return await session.call_tool(tool_name, arguments=arguments, **extra)
+    if server.gone.is_set():
+        raise _ServerGone("its pipe was already closed")
+
+    asking = asyncio.ensure_future(session.call_tool(tool_name, arguments=arguments, **extra))
+    watching = asyncio.ensure_future(server.gone.wait())
+    try:
+        await asyncio.wait({asking, watching}, return_when=asyncio.FIRST_COMPLETED)
+        if asking.done():
+            return asking.result()
+        raise _ServerGone("its pipe closed before it answered")
+    finally:
+        for waited in (asking, watching):
+            if not waited.done():
+                waited.cancel()
 
 
 def _parse_result(response: Any) -> Any:
@@ -219,14 +370,29 @@ async def _call_tool(tool_name: str, params: dict) -> dict | list | ToolError:
     since every tool function has a single Pydantic-model parameter named
     'input'), handles network / server errors, and parses responses.
     """
+    # FastMCP tools wrap their inputs in an 'input' schema parameter
+    arguments = params if "input" in params else {"input": params}
+    response = None
+    for asking in ("first", "again"):
+        session = None
+        try:
+            session = await get_session()
+            response = await _ask(session, tool_name, arguments, _sent_with_call())
+            break
+        except Exception as exc:
+            # Phase 31: the server died under the call, was dead already, or would not start.
+            if not (_gone(exc) or session is None):
+                return ToolError(error=f"MCP client exception: {type(exc).__name__}: {exc}", code="MCP_CLIENT_ERROR")
+            await _forget(session)
+            what = "would not start" if session is None else "is gone"
+            if asking == "again":
+                logger.error("The tool server %s a second time during %s (%s) — not asked again", what, tool_name, exc)
+                return ToolError(error="The tool server could not be reached.", code=SERVER_GONE)
+            logger.warning(
+                "The tool server %s during %s (%s) — starting another and asking again", what, tool_name, exc
+            )
+
     try:
-        session = await get_session()
-
-        # FastMCP tools wrap their inputs in an 'input' schema parameter
-        arguments = params if "input" in params else {"input": params}
-        with_it = _sent_with_call()  # Phase 29; nothing to send → the call as it always was
-        response = await session.call_tool(tool_name, arguments=arguments, **({"meta": with_it} if with_it else {}))
-
         if getattr(response, "isError", False):
             error_msg = getattr(response.content[0], "text", str(response.content[0])) if response.content else ""
             return ToolError(error=f"MCP error: {error_msg}", code="MCP_SERVER_ERROR")

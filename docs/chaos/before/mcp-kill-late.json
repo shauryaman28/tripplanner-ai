@@ -1,0 +1,244 @@
+{
+ "exercise": "mcp-kill-late",
+ "began": "2026-10-13T02:17:42+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "tool_server_pids": {
+  "before": [],
+  "killed": [
+   30
+  ],
+  "right_after_the_run": [],
+  "now": []
+ },
+ "asked_at_s": 0.57,
+ "killed_at_s": 7.43,
+ "ended_at_s": 18.17,
+ "events": [
+  {
+   "t": 0.58,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 7.41,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 7.44,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 7.44,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 16.28,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "status": {
+  "status": "completed",
+  "trip_id": "cf6597b8-9810-44c5-9672-c6b785821ac7",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 2932,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 3868,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b918,376; \u20b951,624 (74%) remaining for hotels and activities."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 18,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 16,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 2056,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "completed",
+   "ms": 6741,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "persist",
+   "status": "completed",
+   "ms": 10,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preference_extractor",
+   "status": "completed",
+   "ms": 1302,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "orchestrator",
+   "status": "completed",
+   "ms": 17005,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "itinerary": {
+  "days": 4,
+  "missing": null
+ },
+ "the_next_plan": {
+  "trip": "be0f5699-8fd8-4a6b-ab1f-8e864f74887a",
+  "asked": 202,
+  "status": "failed",
+  "seconds": 8.6,
+  "searches_done": "0 of 3",
+  "errors": {
+   "flight_agent": "MCP client exception: ",
+   "hotel_agent": "MCP client exception: ",
+   "activities_agent": "MCP client exception: "
+  },
+  "failure_reason": "No flights, places to stay or things to do were found for Madurai, so there is nothing to build a plan from."
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: [COST] no price on record for model 'gemini-3.5-flash' \u2014 its tokens are counted, its cost is not. Add one with LLM_PRICES in .env.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: /usr/local/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()`"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "the run ended \u2014 the trip is not left planning",
+   "detail": "completed 10.7 s after the kill"
+  },
+  {
+   "ok": false,
+   "what": "the searches the kill took are 'failed' rows in agent_runs",
+   "detail": "none"
+  },
+  {
+   "ok": false,
+   "what": "\u2026each with a reason that names the cause",
+   "detail": "{}"
+  },
+  {
+   "ok": false,
+   "what": "the traveller is told in their own words, not the program's",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "the plan is made from what was found before the kill",
+   "detail": "3 of 3 searches"
+  },
+  {
+   "ok": false,
+   "what": "\u2026and the itinerary itself says what is missing from it",
+   "detail": "nothing in the itinerary says so"
+  },
+  {
+   "ok": false,
+   "what": "the next plan works: a new tool server was started, and nobody restarted the backend",
+   "detail": "failed, searches 0 of 3, {\"flight_agent\": \"MCP client exception: \", \"hotel_agent\": \"MCP client exception: \", \"activities_agent\": \"MCP client exception: \"}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false
+}

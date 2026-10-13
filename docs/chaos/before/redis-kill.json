@@ -1,0 +1,393 @@
+{
+ "exercise": "redis-kill",
+ "began": "2026-10-13T02:15:30+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "pages": 20,
+ "away_s": 30,
+ "asked": 202,
+ "asked_at_s": 12.18,
+ "redis_gone_at_s": 15.21,
+ "redis_back_at_s": 47.69,
+ "before": {
+  "redis": {
+   "connections": 30,
+   "subscribed": 21,
+   "channels": 21
+  },
+  "streams_open": 21.0
+ },
+ "after_the_restart": {
+  "redis": {
+   "connections": 21,
+   "subscribed": 21,
+   "channels": 21
+  },
+  "streams_open": 21.0
+ },
+ "after_every_page_closed": {
+  "redis": {
+   "connections": 4,
+   "subscribed": 0,
+   "channels": 0
+  },
+  "streams_open": 0.0
+ },
+ "streams_ended_s_after_the_kill": [
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8
+ ],
+ "streams_reconnected_s_after_redis_was_back": [
+  8.3,
+  8.3,
+  8.4,
+  8.7,
+  8.8,
+  9.5,
+  9.5,
+  9.5,
+  9.5,
+  9.5,
+  9.7,
+  9.8,
+  9.8,
+  10.1,
+  10.2,
+  10.3,
+  10.3,
+  10.3,
+  10.3,
+  10.3
+ ],
+ "attempts_of_one_page": [
+  {
+   "asked_at": 9.5,
+   "connected_at": 10.87,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 21.0
+  },
+  {
+   "asked_at": 22.0,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 23.87
+  },
+  {
+   "asked_at": 25.9,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 27.42
+  },
+  {
+   "asked_at": 31.42,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 32.68
+  },
+  {
+   "asked_at": 40.68,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 41.73
+  },
+  {
+   "asked_at": 57.73,
+   "connected_at": 57.98,
+   "http": 200
+  }
+ ],
+ "while_it_was_away": [
+  {
+   "t": 0.2,
+   "pages_connected": 20,
+   "status_answers": "planning"
+  },
+  {
+   "t": 4.0,
+   "pages_connected": 20,
+   "status_answers": "planning"
+  },
+  {
+   "t": 6.8,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 9.5,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 12.3,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 15.9,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 18.6,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 21.4,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 24.1,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 26.9,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  },
+  {
+   "t": 29.6,
+   "pages_connected": 0,
+   "status_answers": "planning"
+  }
+ ],
+ "a_plan_asked_for_while_it_was_away": {
+  "http": 500,
+  "answer": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+  "trip_status_right_after": "pending"
+ },
+ "the_plan_in_flight": {
+  "status": "completed",
+  "saved": true,
+  "heard_on_its_page": [
+   {
+    "t": 12.21,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 14.5,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 14.52,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 14.53,
+    "event": "activities_agent: completed",
+    "summary": "Found 10 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 65.4,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 71.45,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 77.09,
+    "event": "planning_complete",
+    "status": "completed"
+   }
+  ],
+  "agent_runs": [
+   {
+    "agent": "intent_parsing",
+    "status": "completed",
+    "ms": 2236,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preferences",
+    "status": "completed",
+    "ms": 1,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "flight_agent",
+    "status": "completed",
+    "ms": 19,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "budget_decision",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Budget check passed. Flights \u20b911,656; \u20b958,344 (83%) remaining for hotels and activities."
+   },
+   {
+    "agent": "hotel_agent",
+    "status": "completed",
+    "ms": 15,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "activities_agent",
+    "status": "completed",
+    "ms": 14,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "destination_intelligence",
+    "status": "completed",
+    "ms": 1769,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "itinerary_builder",
+    "status": "completed",
+    "ms": 31953,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "evaluator",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "persist",
+    "status": "completed",
+    "ms": 7,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preference_extractor",
+    "status": "completed",
+    "ms": 1028,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "orchestrator",
+    "status": "completed",
+    "ms": 37087,
+    "turn": 1,
+    "error": null
+   }
+  ]
+ },
+ "refine_afterwards": {
+  "http": 200,
+  "answer": "{\"status\":\"refinement_started\",\"trip_id\":\"84cbd0b7-ee6a-43d4-a6a7-a63dfe25eadd\",\"turn\":2,\"refinement_type\":\"targeted_hotel\",\"reason\":\"stand-in classifier\"}"
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: [COST] no price on record for model 'gemini-3.5-flash' \u2014 its tokens are counted, its cost is not. Add one with LLM_PRICES in .env.",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Event stream of trip 3f2c98ee-ff43-445c-b67f-9357c0e0a180: Redis could not be reached again (Error -2 connecting to upstash-standin:6379. Name or service not known.) \u2014 closing it",
+  "warning: Event stream of trip 84cbd0b7-ee6a-43d4-a6a7-a63dfe25eadd: Redis could not be reached again (Error -2 connecting to upstash-standin:6379. Name or service not known.) \u2014 closing it",
+  "warning: SSE publish failed for builder_token",
+  "error: Exception in ASGI application\n",
+  "warning: /usr/local/lib/python3.11/site-packages/pydantic_settings/sources/utils.py:47: IncompleteFieldDefinitionWarning: Field 'lifespan' has an incomplete definition: its annotation contains an unresolved forward reference, so settings sources may fail to correctly resolve its value. Call `model_rebuild()`"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "no stream is left open and silent: each ends, or goes on being served",
+   "detail": "20 of 20 ended, 5.8 to 5.8 s after the kill"
+  },
+  {
+   "ok": true,
+   "what": "every page's stream is connected again after Redis returns \u2014 by the page's own backoff",
+   "detail": "20 reconnected, 8.3 to 10.3 s after it was back"
+  },
+  {
+   "ok": true,
+   "what": "CLIENT LIST after the restart: no more subscribed connections than there are open streams",
+   "detail": "21 subscribed for 21 streams (the backend counts 21.0)"
+  },
+  {
+   "ok": true,
+   "what": "the plan that was in flight is made, and saved",
+   "detail": "completed; the page heard: planning_started, flight_agent: completed, hotel_agent: completed, activities_agent: completed"
+  },
+  {
+   "ok": true,
+   "what": "GET /status goes on answering while Redis is away \u2014 it is what the page falls back on",
+   "detail": "['planning']"
+  },
+  {
+   "ok": false,
+   "what": "a plan asked for while Redis is away is started, or refused in words \u2014 not a 500",
+   "detail": "{\"http\": 500, \"answer\": \"{\\\"detail\\\":\\\"Something went wrong on our side. It has been reported.\\\",\\\"error\\\":{\\\"code\\\":\\\"INTERNAL_SERVER_ERROR\\\",\\\"message\\\":\\\"Something went wrong on our side. It has been reported.\\\"}}\", \"trip_status_right_af"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and a refused one does not leave its trip 'planning'",
+   "detail": "pending"
+  },
+  {
+   "ok": true,
+   "what": "the planned trip can still be changed, although what Redis held about it is gone",
+   "detail": "200 {\"status\":\"refinement_started\",\"trip_id\":\"84cbd0b7-ee6a-43d4-a6a7-a63dfe25eadd\",\"turn\":2,\"refinement_type\":\"targeted_hotel\",\"reason\":\"stand-in classifier\"}"
+  },
+  {
+   "ok": true,
+   "what": "with every page closed, CLIENT LIST shows no subscription left behind",
+   "detail": "0 subscribed, 0.0 streams open"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false
+}
