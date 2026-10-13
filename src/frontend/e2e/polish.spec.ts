@@ -261,7 +261,7 @@ test("a run that fails outright says what failed, and Retry plans it again", asy
 
   // the same after a reload: the reason and each search's own error come back from GET /status
   await page.reload();
-  await expect(failed).toContainText("No flights, places to stay or things to do were found for Shimla");
+  await expect(failed).toContainText("None of the searches could be run just now");
   await expect(searches).toHaveCount(3);
   await expect(page.locator('[data-stream="connected"]')).toBeAttached();
 

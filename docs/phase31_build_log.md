@@ -104,22 +104,46 @@ Every exercise on the tree as committed, with the machine awake (20:37–20:44 I
 
 ## Tests
 
-**1,253 unit + contract and 74 integration pass on the tree as committed.** New in this phase: 53 unit, 9 integration.
+**1,255 unit + contract, 74 integration, 60 browser — all passing.** New in this phase: 55 unit, 9 integration.
 
-- **`tests/unit/test_phase31_recovery.py` (34)** — the fixes: a call that finds the tool server gone starts another and asks again, for each way a dead pipe shows; a server that dies again is not asked a third time; one that will not start is the same thing to its caller; an error that is not the server dying is not taken for it; only the call that holds the dead session lets go of it; a call is not waited for once the pipe has closed; every start counted; the traveller's words; searches that could not run are not a destination with nothing in it; the label and who may write it; the builder's deadline, its client's timeout, what is and is not built again; the publisher that does not wait on a dead Redis; a run started whatever Redis does; Redis away as a 503.
+- **`tests/unit/test_phase31_recovery.py` (36)** — the fixes: a call that finds the tool server gone starts another and asks again, for each way a dead pipe shows; a server that dies again is not asked a third time; one that will not start is the same thing to its caller; an error that is not the server dying is not taken for it; only the call that holds the dead session lets go of it; a call is not waited for once the pipe has closed; every start counted; the traveller's words; searches that could not run are not a destination with nothing in it; the label and who may write it; the builder's deadline, its client's timeout, what is and is not built again; the publisher that does not wait on a dead Redis; a run started whatever Redis does; Redis away as a 503.
 - **`tests/unit/test_phase31_harness.py` (19)** — the failing server asked directly, and **by the providers' own clients**: Google's told 429 asks once and the other model answers; Groq's given no answer is stopped by the builder's deadline. Which model a fault applies to; that a fault never points a client anywhere but this machine; that nothing in `src/` knows about faults; the script's page held to `sse.ts`, its numbers to the roadmap's, its integrity questions, its refusal of any stack but the stand-ins'.
 - **`tests/integration/test_phase31_chaos_integration.py` (9)** — the real tool server sent `SIGKILL` between calls, under calls in flight (and nobody cancelled), and repeatedly; through the HTTP API on a real database: a plan saved saying what it lacks, a trip failed because nothing could be searched, a builder that never answers, a run stopped at its deadline, a planned trip whose state Redis has lost still changed.
 - Changed: `test_phase29_wiring.py` (the fake session can be closed: the task that opens it closes it), `test_phase15_refinement.py` (no state *and* no itinerary is the 409).
 
-**What was still owed when this was first committed** — the laptop's battery was at 3 %:
+**What was still owed when this was first committed (the laptop was at 3 % battery), and what came of each** once it was on mains:
 
-- **The browser suite: run next, 58 of 60 passed, 1 failed, 1 did not run.** The failure was a test that held the sentence #263 replaced: with every provider down, `e2e/polish.spec.ts` expected "No flights, places to stay or things to do were found for Shimla" and the page now says "None of the searches could be run just now…". The test was changed to the new sentence. **Its re-run did not get as far as the assertion** — sign-in against the stub stack did not complete on a machine at 2 % battery — so that one test, and the one after it in the file that did not run, are not yet seen passing on this tree.
-- **The break-on-purpose checks: not run.** The list is written (97 breakages).
-- **Phase 27's and Phase 29's checks on real providers: not run on this tree.** In particular the real Groq model has not yet been seen writing an itinerary under the new 20-second / 30-second limits; the measured builds took 5 to 9 seconds.
+- **The browser suite: 60 of 60.** Its first run on this tree was 58 passed, 1 failed, 1 did not run. The failure was a test holding the sentence #263 replaced: with every provider down, `e2e/polish.spec.ts` expected "No flights, places to stay or things to do were found for Shimla" — on the page and again after a reload — and the page now says "None of the searches could be run just now…". The test holds the new sentence in both places.
+- **Phase 27's check on real providers and models: 25 passed, 0 failed, 1 skipped** (the frontend: no `--web`). The deployed image has no `loadtest/` in it; version `0.31.0`. Its plan took 21.6 s and the next one 25.4 s where 12 is usual — in both `intent_parsing` took 15 s: Gemini did not answer within its 15-second limit and Groq's small model did. That is exercise 2's fallback, met in the wild; the real Groq model wrote the itinerary in 7.8 s, well inside the new limits.
+- **Phase 29's check: 45 passed, 0 failed.** (Its first run, made straight after the stack came up, said 44 passed and 1 failed; only the last lines of that run were kept, so which one is not known. Run again it passed all 45.)
+- **The real tool server killed under a real plan, on real providers:** pid 27 sent `SIGKILL` eleven seconds in; the backend's log: `The tool server is gone during search_flights (its pipe was already closed) — starting another and asking again`; all three searches completed, the plan was made, and the tool server afterwards was pid 67. Nobody restarted anything.
 
 ### Break it on purpose
 
-Not run yet: see above. The list is written (97 breakages of the fixes, the faults, the failing server and the script).
+94 deliberate breakages, each applied to a scratch copy of the repository with a database of its own; the Phase 31 unit tests and the three older files the phase touched run on it, then the whole unit and contract suite, then the integration suite, stopping at the first that fails. **First pass: 84 caught by the unit tests, 6 only by the integration tests, 4 not at all.** Four tests were added or extended for those four, and the whole set was started again from the beginning.
+
+The four that survived, and what was missing:
+
+| The breakage | Why nothing failed | Now |
+|---|---|---|
+| the pipe closing is not noticed | the owner task ending sets the same flag, a moment later — the race the watch exists for does not come up on demand | the relay is given a stream that ends, and must set the flag itself |
+| a tool server that would not start is handed back as if it had | the tests replaced the whole server object, and so its `start()` | `start()` itself, with pipes that cannot be opened: it raises what stopped it and leaves no task behind |
+| the abandoned call is left running when the pipe closes | the test saw the caller told, not what became of the request | the request must be seen to be cancelled |
+| the turn of a re-plan is counted from a conversation that is gone | with one turn behind the trip, Redis's count and Postgres's agree | the trip is given three turns, loses its state again, and its next must be the fourth |
+
+The six only the integration tests caught are the ones that need the real thing: one lock for the whole process (several event loops, and calls that wait on it), a plan saved without its label, a run with no deadline and one that says nothing at it, and a planned trip whose state is gone being refused, or changed without the searches it needs.
+
+| Where | Breakages | For example |
+|---|---|---|
+| the tool client (`mcp_client/client.py`) | 19 | a dead session kept · the call not asked again · asked a third time · any error taken for the server dying · a second report of one death taking the new server down · a call waiting for its answer only · one lock for the whole process |
+| the traveller's words (`failures.py`) | 3 | no words for a dead search service · it is called lasting: no Retry |
+| the builder and the extractor | 13 | no timeout again · no deadline for the whole reply (the tests *hang*, which is the bug) · a timeout built again · a deadline shorter than a slow build · a model may write the label |
+| the orchestrator | 10 | searches that could not run are "nothing found" again · two failed searches are "none could be run" · the label gives the program's reason · what the traveller was told is not written down |
+| the routes (`trips.py`, `main.py`) | 21 | every publish tried against a dead Redis · the events that end a run dropped too · a publish that fails fails the run · a run with no deadline · Redis going as a run begins leaves the trip planned by nobody · Redis away answered 500 · the answer says where Redis is |
+| the faults and the failing server | 15 | Gemini's 429 worded as something else · a request that should hang is answered · the builder's fault is everybody's · a fault's address not held to this machine · the client made without the app's options |
+| the script, its stack, the counter | 13 | things are broken on any stack · every exercise "as expected" · a trip left planning is not looked for · the tool server asked nicely · a key handed to the failing server |
+
+**The second pass was still running when this was written**: the laptop's lid had been closed again and the machine was asleep in cycles. As far as it had got — 52 of 94 — every breakage was caught, the three unit-level survivors among them, each by its new test; the fourth (`the turn …`) had not come up yet, and its new assertion passes on the unbroken tree.
 
 ## Done criterion checklist
 

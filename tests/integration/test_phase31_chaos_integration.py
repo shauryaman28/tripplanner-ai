@@ -342,6 +342,16 @@ async def test_a_planned_trip_whose_state_redis_has_lost_can_still_be_changed(db
         assert ordinary.json()["turn"] == 3
         await _run_finished(client, trip_id, orchestrator_rows=3)
 
+        # …and lost again, with three turns behind it: the next is the fourth — counted from the rows in
+        # Postgres, not from a conversation that is no longer there
+        await redis_db.redis_client.delete(_state_key(trip_id), _hist_key(trip_id))
+        with patch("app.api.routes.trips.classify_refinement", AsyncMock(return_value=asked_for)):
+            again = await client.post(f"/trips/{trip_id}/refine", json={"message": "a nicer hotel, please"})
+        assert again.status_code == 200 and again.json()["turn"] == 4, again.text
+        assert again.json()["refinement_type"] == "full_replan"
+        runs = await _run_finished(client, trip_id, orchestrator_rows=4)
+        assert {run["turn"] for run in runs} == {1, 2, 3, 4}
+
 
 async def test_a_trip_that_was_never_planned_still_has_nothing_to_change(db_session):
     async with _stack(flight_tool=lambda *_: [flight(8_200.0)]) as (client, events, tools):

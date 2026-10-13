@@ -142,10 +142,14 @@ async def test_only_the_call_that_holds_the_dead_session_lets_go_of_it():
 async def test_a_call_is_not_waited_for_once_the_servers_pipe_has_closed():
     """Seen: a server killed while it was being started for three calls at once. Two were told; the third had
     sent its request a moment after the library stopped listening, and waited for ever."""
-    never = asyncio.Event()
+    never, given_up = asyncio.Event(), asyncio.Event()
 
     async def no_answer(*_args, **_kwargs):
-        await never.wait()
+        try:
+            await never.wait()
+        except asyncio.CancelledError:
+            given_up.set()
+            raise
 
     session = MagicMock(call_tool=no_answer)
     server = MagicMock(session=session, gone=asyncio.Event())
@@ -156,10 +160,49 @@ async def test_a_call_is_not_waited_for_once_the_servers_pipe_has_closed():
         server.gone.set()  # its pipe closes
         with pytest.raises(client._ServerGone, match="closed before it answered"):
             await asyncio.wait_for(asking, 1)
+        await asyncio.wait_for(given_up.wait(), 1)  # and the request nobody will answer is not left waiting behind it
 
         with pytest.raises(client._ServerGone, match="already closed"):  # …and nothing more is sent down it
             await client._ask(session, "search_hotels", {"input": {}}, {})
     assert client._gone(client._ServerGone("x"))
+
+
+async def test_the_moment_the_server_stops_talking_is_noticed_and_the_session_is_told_too():
+    """What the server says is handed on to the session as it comes; when the pipe closes, the thing a call
+    waits on beside its answer is set — whatever the session's own reader has or has not noticed yet."""
+    server = client._ToolServer()
+    said, pipe = anyio.create_memory_object_stream(1)
+    hands_on, heard = anyio.create_memory_object_stream(1)
+    passing = asyncio.ensure_future(server._pass_on(pipe, hands_on))
+
+    await said.send("an answer")
+    assert await heard.receive() == "an answer" and not server.gone.is_set()  # alive: every word reaches the session
+
+    await said.aclose()  # the process is killed: its end of the pipe closes
+    await asyncio.wait_for(passing, 1)
+    assert server.gone.is_set()
+    with pytest.raises(anyio.EndOfStream):  # …and the session sees the end as it always did
+        await heard.receive()
+
+
+async def test_a_tool_server_that_cannot_be_started_raises_what_stopped_it_and_is_not_handed_back():
+    """`start()` gives a session or says why not. Given back as nothing, it would be kept as "the session" —
+    and every later call would find it gone, start another, and be given nothing again."""
+
+    class NoPipes:
+        async def __aenter__(self):
+            raise OSError("no such file: python")
+
+        async def __aexit__(self, *_exc):
+            return False
+
+    server = client._ToolServer()
+    with patch.object(client, "stdio_client", lambda *_args, **_kwargs: NoPipes()):
+        with pytest.raises(OSError, match="no such file: python"):
+            await server.start()
+
+    assert server.session is None and server.gone.is_set()
+    assert server._owner.done()  # nothing of it is left running
 
 
 async def test_a_call_that_is_answered_is_answered_as_before():
