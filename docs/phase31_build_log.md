@@ -111,7 +111,11 @@ Every exercise on the tree as committed, with the machine awake (20:37–20:44 I
 - **`tests/integration/test_phase31_chaos_integration.py` (9)** — the real tool server sent `SIGKILL` between calls, under calls in flight (and nobody cancelled), and repeatedly; through the HTTP API on a real database: a plan saved saying what it lacks, a trip failed because nothing could be searched, a builder that never answers, a run stopped at its deadline, a planned trip whose state Redis has lost still changed.
 - Changed: `test_phase29_wiring.py` (the fake session can be closed: the task that opens it closes it), `test_phase15_refinement.py` (no state *and* no itinerary is the 409).
 
-**Not yet run on this tree when it was first committed** — the laptop's battery was at 3 %: the 60 browser tests (they passed on Phase 30's tree; the backend has changed since), the break-on-purpose checks below, and Phase 27's and Phase 29's checks on real providers.
+**What was still owed when this was first committed** — the laptop's battery was at 3 %:
+
+- **The browser suite: run next, 58 of 60 passed, 1 failed, 1 did not run.** The failure was a test that held the sentence #263 replaced: with every provider down, `e2e/polish.spec.ts` expected "No flights, places to stay or things to do were found for Shimla" and the page now says "None of the searches could be run just now…". The test was changed to the new sentence. **Its re-run did not get as far as the assertion** — sign-in against the stub stack did not complete on a machine at 2 % battery — so that one test, and the one after it in the file that did not run, are not yet seen passing on this tree.
+- **The break-on-purpose checks: not run.** The list is written (97 breakages).
+- **Phase 27's and Phase 29's checks on real providers: not run on this tree.** In particular the real Groq model has not yet been seen writing an itinerary under the new 20-second / 30-second limits; the measured builds took 5 to 9 seconds.
 
 ### Break it on purpose
 
