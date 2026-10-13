@@ -24,6 +24,16 @@ The rest are the app's own, counted where the thing happens:
     planning_runs_in_progress                           answered at once, so its own duration says nothing
     tripplanner_build_info{version, commit}             always 1: which build these numbers are about
 
+And three that say how near this process is to running out of something (Phase 30) — what a load
+test watches, and what "it got slow" is usually made of:
+
+    db_pool_connections{state}                          the database pool's connections: in_use, idle
+    db_pool_connections_limit                           the most it will open: its size plus its overflow
+    redis_pool_connections{state}                       the same for Redis — an open event stream holds one
+    redis_pool_connections_limit
+    event_loop_lag_seconds                              how late the event loop ran what was due: every
+                                                        request of this process waits behind whatever holds it
+
 A request's duration is the time to its first byte, not its last: an event stream is open for
 minutes by design, and those minutes are not latency.
 
@@ -44,6 +54,7 @@ cannot be listed — an endpoint's requests — is the library's, and loses its 
 
 from __future__ import annotations
 
+import asyncio
 import math
 import threading
 import time
@@ -61,7 +72,10 @@ prometheus_client.disable_created_metrics()
 REQUEST_BUCKETS = (0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30)
 TOOL_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 40)
 RUN_BUCKETS = (2, 4, 6, 8, 10, 12.5, 15, 17.5, 20, 25, 30, 45, 60, 90, 120, 180, 300)  # a plan is 8 to 25 s: fine there
+LAG_BUCKETS = (0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5)
 CACHE_WINDOW_S = 300.0
+LAG_EVERY_S = 0.1  # how often the event loop is asked to wake something, to see how late it does
+POOL_STATES = ("in_use", "idle")
 
 BUILD_STATUSES = ("success", "failure", "retry")
 CACHE_RESULTS = ("hit", "miss", "error")
@@ -99,6 +113,19 @@ RUNS_IN_PROGRESS = Gauge("planning_runs_in_progress", "Planning runs this proces
 BUILD_INFO = Gauge(
     "tripplanner_build_info", "Always 1: the version and the commit that are running.", ["version", "commit"]
 )
+DB_POOL = Gauge(
+    "db_pool_connections",
+    "Connections of this process's database pool: lent out (in_use), or waiting (idle).",
+    ["state"],
+)
+DB_POOL_LIMIT = Gauge("db_pool_connections_limit", "The most connections the database pool will open.")
+REDIS_POOL = Gauge(
+    "redis_pool_connections",
+    "Connections of this process's Redis pool: in use — one per open stream — or idle.",
+    ["state"],
+)
+REDIS_POOL_LIMIT = Gauge("redis_pool_connections_limit", "The most connections the Redis pool will open.")
+LOOP_LAG = Histogram("event_loop_lag_seconds", "How late the event loop ran a task that was due.", buckets=LAG_BUCKETS)
 
 # A build that has never failed is 0 failures, not no data: these exist from the start.
 for _status in BUILD_STATUSES:
@@ -220,6 +247,58 @@ def planning_run(kind: str) -> Iterator[Run]:
 
 def build_info(version: str, commit: str | None) -> None:
     BUILD_INFO.labels(version, (commit or "")[:12] or "unknown").set(1)
+
+
+# ── What runs out under load (Phase 30) ────────────────────────────────────
+
+
+def _read(count: Callable[[], Any]) -> Callable[[], float]:
+    """A gauge's reading that cannot fail a scrape: NaN when there is nothing to count, or it cannot be counted."""
+
+    def reading() -> float:
+        try:
+            return float(count())
+        except Exception:
+            return math.nan
+
+    return reading
+
+
+def watch_db_pool(pool_of: Callable[[], Any]) -> None:
+    """Report the database pool at every scrape. `pool_of()` returns the engine's pool as it is then.
+
+    Read when Prometheus asks, not counted as connections come and go: the pool already knows.
+    The limit is the pool's size plus its overflow — past it a request waits for a connection,
+    and after the pool's timeout fails.
+    """
+    DB_POOL.labels("in_use").set_function(_read(lambda: pool_of().checkedout()))
+    DB_POOL.labels("idle").set_function(_read(lambda: pool_of().checkedin()))
+    DB_POOL_LIMIT.set_function(_read(lambda: pool_of().size() + max(0, pool_of()._max_overflow)))
+
+
+def watch_redis_pool(pool_of: Callable[[], Any]) -> None:
+    """Report the Redis client's pool at every scrape. `pool_of()` returns it, or None while there is no client.
+
+    Every command borrows a connection for a moment; a subscription — an open event stream — keeps
+    one. The limit is not a queue: a command over it fails at once ("Too many connections").
+    """
+    REDIS_POOL.labels("in_use").set_function(_read(lambda: len(pool_of()._in_use_connections)))
+    REDIS_POOL.labels("idle").set_function(_read(lambda: len(pool_of()._available_connections)))
+    REDIS_POOL_LIMIT.set_function(_read(lambda: pool_of().max_connections))
+
+
+async def watch_event_loop(every: float = LAG_EVERY_S) -> None:
+    """For as long as it runs: ask to be woken in `every` seconds, and note how much later than that it was.
+
+    One event loop serves every request of a process, one piece of work at a time. Work that does
+    not give it back — a password being hashed, a large answer being put together — makes
+    everything else late by as long as it takes, and no request's own timing says why. This does.
+    """
+    loop = asyncio.get_running_loop()
+    while True:
+        due = loop.time() + every
+        await asyncio.sleep(every)
+        LOOP_LAG.observe(max(0.0, loop.time() - due))
 
 
 _requests: Any = None  # what counts a finished request — made once for the process

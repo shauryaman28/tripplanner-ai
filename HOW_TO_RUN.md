@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–29
+# How to Run & Verify — Phases 1–30
 
 ## What changed vs the original codebase?
 
@@ -28,6 +28,7 @@
 | 27 | `Dockerfile` (listens on `$PORT`, `exec`s the server, pinned installs, not root), `main.py` (the pre-start check, Sentry, recovery that leaves another instance's runs alone, waiting for plans at shutdown, `no-store`, a JSON 500), `trips.py` (a run's note kept up; a run cut short tidied up; the event stream's wait), `session.py` + `migrations/env.py` (a hosted Postgres's URL), `db/redis.py` + `mcp_server/cache.py` (retries, health checks, no password in a log), `health.py` (`GET /ready`), `admin.py` (`GET /admin/sentry-test`), `config.py`, `conversation.py`, `requirements.txt` (`sentry-sdk`), `ci.yml`, `next.config.mjs`, `lib/sse.ts`, `.env.example`, `.gitignore`, `tests/conftest.py` — see `docs/phase27_build_log.md` | `app/preflight.py`, `app/db/url.py`, `app/core/error_reporting.py`, `constraints.txt`, `railway.json`, `docker/prodlike/` (the production-like stack), `scripts/prodlike.py`, `scripts/prod_check.py`, `scripts/sentry_receiver.py`, `scripts/freeze_constraints.py`, `playwright.production.config.ts`, `e2e-production/smoke.spec.ts`, three unit test files and one integration test file |
 | 28 | `.github/workflows/ci.yml` (two jobs, pushes only, the migrations up / checked / down / up, a deploy on `main` after both), `health.py` (`GET /version`), `config.py` (`GIT_COMMIT_SHA`, `settings.commit`), `error_reporting.py` (a report's release from the same commit), `next.config.mjs` (the build told its commit), `docker/prodlike/compose.yml`, `.env.example` — see `docs/phase28_build_log.md` | `.github/workflows/deploy.yml`, `.github/workflows/nightly.yml`, `.github/nightly-issue.md`, `scripts/wait_for_release.py`, `scripts/nightly_summary.py`, `scripts/nightly_post.sh`, `src/frontend/src/app/version/route.ts`, `tests/ci/fake_gh.sh`, `tests/unit/test_phase28_pipeline.py` |
 | 29 | `main.py` (logging set up as the module loads, the `RequestContext` middleware, `GET /metrics`, tracing), `deps.py` (`may_read_metrics`), `trips.py` (a planning run timed, counted and one span), `session.py` / `redis.py` (statements and commands as spans), `preflight.py`, `config.py` (4 settings), `error_reporting.py` (a tracing backend's key is a secret too), `usage.py` + `run_logger.py` + `llm.py` (model calls counted per agent, every agent a span), `orchestrator.py` (builds counted), `mcp_client/client.py` + `mcp_server/server.py` + `cache.py` + `outbound.py` (the trace and the trip carried to the tool server, the cache's tally carried back), every agent's `timed_run("<its name>")`, `docker/prodlike/compose.yml`, `requirements.txt` + `constraints.txt` (18 new pins), `.env.example`, `tests/conftest.py`, `tests/fakes.py` — see `docs/phase29_build_log.md` | `src/telemetry/` (`context.py`, `metrics.py`, `traces.py`, `logs.py`), `docker/observability/` (compose, Prometheus, Alloy, Grafana's data sources and dashboard), `scripts/observability.py`, `scripts/observability_check.py`, `tests/unit/test_phase29_telemetry.py`, `test_phase29_wiring.py`, `test_phase29_stack.py`, `tests/integration/test_phase29_observability_integration.py` |
+| 30 | `run_logger.py` (a row is written and not read back; `hand_back`), `orchestrator.py` + `trips.py` + `utils/embeddings.py` + `embedder.py` (a read's transaction is ended before a model, a provider or the embedding API is waited for), `config.py` (`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `REDIS_MAX_CONNECTIONS`), `session.py` + `redis.py` (the pools made as the settings say, and reported), `main.py` (the event loop's lateness watched), `telemetry/metrics.py` (three gauges of what runs out), `docker/prodlike/pgbouncer.ini` + `compose.yml` (a pooler as large as the hosted one; the pools sized), the Grafana dashboard (a row for what runs out under load), `.env.example`, `.gitignore`, `tests/integration/conftest.py` — see `docs/phase30_build_log.md` | `loadtest/k6/traveller.js` (the load), `loadtest/standins/` (what answers for the models and providers), `docker/loadtest/` (the image and the stack they run in), `scripts/loadtest.py`, `docs/load-test-report.md`, `docs/loadtest/` (every run, as measured), four unit test files and one integration test file |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -312,7 +313,7 @@ published event within milliseconds.
 
 ---
 
-## Step 10 — Run all unit and contract tests ✅ Phases 1–29 check
+## Step 10 — Run all unit and contract tests ✅ Phases 1–30 check
 
 Run from the **project root**:
 
@@ -320,7 +321,7 @@ Run from the **project root**:
 pytest tests/unit/ tests/contract/ -v
 ```
 
-Expected: **1094 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
+Expected: **1200 passed**, no network, no Docker. The Phase 19 and 20 tests build real PDFs and read them back;
 the Phase 24 tests run the real MCP server against fake providers, and record every wait instead of sitting through it.
 
 Integration tests (need Docker Postgres + Redis running):
@@ -329,7 +330,7 @@ Integration tests (need Docker Postgres + Redis running):
 RUN_INTEGRATION=1 pytest tests/integration/ -v
 ```
 
-Expected: **64 passed**. They run against a separate `tripplanner_db_test` database
+Expected: **65 passed**. They run against a separate `tripplanner_db_test` database
 (created automatically, migrated with Alembic), so they never touch your dev data.
 `test_pipeline_integration.py` is the one to watch: it drives plan → PDF export → refine →
 add-day, budget conflict → replan, and a no-provider run through the HTTP API with real
@@ -1215,6 +1216,8 @@ PYTHONPATH=src/backend python -m app.preflight --env-file .env.production --prod
 | `DATABASE_URL` | Neon → your project → Connection string → **Pooled connection**, copied as it is |
 | `DATABASE_URL_UNPOOLED` | optional — the same page with pooling off; only the migrations use it |
 | `REDIS_URL` | Upstash → your Redis database → the `rediss://…:6379` URL. Not the REST URL |
+| `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | optional (Phase 30) — how many database connections one instance may hold: 5 kept and 10 more by default. Together, times two (a deploy has two instances alive at once), they must fit in what the pooler lends: 90 % of Neon's `max_connections`, 94 on the smallest compute. `10` and `30` are what the load test ran on |
+| `REDIS_MAX_CONNECTIONS` | optional (Phase 30) — how many connections to Redis one instance may open, default 100. Every open trip page keeps one, so this is how many pages can be open at once; past it requests fail. Set it as high as your Redis plan's limit of concurrent connections allows — the load test ran on `500` |
 | `JWT_SECRET` | `openssl rand -hex 32` — a new one, not your laptop's |
 | `OPS_TOKEN` | `openssl rand -hex 32` |
 | `SENTRY_DSN` | Sentry → new project, platform FastAPI → Client Keys (DSN) |
@@ -1266,7 +1269,7 @@ what only GitHub can show — and the three things only you can set — are at t
 ```bash
 # the backend job — lint and tests (about 25 seconds on a laptop); its migrations step is below
 ruff check . && ruff format --check .
-pytest tests/unit/ tests/contract/ -v          # 1094 passed
+pytest tests/unit/ tests/contract/ -v          # 1200 passed
 
 # the frontend job
 cd src/frontend && npm ci && npx tsc --noEmit && npm run lint && npm run build
@@ -1351,7 +1354,7 @@ python scripts/nightly_summary.py /tmp/an-empty-directory --require integration 
 
 **Every push** shows two checks, `backend` and `frontend`, on the commit and on its pull request (Actions tab
 → CI). To see one fail: push a branch with `assert 1 + 1 == 3` in a new test; the commit gets a red cross
-and the run's log ends `1 failed, 1094 passed`. Delete the branch afterwards.
+and the run's log ends `1 failed, 1200 passed`. Delete the branch afterwards.
 
 **1. Make a red cross block the merge.** Settings → Branches → Add branch ruleset (or "Add classic branch
 protection rule") for `main` → *Require status checks to pass* → add `backend` and `frontend` → also
@@ -1512,6 +1515,141 @@ of them starts the tool server as a real second process and follows a trace into
 
 ---
 
+## Step 28 — Verify Phase 30: the load test
+
+Needs Docker and nothing else — **no key is used, and none is given to the stack**: the models and
+the providers cannot take load, so stand-ins answer for them, each taking as long as the real one
+does. What was measured, what the bottleneck was and what was changed is `docs/load-test-report.md`;
+this step is how to run it yourself.
+
+**Keep the machine awake while it runs** — lid open, plugged in. A laptop on battery with its lid
+closed sleeps for seconds at a time while everything on it seems to keep running, and a run comes out
+slower than it was. The script notices (it compares the wall clock with the clock programs time by)
+and does not keep such a run; it cannot prevent it.
+
+### A. Once: a k6 that can read an event stream
+
+```bash
+python scripts/loadtest.py k6
+# building k6 v2.3.0 with github.com/phymbert/xk6-sse@v0.2.0 for darwin/arm64 — a few minutes…
+# k6-sse v2.3.0 (go1.27.1, darwin/arm64) · github.com/phymbert/xk6-sse v0.2.0, k6/x/sse [js]
+```
+
+k6 itself has no event streams: `http.get` on `GET /trips/{id}/stream` waits for a response that never
+ends. The binary is built by the `grafana/xk6` image into `.loadtest/bin/` (git-ignored) — no Go, no
+Homebrew.
+
+### B. The stack
+
+```bash
+python scripts/observability.py up     # optional, to watch: Grafana on http://localhost:3001 (Step 27)
+python scripts/loadtest.py up
+# building tripplanner-backend:under-test from src/backend/Dockerfile…
+# building tripplanner-loadtest-backend from docker/loadtest/Dockerfile…
+# ready: http://localhost:8200 — the models and the providers are stand-ins.  Next: python scripts/loadtest.py smoke
+```
+
+It is the production-like stack of Step 25 — the deployed image, the TLS-only Postgres behind its
+pooler, the TLS-only Redis — with one directory added to the image (`loadtest/standins/`) and a
+different thing served: `loadtest.standins.app:app`, which puts the stand-ins in and then is the app.
+The backend's log says so, and the script will not put load on a stack whose log does not:
+
+```bash
+python scripts/prodlike.py logs | grep STAND-INS
+# … "[STAND-INS] the models, the embeddings and the five providers are stand-ins: every plan made here is made up" …
+```
+
+(To see the errors a run causes as Sentry would be sent them: `python scripts/sentry_receiver.py` in
+another terminal, as in Step 25.)
+
+### C. Does every part work
+
+```bash
+python scripts/loadtest.py smoke
+#   plans: asked 3, completed 3, failed 0, visits dropped 0
+#   a plan took: p50 10989 ms, p95 12574 ms, max 12750 ms
+#   requests (not streams): 39, failed 0.00 %, p50 10 ms, p95 53 ms, p99 197 ms
+#     GET /trips/{id}/status        16 ×    10 ms median
+#     POST /auth/login               2 ×   196 ms median
+#     POST /trips/{id}/plan          3 ×    21 ms median
+#     …
+#   ✓ three visits, three plans, no failed request
+
+python scripts/loadtest.py one-plan
+#      0.01 s  planning_started
+#      2.50 s  flight_agent: completed
+#     11.61 s  planning_complete
+#   intent_parsing             completed    2456 ms  338
+#   itinerary_builder          completed    7927 ms  3867
+#   …
+```
+
+A stand-in's plan takes what a real one takes (12.6 s on real providers, measured for this phase) and
+makes the same events in the same order. Before Phase 30 `one-plan` ended
+`Postgres: a connection idle inside a transaction from 2.51 s to 14.22 s after POST /plan`. Now it
+ends without that line — or with one look's worth of it (`from 0.09 s to 0.09 s`): a request's own
+transaction, caught in passing. With `scripts/prodlike.py up` in place of the load test's stack,
+`one-plan --api http://localhost:8200` does the same on real providers and models.
+
+### D. Load
+
+```bash
+python scripts/loadtest.py run --rate 0.8 --hold 180 --name mine
+# ── mine: 0.8 visits a second for 180 s ──
+#   plans: asked 145, completed 145, failed 0, visits dropped 0
+#   a plan took: p50 11603 ms, p95 13504 ms, max 16968 ms
+#   requests (not streams): 1867, failed 0.00 %, p50 7 ms, p95 85 ms, p99 208 ms
+#   the stack: plans in progress up to 14.0, streams 35.0, database pool …, pooler serving … with 0 waiting …
+#   HOLDS   → docs/loadtest/mine/rate-0.8.json
+
+python scripts/loadtest.py ladder --name mine --rates 0.1,0.2,0.4,0.8,1.6,3.2 --hold 180
+python scripts/loadtest.py table mine          # the runs kept under that name, as the report's two tables
+```
+
+A visit is what the trip page does for someone who comes to plan a trip (`loadtest/k6/traveller.js`
+lists the requests), and visits *start* at the rate given whatever the server does. A rate **holds**
+when 99 % of the visits get their plan, a plan takes under 30 s at p95, and requests that are not
+streams take under 1 s at p99 with fewer than 1 % failing. A ladder stops at the first rate where
+fewer than half the visits got a plan.
+
+While it runs, the dashboard's row **Under load** shows what runs out: database connections against
+their limit, Redis connections and open streams against theirs, and how late the event loop is.
+Every two seconds the script itself asks the pooler who is waiting (`SHOW POOLS`), Postgres what its
+connections are doing, and the backend its own numbers — all of it is in the run's file.
+
+**The baseline, again.** The report's "before" is this stack with 4 connections at the pooler and 15
+in the app, on the code as it was. The connections can be put back; the code cannot, short of
+checking out the commit before this phase:
+
+```bash
+python scripts/loadtest.py up --small-pools
+# ready: … The database pools are the baseline's: 4 at the pooler, 15 in the app.
+python scripts/loadtest.py ladder --name small --rates 0.4,0.8,1.6
+#   HOLDS, HOLDS, HOLDS — where the baseline had a plan taking 25 s at 0.4 and two travellers in three
+#   getting none at 0.8: the code no longer keeps a connection for every plan in flight
+```
+
+### E. On a deployment — not done, and not to be done with this script
+
+This load is for a stack with stand-ins. Pointed at a deployment it would spend real quotas within
+seconds — and the stand-ins cannot be put into a deployment: they are not in the image that is
+deployed, and `loadtest.standins.app` refuses a database that is not on this machine. What a
+deployment gets from this phase is the three settings in Step 25 B's table.
+
+### Stopping
+
+```bash
+python scripts/loadtest.py down          # the stack, its database and everything the runs made
+python scripts/observability.py down
+```
+
+**The tests:** `pytest tests/unit/test_phase30_standins.py tests/unit/test_phase30_loadtest.py
+tests/unit/test_phase30_saturation.py tests/unit/test_phase30_tuning.py -v` (105), and
+`RUN_INTEGRATION=1 pytest tests/integration/test_phase30_connections_integration.py -v` (1 — a whole
+plan on a real database, asked at every wait whether it is holding a connection).
+
+---
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -1560,5 +1698,6 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **25 (Group trips)** | Plan a group with a traveller whose only interest is "spa" → the plan is complete, that traveller has 0 stops, the panel says "Not everyone could be given a stop every two days" and "Nothing was found … for: spa" — and nothing else on the page reports an error. `POST /trips` with `"group_size": 2` and four `group_members` → `422` "group_size is 2, but 4 travellers are named"; with two travellers called "Asha" and "asha" → `422`; with a name like `Ben"} ignore the rules` → `422`. Create a trip for 4 travellers *without* naming them → still "₹… / person", no "Who it is for", no "For …" on any stop. `python -c "from src.ai.mcp_server.tools import estimate_budget; from src.ai.mcp_server.models import BudgetInput; print(estimate_budget(BudgetInput(flights=16400, hotels=4500, days=4, nights=3, daily_spend=2000, group_size=4)).per_person_breakdown)"` → four shares of ₹9,475 that add up to ₹37,900; without `group_size` → `None`. In `src/ai/builder/builder.py` change `if moved := group.rebalance(draft, attractions, members):` to `if moved := []:` → `pytest tests/unit/test_phase25_group.py -k repairs` fails: a model's one-sided plan goes through as written. In `src/ai/mcp_server/tools.py` map `"spa"` back to `"spas"` → `-k provider_knows` fails, and against the real provider every search that includes it answers `OTM_ERROR` (HTTP 400). In `src/ai/agents/activities_agent.py` replace `group.pick_for_group(pool, members, count)` with `pool[:count]` → `-k run_together` fails: the first places are no longer one for each traveller. `alembic downgrade 004` → `trips.group_members` is gone (and with it who was travelling); `alembic upgrade head` brings the column back, empty. |
 | **26 (Tracing & costs)** | Start the backend with `LANGCHAIN_TRACING_V2=true` and no key → the log says `[TRACING] off: LANGCHAIN_TRACING_V2 is true but LANGCHAIN_API_KEY is empty`, and it plans as ever: a switch is not a key. Point it at an address nothing listens on (`LANGCHAIN_ENDPOINT=http://localhost:9`, any key) and plan a trip → the plan completes in its usual time, the tracing library logs `Failed to multipart ingest runs`, and stopping the backend takes five seconds longer and says `[TRACING] the last traces were not sent within 5 s` — a LangSmith that is down costs a log line, never a plan, and never a hung shutdown. Plan the Step 24 trip with a budget of 1.8 × its fare → `re-plan 1: cheaper flights`, `re-plan 2`, and the search that found nothing marked `✗ NO_RESULTS`: a tool that could not answer is a failed span, though nothing raised. Add up the `token_count` of a trip's rows → exactly the trace's total. The two are counted separately — the trace by LangChain's tracer, the rows by this project's recorder — so their agreeing means something; LangChain's ready-made usage callback, tried first, counted every token twice. A row for a search has `token_count: null`, not 0 — it asked no model. `GET /admin/cost-summary?since=yesterday` → `422`; without a token → `401`. Restart with `LLM_COST_ALERT_USD=0.002` and plan → `[COST ALERT]` once, on the row that took the trip over, not on the rows after it. `curl localhost:1984/records` after a run and search it for any key in `.env` → nothing: the keys are sent as placeholders that name the variable, and the database session and callbacks a run carries are taken out before it is uploaded. `alembic downgrade 005` → the two columns are gone, and with them the tokens recorded so far; `alembic upgrade head` → the columns are back, empty. With a LangSmith key: plan a trip and change it → both traces are in the project `tripplanner-ai`, though one is started by LangChain and the other by this app — take the tracer out of `tracing.run_config` and the plan goes to a project called `default`, where the trip's filter no longer finds it, and nothing is logged. |
 | **27 (Production)** | `python scripts/prodlike.py up`, then: `docker stop -t 70 tripplanner-prodlike-backend-1` while a trip is being planned → the log says `[SHUTDOWN] 1 planning run(s) in flight — waiting…` and the plan is there after `docker start`; `docker kill` it instead → the trip fails 45 s after the restart, with the reason on the page — never "planning" for ever. Kill Redis's connections (`redis-cli … client kill type normal`, then `type pubsub` with a trip's page open) → the next request answers 200 and the page's event stream still hears. In `docker/prodlike/compose.yml` take `CORS_ORIGIN_REGEX` out → the backend does not start: `Cannot start in production: ✗ CORS_ORIGINS names no deployed frontend` (the list has only localhost in it). Set `CORS_ORIGINS` to another site instead (`https://elsewhere.example`) → it starts, `prod_check.py` says 28 passed, 1 failed — `✗ the backend lets a page on the frontend's origin read it (CORS)` — and the browser check stops at the event stream, which never connects, while the plan itself is still made. Set `REDIS_URL` to an `https://` address → `that is a REST API, and a REST API cannot subscribe`. Set `JWT_SECRET` to the repository's default → refused. `VERCEL=1 npx next build` in `src/frontend` with no `BACKEND_URL` → the build stops and names it. `pip install sqlmodel==0.0.48` in the venv → `test_what_is_deployed_is_what_was_tested` fails: the environment is no longer the pinned one (the same version the first image installed by itself, and on which registering an account answered 500). `curl localhost:8200/admin/sentry-test` without `X-Ops-Token` → 404; with it → 500, and `curl localhost:9010/raw` shows the report with the token header `[Filtered]`. `GET /ping` with the database down → 200 and the error in the body; `GET /ready` → 503. |
-| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1094 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |
+| **28 (CI/CD)** | Add a column to a model and no migration (`a_column_nobody_migrated: str \| None = None` in `Trip`) → `alembic check` ends `FAILED: New upgrade operations detected: [('add_column', None, 'trips', …)]`, and so does the `backend` job. Add a test that asserts `1 + 1 == 3` → the job ends `1 failed, 1200 passed`; on `main`, the `deploy` job does not start. Delete the night's report before the summary is written (`python scripts/nightly_summary.py /tmp/an-empty-directory --require integration`) → `❌ Nightly — 1 failed`, `DID NOT RUN — no report was written`, exit 1: a night whose tests never started is not a night without failures. `python scripts/wait_for_release.py --commit 0000000000 --api http://localhost:8200 --timeout 12` against a running stack → exit 1 and what the address last answered. Take the `if: steps.target.outputs.configured == 'true'` off any step of `deploy.yml` → `test_a_repository_with_nowhere_to_deploy_to_can_still_merge` fails. Why: a pipeline's job is to say no, so each no was made to happen. |
 | **29 (Observability)** | With the stack of Step 27 up: `docker stop tripplanner-observability-jaeger-1`, then plan a trip → the plan is made as before; the log has `Transient error … encountered while exporting span batch` from the exporter and nothing else changes — nothing here is in the app's path (start it again: `python scripts/observability.py up`). `curl -s -o /dev/null -w "%{http_code}" localhost:8200/metrics` on the production-like stack → `404`: a deployment's numbers are for whoever has its token. `OTEL_EXPORTER_OTLP_ENDPOINT=collector:4318 PYTHONPATH=src/backend python -m app.preflight --production` → among what stops a deployment: `✗ OTEL_EXPORTER_OTLP_ENDPOINT is not an http:// or https:// URL`, and among what it starts without: `! OPS_TOKEN is empty: GET /metrics answers nobody`. Rename a metric in `docker/observability/grafana/dashboards/tripplanner.json` (`itinerary_builds_total` → `itinerary_build_total`) → `test_every_metric_a_panel_asks_for_is_one_the_app_exports` fails and names the panel, instead of the panel going quietly empty. Open an event stream (`curl -N "localhost:8000/trips/<id>/stream?token=<your token>"`), stop it, and look at its trace in Jaeger → `http.url` ends `?token=[Filtered]`. Why: what watches a system must not be able to break it, leak from it, or go blind without anyone noticing. |
+| **30 (Load test)** | With the stack of Step 28 up: in `src/ai/utils/run_logger.py` make `log_agent_run` what it was — `await db.refresh(run)` after the commit, and no `await hand_back(db)` after `_warn_if_over` — then `python scripts/loadtest.py up --small-pools` and `python scripts/loadtest.py run --rate 0.8 --name broken` → `DOES NOT HOLD: 118 of 145 visits got a plan; 26 visits could not even start; a plan took 164 s at p95; requests took 15395 ms at p99`, `database pool 15.0/15.0`, `pooler serving 8 with 11 waiting`: every plan in flight keeps a connection again. Put back only the `refresh` and it still `HOLDS` — but with `database pool 10.0/15.0` and `5 waiting` where there were 2 and none: the read that mattered more is the one after it (both runs were made on a copy for the report: `docs/loadtest/log-agent-run-as-it-was/`, `read-back-restored/`). Without the load, either way: `RUN_INTEGRATION=1 pytest tests/integration/test_phase30_connections_integration.py` fails and names the waits — `{'flights': True, 'hotels': True, 'attractions': True, 'local tips': True, ...}`. In `docker/prodlike/compose.yml` set `REDIS_MAX_CONNECTIONS: "100"` and run 3.2 visits a second → the backend's log fills with `MaxConnectionsError: Too many connections` at the 101st open page, and plans are made that nobody hears about (seen with the library's default of 100: the report, section 7). `DATABASE_URL=postgresql://u:p@db.example.com/x REDIS_URL=redis://localhost:6379 PYTHONPATH=src/backend:. python -c "import loadtest.standins.app"` → `NotTheLoadTest: DATABASE_URL is not on this machine` — the stand-ins do not start against a database that is somewhere else. Close the laptop's lid on battery during a run → `this machine was asleep for 14 s of the run: its figures are wrong, and are not kept`. Why: a load test's result is only as good as what it refuses to count. |

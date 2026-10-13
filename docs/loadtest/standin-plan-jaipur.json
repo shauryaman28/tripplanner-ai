@@ -1,0 +1,383 @@
+{
+ "api": "http://localhost:8200",
+ "destination": "Jaipur",
+ "trip_id": "c5329107-140f-4a54-9e7d-0b369a117319",
+ "asked": 202,
+ "plan_seconds": 11.5,
+ "events": [
+  {
+   "t": 0.054,
+   "event": "planning_started"
+  },
+  {
+   "t": 2.522,
+   "event": "flight_agent: completed"
+  },
+  {
+   "t": 2.543,
+   "event": "hotel_agent: completed"
+  },
+  {
+   "t": 2.545,
+   "event": "activities_agent: completed"
+  },
+  {
+   "t": 11.501,
+   "event": "planning_complete"
+  }
+ ],
+ "pieces": {
+  "count": 28,
+  "from_s": 9.799,
+  "to_s": 11.366
+ },
+ "steps": [
+  {
+   "step": "intent_parsing",
+   "status": "completed",
+   "ms": 2429,
+   "tokens": 338
+  },
+  {
+   "step": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "tokens": null
+  },
+  {
+   "step": "flight_agent",
+   "status": "completed",
+   "ms": 13,
+   "tokens": null
+  },
+  {
+   "step": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "step": "hotel_agent",
+   "status": "completed",
+   "ms": 10,
+   "tokens": null
+  },
+  {
+   "step": "activities_agent",
+   "status": "completed",
+   "ms": 12,
+   "tokens": null
+  },
+  {
+   "step": "destination_intelligence",
+   "status": "completed",
+   "ms": 1505,
+   "tokens": 587
+  },
+  {
+   "step": "itinerary_builder",
+   "status": "completed",
+   "ms": 7306,
+   "tokens": 3714
+  },
+  {
+   "step": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "step": "persist",
+   "status": "completed",
+   "ms": 6,
+   "tokens": null
+  },
+  {
+   "step": "preference_extractor",
+   "status": "completed",
+   "ms": 890,
+   "tokens": 500
+  },
+  {
+   "step": "orchestrator",
+   "status": "completed",
+   "ms": 12350,
+   "tokens": null
+  }
+ ],
+ "a_connection_idle_in_transaction": {
+  "from_s": 2.51,
+  "to_s": 14.22
+ },
+ "postgres": [
+  {
+   "t": 0.09,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 0.71,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 1.32,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 1.92,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 2.51,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 3.12,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 0.6
+   }
+  },
+  {
+   "t": 3.73,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 1.2
+   }
+  },
+  {
+   "t": 4.32,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 0.3
+   }
+  },
+  {
+   "t": 4.93,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 0.9
+   }
+  },
+  {
+   "t": 5.52,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 1.5
+   }
+  },
+  {
+   "t": 6.12,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 2.1
+   }
+  },
+  {
+   "t": 7.03,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 2.9
+   }
+  },
+  {
+   "t": 7.61,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 3.6
+   }
+  },
+  {
+   "t": 8.22,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 4.2
+   }
+  },
+  {
+   "t": 8.82,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 4.8
+   }
+  },
+  {
+   "t": 9.42,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 11.3
+   }
+  },
+  {
+   "t": 10.01,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 11.9
+   }
+  },
+  {
+   "t": 10.6,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 12.5
+   }
+  },
+  {
+   "t": 11.21,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 13.1
+   }
+  },
+  {
+   "t": 11.82,
+   "idle": {
+    "n": 2,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 2,
+    "oldest_s": 0.4
+   }
+  },
+  {
+   "t": 12.42,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 1.0
+   }
+  },
+  {
+   "t": 13.04,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 1.6
+   }
+  },
+  {
+   "t": 13.65,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 2.3
+   }
+  },
+  {
+   "t": 14.22,
+   "idle": {
+    "n": 3,
+    "oldest_s": 0.0
+   },
+   "idle in transaction": {
+    "n": 1,
+    "oldest_s": 2.8
+   }
+  },
+  {
+   "t": 14.82,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 15.43,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  },
+  {
+   "t": 16.05,
+   "idle": {
+    "n": 4,
+    "oldest_s": 0.0
+   }
+  }
+ ]
+}

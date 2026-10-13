@@ -1,0 +1,519 @@
+{
+ "api": "http://localhost:8200",
+ "destination": "Jaipur",
+ "trip_id": "0c3ae0bd-739b-4ce7-bc33-184566f16910",
+ "plan_seconds": 12.63,
+ "request_ms": {
+  "POST /auth/register": 236.9,
+  "POST /auth/login": 185.6,
+  "POST /trips": 7.8,
+  "GET /trips/{id}": 32.7,
+  "GET /trips/{id}/status": 6.5,
+  "POST /trips/{id}/plan": 36.4,
+  "GET /trips/{id}/itinerary": 25.7,
+  "GET /trips/{id}/similar": 19.1,
+  "GET /trips": 9.2
+ },
+ "events": [
+  {
+   "t": 0.036,
+   "event": "planning_started",
+   "status": "planning",
+   "bytes": 144,
+   "seq": null,
+   "chars": 0
+  },
+  {
+   "t": 4.695,
+   "event": "agent:flight_agent",
+   "status": "completed",
+   "bytes": 84,
+   "seq": null,
+   "chars": 0
+  },
+  {
+   "t": 4.759,
+   "event": "agent:hotel_agent",
+   "status": "completed",
+   "bytes": 82,
+   "seq": null,
+   "chars": 0
+  },
+  {
+   "t": 4.761,
+   "event": "agent:activities_agent",
+   "status": "completed",
+   "bytes": 93,
+   "seq": null,
+   "chars": 0
+  },
+  {
+   "t": 12.63,
+   "event": "planning_complete",
+   "status": "completed",
+   "bytes": 163,
+   "seq": null,
+   "chars": 0
+  }
+ ],
+ "builder_tokens": {
+  "count": 35,
+  "first_at_s": 10.817,
+  "last_at_s": 12.595,
+  "chars": 2599,
+  "bytes_on_wire": 5919
+ },
+ "itinerary_bytes": 4804,
+ "itinerary_days": 4,
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 4594,
+   "tokens": 416
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "tokens": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 14,
+   "tokens": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 56,
+   "tokens": null
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 54,
+   "tokens": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 2563,
+   "tokens": 890
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "completed",
+   "ms": 5313,
+   "tokens": 4366
+  },
+  {
+   "agent": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "tokens": null
+  },
+  {
+   "agent": "persist",
+   "status": "completed",
+   "ms": 14,
+   "tokens": null
+  },
+  {
+   "agent": "preference_extractor",
+   "status": "completed",
+   "ms": 946,
+   "tokens": 803
+  },
+  {
+   "agent": "orchestrator",
+   "status": "completed",
+   "ms": 13537,
+   "tokens": null
+  }
+ ],
+ "postgres": [
+  {
+   "t": 0.0,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 8.23
+    }
+   }
+  },
+  {
+   "t": 0.6,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 8.83
+    }
+   }
+  },
+  {
+   "t": 1.2,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 9.41
+    }
+   }
+  },
+  {
+   "t": 1.78,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 10.01
+    }
+   }
+  },
+  {
+   "t": 2.38,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 10.62
+    }
+   }
+  },
+  {
+   "t": 2.99,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 11.22
+    }
+   }
+  },
+  {
+   "t": 3.59,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 11.82
+    }
+   }
+  },
+  {
+   "t": 4.2,
+   "states": {
+    "idle": {
+     "n": 2,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 12.43
+    }
+   }
+  },
+  {
+   "t": 4.79,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 13.0
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 0.09,
+     "in_state_s": 0.09
+    }
+   }
+  },
+  {
+   "t": 5.37,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 13.6
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 0.7,
+     "in_state_s": 0.7
+    }
+   }
+  },
+  {
+   "t": 5.98,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 14.18
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 1.28,
+     "in_state_s": 1.28
+    }
+   }
+  },
+  {
+   "t": 6.55,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 14.78
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 1.88,
+     "in_state_s": 1.88
+    }
+   }
+  },
+  {
+   "t": 7.16,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 15.39
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 2.48,
+     "in_state_s": 2.48
+    }
+   }
+  },
+  {
+   "t": 7.76,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 16.0
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 0.59,
+     "in_state_s": 0.59
+    }
+   }
+  },
+  {
+   "t": 8.37,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 16.61
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 1.2,
+     "in_state_s": 1.2
+    }
+   }
+  },
+  {
+   "t": 8.99,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 17.21
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 1.8,
+     "in_state_s": 1.8
+    }
+   }
+  },
+  {
+   "t": 9.58,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 17.78
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 2.37,
+     "in_state_s": 2.36
+    }
+   }
+  },
+  {
+   "t": 10.14,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 18.37
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 2.96,
+     "in_state_s": 2.96
+    }
+   }
+  },
+  {
+   "t": 10.74,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 18.99
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 3.57,
+     "in_state_s": 3.57
+    }
+   }
+  },
+  {
+   "t": 11.36,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 19.57
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 4.16,
+     "in_state_s": 4.16
+    }
+   }
+  },
+  {
+   "t": 11.94,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 20.17
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 4.76,
+     "in_state_s": 4.76
+    }
+   }
+  },
+  {
+   "t": 12.54,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 20.77
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 0.0
+    }
+   }
+  },
+  {
+   "t": 13.14,
+   "states": {
+    "idle in transaction": {
+     "n": 2,
+     "oldest_xact_s": 0.61,
+     "in_state_s": 0.6
+    }
+   }
+  },
+  {
+   "t": 13.75,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 0.25
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 1.21,
+     "in_state_s": 1.19
+    }
+   }
+  },
+  {
+   "t": 14.36,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 0.85
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 1.82,
+     "in_state_s": 1.8
+    }
+   }
+  },
+  {
+   "t": 14.96,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 1.47
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 2.43,
+     "in_state_s": 2.41
+    }
+   }
+  },
+  {
+   "t": 15.57,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 2.05
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 3.01,
+     "in_state_s": 2.99
+    }
+   }
+  },
+  {
+   "t": 16.15,
+   "states": {
+    "idle": {
+     "n": 1,
+     "oldest_xact_s": 0.0,
+     "in_state_s": 2.66
+    },
+    "idle in transaction": {
+     "n": 1,
+     "oldest_xact_s": 3.62,
+     "in_state_s": 3.6
+    }
+   }
+  }
+ ]
+}

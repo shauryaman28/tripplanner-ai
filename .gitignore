@@ -53,3 +53,6 @@ next-env.d.ts
 
 # Phase 29: the production-like stack's operations token, copied for Prometheus by scripts/observability.py
 docker/observability/secrets/
+
+# Phase 30: the k6 built for the load test (scripts/loadtest.py k6), and k6's own logs
+.loadtest/

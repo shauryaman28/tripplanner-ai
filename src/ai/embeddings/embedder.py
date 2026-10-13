@@ -178,87 +178,81 @@ async def write_embedding_rows(
 ) -> None:
     """Write 2 embedding rows (full-text + summary) for one itinerary.
 
+    The order (Phase 30)
+    ─────────────────────
+    The vectors are fetched first, and the database is touched only once they are in hand — or known
+    not to be coming. The embedding API takes seconds, and its retries longer: asked from inside a
+    transaction, each job kept a database connection for all of it, doing nothing. So the caller must
+    not hand over a session with a transaction already open (src/ai/utils/embeddings.py ends its own).
+
     Failure handling
     ─────────────────
-    If the embedding call fails after all retries:
-      1. Roll back any partially-added rows.
-      2. Write ONE pending_retry row (vector=NULL, model="pending_retry").
-      3. Commit the fallback row — the trip stays COMPLETED.
+    If the embedding call fails after all retries, ONE pending_retry row is written instead
+    (vector=NULL, model="pending_retry") — the trip stays COMPLETED.
 
     Idempotency
     ────────────
-    Any pre-existing pending_retry rows for this itinerary are deleted at the
-    start of the function, so startup recovery (which re-calls generate_embeddings)
-    never produces duplicate rows.
+    Any pre-existing pending_retry rows for this itinerary are deleted in the same transaction that
+    writes the new rows, so startup recovery (which re-calls generate_embeddings) never produces
+    duplicate rows.
     """
     try:
         from app.models.embedding import Embedding
     except ImportError:
         from src.backend.app.models.embedding import Embedding
 
-    # ── Clean up stale pending_retry rows (makes recovery idempotent) ──────
-    stale_rows = (
-        (
-            await db.execute(
-                select(Embedding).where(
-                    Embedding.itinerary_id == itinerary_id,
-                    Embedding.embedding_model == PENDING_RETRY_MODEL,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    for stale in stale_rows:
-        await db.delete(stale)
-    if stale_rows:
-        await db.commit()
-        logger.info(
-            "[EMBEDDING] Cleared %d stale pending_retry row(s) for itinerary %s",
-            len(stale_rows),
-            itinerary_id,
-        )
-
-    # ── Build texts ─────────────────────────────────────────────────────────
+    # ── Build texts, and fetch their vectors: no database yet ───────────────
     texts = {
         FULL_TEXT: build_full_text(structured_data),
         SUMMARY: build_summary_text(destination, interests, structured_data),
     }
-
-    # ── Generate vectors and write rows ─────────────────────────────────────
+    vectors: dict[str, list[float]] | None = {}
     try:
         for kind, text in texts.items():
-            vector = await _call_embed(text)
-            db.add(
-                Embedding(
-                    itinerary_id=itinerary_id,
-                    embedding_model=EMBEDDING_MODEL,
-                    kind=kind,
-                    vector=vector,
-                )
-            )
-        await db.commit()
-        logger.info("[EMBEDDING] Wrote 2 rows for itinerary %s", itinerary_id)
-
+            vectors[kind] = await _call_embed(text)
     except Exception as exc:
         logger.error(
             "[EMBEDDING FAILED] itinerary=%s error=%s — writing pending_retry row",
             itinerary_id,
             exc,
         )
-        try:
-            await db.rollback()
-            db.add(
-                Embedding(
-                    itinerary_id=itinerary_id,
-                    embedding_model=PENDING_RETRY_MODEL,
-                    vector=None,
+        vectors = None
+
+    # ── One transaction: stale rows out, the new rows in ────────────────────
+    try:
+        stale_rows = (
+            (
+                await db.execute(
+                    select(Embedding).where(
+                        Embedding.itinerary_id == itinerary_id,
+                        Embedding.embedding_model == PENDING_RETRY_MODEL,
+                    )
                 )
             )
-            await db.commit()
-        except Exception as inner:
-            logger.error(
-                "[EMBEDDING] Failed to write pending_retry row for %s: %s",
-                itinerary_id,
-                inner,
-            )
+            .scalars()
+            .all()
+        )
+        for stale in stale_rows:
+            await db.delete(stale)
+        if vectors is None:
+            db.add(Embedding(itinerary_id=itinerary_id, embedding_model=PENDING_RETRY_MODEL, vector=None))
+        else:
+            for kind, vector in vectors.items():
+                db.add(Embedding(itinerary_id=itinerary_id, embedding_model=EMBEDDING_MODEL, kind=kind, vector=vector))
+        await db.commit()
+    except Exception as inner:
+        logger.error("[EMBEDDING] Failed to write the rows for %s: %s", itinerary_id, inner)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return
+
+    if stale_rows:
+        logger.info(
+            "[EMBEDDING] Cleared %d stale pending_retry row(s) for itinerary %s",
+            len(stale_rows),
+            itinerary_id,
+        )
+    if vectors is not None:
+        logger.info("[EMBEDDING] Wrote 2 rows for itinerary %s", itinerary_id)

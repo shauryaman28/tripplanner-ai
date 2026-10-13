@@ -277,7 +277,12 @@ async def test_write_embedding_rows_openai_failure_writes_pending_retry():
 
 
 @pytest.mark.asyncio
-async def test_write_embedding_rows_failure_calls_rollback():
+async def test_write_embedding_rows_failure_leaves_nothing_to_roll_back():
+    """Phase 30: the vectors are fetched before the database is touched, so a failed fetch has added nothing.
+
+    (It used to add the first row, fail on the second, and roll back — with a connection held all
+    the while the embedding API was being waited for.)
+    """
     db = _make_mock_db()
 
     with patch(
@@ -285,6 +290,24 @@ async def test_write_embedding_rows_failure_calls_rollback():
         AsyncMock(side_effect=Exception("timeout")),
     ):
         await write_embedding_rows(
+            itinerary_id=uuid.uuid4(),
+            structured_data=_STRUCTURED_DATA,
+            destination="Goa",
+            interests=None,
+            db=db,
+        )
+
+    db.rollback.assert_not_called()
+    db.commit.assert_called_once()  # one transaction: the pending_retry row
+
+
+@pytest.mark.asyncio
+async def test_write_embedding_rows_rolls_back_when_the_rows_cannot_be_written():
+    db = _make_mock_db()
+    db.commit = AsyncMock(side_effect=Exception("the connection was closed"))
+
+    with patch("src.ai.embeddings.embedder._call_embed", AsyncMock(return_value=_FAKE_VECTOR)):
+        await write_embedding_rows(  # never raises: the plan is saved, and recovery embeds it at the next start
             itinerary_id=uuid.uuid4(),
             structured_data=_STRUCTURED_DATA,
             destination="Goa",

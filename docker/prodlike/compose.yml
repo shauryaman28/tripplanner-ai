@@ -91,9 +91,17 @@ services:
       # A hosted Postgres's URL, as it is handed out: the pooled address, libpq's parameters and all.
       DATABASE_URL: postgresql://tripplanner:standin_db_password@pooler:6432/tripplanner?sslmode=require&channel_binding=require
       DATABASE_URL_UNPOOLED: postgresql://tripplanner:standin_db_password@neon-standin:5432/tripplanner?sslmode=require&channel_binding=require
+      # How many of the pooler's connections this instance may hold (Phase 30): 10 kept, 30 more on
+      # demand. Forty, because two instances are alive at once during a deploy and both have to fit in
+      # the 90 the pooler lends (pgbouncer.ini).
+      DB_POOL_SIZE: "10"
+      DB_MAX_OVERFLOW: "30"
       # A hosted Redis's URL: TLS, a password. (ssl_ca_certs only because this stand-in signed its own
       # certificate; a real one is signed by a public authority and needs nothing added.)
       REDIS_URL: rediss://default:standin_redis_password@upstash-standin:6379?ssl_ca_certs=/certs/ca.crt
+      # How many trip pages this instance can have open at once, near enough (Phase 30): each one's
+      # event stream keeps a connection. The library's own limit is 100, and the 101st page failed.
+      REDIS_MAX_CONNECTIONS: "500"
       JWT_SECRET: ${PRODLIKE_JWT_SECRET:?run scripts/prodlike.py, which makes it}
       OPS_TOKEN: ${PRODLIKE_OPS_TOKEN:?run scripts/prodlike.py, which makes it}
       # The frontend's origin. A pattern, because the check that guards production refuses a list
