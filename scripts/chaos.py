@@ -8,6 +8,10 @@
     python scripts/chaos.py gemini-429 [--both]        Gemini answers 429 (--both: so does the model asked instead)
     python scripts/chaos.py builder-timeout            the model that writes the itinerary never answers
     python scripts/chaos.py redis-kill                 Redis stopped for 30 s under open event streams
+    python scripts/chaos.py postgres-kill              Postgres killed for 15 s while a plan is being made (Phase 32)
+    python scripts/chaos.py postgres-kill --mid-save   …killed between the two writes that save a plan
+    python scripts/chaos.py backend-kill               the backend killed between saving an itinerary and embedding it
+    python scripts/chaos.py backend-kill --pending     …restarted with an embedding owed from before
     python scripts/chaos.py all                        each of them, one after another
     python scripts/chaos.py down
 
@@ -302,6 +306,44 @@ def tool_servers(kill: bool = False) -> list[int]:
     return [int(pid) for pid in answer.stdout.split()]
 
 
+def postgres_accepts() -> bool:
+    """Whether Postgres itself takes connections (asked inside its own container, past the pooler)."""
+    return docker("exec", POSTGRES, "pg_isready", "-q", "-U", "tripplanner", "-d", "tripplanner").returncode == 0
+
+
+def pooler_serves() -> bool:
+    """Whether a query sent through the pooler — the road the app takes — is answered."""
+    asked = docker(
+        "exec", "-e", "PGPASSWORD=standin_db_password", POSTGRES, "psql", "-X", "-A", "-t",
+        "host=pooler port=6432 dbname=tripplanner user=tripplanner sslmode=require connect_timeout=3", "-c", "select 1",
+    )  # fmt: skip
+    return asked.stdout.strip() == "1"
+
+
+def bring_postgres_back(clock: "Clock", traveller: "Traveller | None" = None, seconds: float = 90) -> dict:
+    """Start Postgres and say when each of three things was first true: Postgres accepts connections, the
+    pooler answers a query, the app answers a request that needs the database."""
+    docker("start", POSTGRES)
+    at: dict = {"started": clock.now(), "postgres_accepts": None, "pooler_serves": None, "app_answers": None}
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if at["postgres_accepts"] is None and postgres_accepts():
+            at["postgres_accepts"] = clock.now()
+        if at["postgres_accepts"] is not None:
+            if at["pooler_serves"] is None and pooler_serves():
+                at["pooler_serves"] = clock.now()
+            if at["app_answers"] is None and traveller is not None:
+                try:
+                    if traveller.ask("GET", "/trips", timeout=5).status_code == 200:
+                        at["app_answers"] = clock.now()
+                except httpx.HTTPError:
+                    pass
+            if at["pooler_serves"] is not None and (traveller is None or at["app_answers"] is not None):
+                break
+        time.sleep(0.25)
+    return at
+
+
 def set_faults(**who_how: str) -> None:
     """Which model goes wrong, and how — or none: the file loadtest/standins/faults.py reads."""
     if who_how:
@@ -401,7 +443,7 @@ INTEGRITY = {
         "(select 1 from agent_runs r where r.trip_id = t.id) and "
         "(select agent_name from agent_runs r where r.trip_id = t.id order by created_at desc, "
         "(agent_name in ('orchestrator', 'interrupted')) desc limit 1) "
-        "not in ('orchestrator', 'interrupted', 'preference_extractor', 'refinement_classifier')"
+        "not in ('orchestrator', 'interrupted', 'preference_extractor', 'refinement_classifier', 'persist')"
     ),
     "itineraries with half their embeddings": (
         "select count(*) from (select itinerary_id from embeddings where vector is not null "
@@ -991,6 +1033,425 @@ def redis_kill(label: str, pages: int, away_s: int) -> int:
     )
 
 
+# ── Exercise 5: Postgres is killed ─────────────────────────────────────────
+
+_DRIVERS_WORDS = ("asyncpg", "sqlalchemy", "pgbouncer", "psycopg", "Traceback", "OperationalError", "InterfaceError")
+APP_MUST_ANSWER_WITHIN_S = 10  # the roadmap's number: from Postgres accepting connections to the app answering
+
+
+def _in_a_travellers_words(said: str | None) -> bool:
+    return bool(said) and not any(word.lower() in said.lower() for word in _DRIVERS_WORDS)
+
+
+def postgres_kill(label: str, away_s: int) -> int:
+    print(f"\n── Exercise 5: Postgres is killed for {away_s} s while a plan is being made ──", flush=True)
+    clock, seen, traveller = Clock(), Seen(), Traveller()
+    since = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    planned = traveller.trip("Leh", ahead=61)  # being planned when Postgres goes
+    later = traveller.trip("Srinagar", ahead=62)  # asked for while it is away
+    time.sleep(9)  # their searches are warmed, and cached
+    page = Page(traveller, planned, clock)
+    page.start()
+    page.connected.wait(20)
+    asked_at = clock.now()
+    asked = traveller.plan(planned)
+    time.sleep(3)  # intent parsing is done or nearly; the itinerary is not yet being written
+    gone_at = clock.now()
+    docker("kill", POSTGRES)
+    print(f"  Postgres killed {gone_at - asked_at:.1f} s after POST /plan", flush=True)
+
+    # A request every two seconds while Postgres is away, each on a thread of its own: one that is kept
+    # waiting must not hold up the next — or the moment Postgres is started again.
+    during: list[dict] = []
+    asking: list[threading.Thread] = []
+
+    def ask_for_the_trips() -> None:
+        look = {"t": round(clock.now() - gone_at, 1)}
+        began = time.monotonic()
+        try:
+            answer = httpx.get(f"{API}/trips", headers=traveller.auth, timeout=150)
+            look.update({"GET /trips": answer.status_code, "said": answer.text[:200]})
+        except httpx.HTTPError as failed:
+            look.update({"GET /trips": type(failed).__name__, "said": ""})
+        look["took_s"] = round(time.monotonic() - began, 2)
+        during.append(look)
+
+    plan_while_away: dict = {}
+
+    def ask_for_a_plan() -> None:
+        began = time.monotonic()
+        try:
+            tried = httpx.post(
+                f"{API}/trips/{later}/plan", headers=traveller.auth, json={"raw_input": "temples"}, timeout=150
+            )
+            plan_while_away.update(http=tried.status_code, answer=tried.text[:200])
+        except httpx.HTTPError as failed:
+            plan_while_away.update(http=type(failed).__name__, answer="")
+        plan_while_away["took_s"] = round(time.monotonic() - began, 2)
+
+    while clock.now() - gone_at < away_s:
+        asking.append(threading.Thread(target=ask_for_the_trips, daemon=True))
+        if len(asking) == 3:
+            asking.append(threading.Thread(target=ask_for_a_plan, daemon=True))
+        for thread in asking:
+            if thread.ident is None:
+                thread.start()
+        time.sleep(2.0)
+    back = bring_postgres_back(clock, traveller)
+    took = {
+        what: (
+            round(back[what] - back["postgres_accepts"], 1)
+            if back[what] is not None and back["postgres_accepts"]
+            else None
+        )
+        for what in ("pooler_serves", "app_answers")
+    }
+    print(
+        f"  Postgres started again after {back['started'] - gone_at:.1f} s; it accepted connections "
+        f"{(back['postgres_accepts'] or 0) - back['started']:.1f} s later; the pooler answered {took['pooler_serves']} s "
+        f"after that, the app {took['app_answers']} s after that",
+        flush=True,
+    )
+
+    for thread in asking:
+        thread.join(160)
+    during.sort(key=lambda look: look["t"])
+    status = run_is_over(traveller, planned, page, 90)
+    failed_event = page.saw("planning_failed") or {}
+    again_code, again = None, {}
+    if status.get("status") != "completed":
+        retried = traveller.plan(planned)
+        again_code = retried.status_code
+        page.ended.clear()
+        again = run_is_over(traveller, planned, page, 120) if again_code == 202 else {}
+    page.close()
+    if plan_while_away.get("http") == 202:
+        run_is_over(traveller, later, None, 120)
+    later_status = sql(f"select status from trips where id = '{later}'")
+    new = a_plan(traveller, "Bhubaneswar", clock, ahead=63)
+
+    codes = [look["GET /trips"] for look in during]
+    slowest = max((look["took_s"] for look in during), default=0)
+    refused = [look for look in during if look["GET /trips"] == 503]
+    seen.expect(asked.status_code == 202, "POST /plan was accepted", str(asked.status_code))
+    seen.expect(
+        bool(codes) and all(code in (200, 503) for code in codes) and plan_while_away.get("http") in (202, 503),
+        "every request sent while Postgres was away was answered: served once it was back, or told to come back — none a 500",
+        f"{len(during)} requests: {sorted(set(map(str, codes)))}; the plan asked for meanwhile: {plan_while_away.get('http')}",
+    )
+    accepted_at = (back["postgres_accepts"] or back["started"]) - gone_at  # seconds after the kill
+    kept = max((look["t"] + look["took_s"] - accepted_at for look in during), default=0)
+    seen.expect(
+        kept <= APP_MUST_ANSWER_WITHIN_S,
+        f"none was kept waiting once Postgres was back: all answered within {APP_MUST_ANSWER_WITHIN_S} s of it accepting connections",
+        f"the last was answered {kept:.1f} s after; the longest any waited in all: {slowest} s",
+    )
+    seen.expect(
+        all("try again shortly" in look["said"] for look in refused),
+        "those that could not be served were told so in words (503, try again shortly)",
+        f"{len(refused)} of {len(during)} refused" + (f": {refused[0]['said'][:110]}" if refused else ""),
+    )
+    seen.expect(
+        later_status != "planning" or plan_while_away.get("http") == 202,
+        "a plan refused meanwhile does not leave its trip 'planning'",
+        f"{json.dumps(plan_while_away)[:160]}; the trip: {later_status}",
+    )
+    seen.expect(
+        took["app_answers"] is not None and took["app_answers"] <= APP_MUST_ANSWER_WITHIN_S,
+        f"the app answers again within {APP_MUST_ANSWER_WITHIN_S} s of Postgres accepting connections — nobody restarted it",
+        f"the pooler after {took['pooler_serves']} s, the app after {took['app_answers']} s",
+    )
+    seen.expect(
+        status.get("status") in ("completed", "failed"),
+        "the plan that was in flight ended: its trip is not left 'planning' with nothing planning it",
+        f"{status.get('status')}, {round((page.saw('planning_complete') or page.saw('planning_failed') or {}).get('t', 0) - asked_at, 1)} s after it was asked for",
+    )
+    seen.expect(
+        status.get("status") == "completed"
+        or (_in_a_travellers_words(failed_event.get("error")) and _in_a_travellers_words(status.get("failure_reason"))),
+        "…and if it could not be made, the traveller is told why in their own words — on the page and by GET /status",
+        f"the page: {str(failed_event.get('error'))[:120]} · GET /status: {str(status.get('failure_reason'))[:90]}",
+    )
+    seen.expect(
+        status.get("status") == "completed" or (again_code == 202 and again.get("status") == "completed"),
+        "…and can ask for it again",
+        f"POST /plan {again_code} → {again.get('status')}",
+    )
+    seen.expect(
+        new["status"] == "completed" and not new["errors"],
+        "a new plan works",
+        f"{new['status']}, searches {new['searches_done']}",
+    )
+    counted = integrity(seen)
+    return keep(
+        label,
+        "postgres-kill" if away_s == 15 else f"postgres-kill-{away_s}s",
+        clock,
+        seen,
+        {
+            "away_s": away_s,
+            "asked_at_s": asked_at,
+            "postgres_gone_at_s": gone_at,
+            "coming_back": back,
+            "s_after_postgres_accepted": took,
+            "while_it_was_away": during,
+            "a_plan_asked_for_while_it_was_away": plan_while_away,
+            "the_plan_in_flight": {
+                "status": status.get("status"),
+                "failure_reason": status.get("failure_reason"),
+                "told_on_its_page": failed_event.get("error"),
+                "heard_on_its_page": page.named(),
+                "agent_runs": traveller.runs(planned),
+                "asked_again": {"http": again_code, "status": again.get("status")},
+            },
+            "a_new_plan": new,
+            "integrity": counted,
+            "log": list(dict.fromkeys(backend_log(since)))[:40],
+        },
+    )
+
+
+# The backend that is waiting for a lock to update `trips`, and whether its transaction has already
+# written to `itineraries` (it then holds a row-exclusive lock on that table).
+_WAITING = (
+    "select a.pid || '|' || left(replace(a.query, E'\\n', ' '), 60) || '|' || "
+    "(select count(*) from pg_locks l join pg_class c on c.oid = l.relation "
+    "where l.pid = a.pid and c.relname = 'itineraries' and l.mode = 'RowExclusiveLock' and l.granted) "
+    "from pg_stat_activity a where a.datname = 'tripplanner' and a.wait_event_type = 'Lock' "
+    "and a.query ilike 'update trips%' limit 1"
+)
+
+
+def postgres_kill_mid_save(label: str) -> int:
+    print("\n── Exercise 5 (mid-save): Postgres is killed between the two writes that save a plan ──", flush=True)
+    clock, seen, traveller = Clock(), Seen(), Traveller()
+    since = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    trip = traveller.trip("Agra", ahead=64)
+    time.sleep(9)
+    page = Page(traveller, trip, clock)
+    page.start()
+    page.connected.wait(20)
+
+    asked_at = clock.now()
+    asked = traveller.plan(trip)
+    # Somebody else now holds the trip's own row — in the mode an UPDATE of it needs, and that an INSERT
+    # of a row pointing at it does not. So the transaction that saves the plan inserts the itinerary,
+    # and waits to mark the trip. (The roadmap had the order right, and section 1 had it wrong.)
+    psql = ["docker", "exec", "-i", "-e", "PGPASSWORD=standin_db_password", POSTGRES]
+    psql += ["psql", "-X", "-q", "-A", "-t", "-U", "tripplanner", "-d", "tripplanner"]
+    lock = subprocess.Popen(psql, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    lock.stdin.write(f"BEGIN;\nSELECT 'locked' FROM trips WHERE id = '{trip}' FOR NO KEY UPDATE;\n")
+    lock.stdin.flush()
+    held = lock.stdout.readline().strip() == "locked"
+    wait_for(lambda: sql(_WAITING) != "", 90, every=0.3)
+    waiting = sql(_WAITING)
+    parts = waiting.split("|") if waiting else ["", "", "0"]
+    before = {
+        "trip": sql(f"select status from trips where id = '{trip}'"),
+        "itineraries": sql(f"select count(*) from itineraries where trip_id = '{trip}'"),
+    }
+    killed_at = clock.now()
+    docker("kill", POSTGRES)
+    lock.kill()
+    print(
+        f"  Postgres killed {killed_at - asked_at:.1f} s after POST /plan, with the save half-made: {waiting}",
+        flush=True,
+    )
+    time.sleep(3)
+    back = bring_postgres_back(clock, traveller)
+    after = {
+        "trip": sql(f"select status from trips where id = '{trip}'"),
+        "itineraries": sql(f"select count(*) from itineraries where trip_id = '{trip}'"),
+        "embeddings": sql(
+            f"select count(*) from embeddings e join itineraries i on i.id = e.itinerary_id where i.trip_id = '{trip}'"
+        ),
+    }
+    status = run_is_over(traveller, trip, page, 75)
+    again_code, again = None, {}
+    if status.get("status") != "completed":
+        retried = traveller.plan(trip)
+        again_code = retried.status_code
+        page.ended.clear()
+        again = run_is_over(traveller, trip, page, 120) if again_code == 202 else {}
+    page.close()
+    final = {
+        "trip": sql(f"select status from trips where id = '{trip}'"),
+        "itineraries": sql(f"select count(*) from itineraries where trip_id = '{trip}'"),
+    }
+
+    seen.expect(held and asked.status_code == 202, "the lock was held, and POST /plan accepted", str(asked.status_code))
+    seen.expect(
+        parts[1].lower().startswith("update trips") and parts[2] == "1",
+        "Postgres was killed with the save half-made: the itinerary inserted, the update of `trips` waiting",
+        waiting or "no transaction was found waiting",
+    )
+    seen.expect(
+        after["itineraries"] == "0" and after["trip"] != "completed",
+        "after the restart, neither write is there: no itinerary, and the trip is not 'completed'",
+        f"before the kill {before}; after the restart {after}",
+    )
+    told = (page.saw("planning_failed") or {}).get("error")
+    seen.expect(
+        status.get("status") in ("completed", "failed"),
+        "the trip is not left 'planning' with nothing planning it",
+        f"{status.get('status')}",
+    )
+    seen.expect(
+        _in_a_travellers_words(told) and _in_a_travellers_words(status.get("failure_reason")),
+        "the traveller is told why in their own words — on the page, and by GET /status afterwards",
+        f"the page: {str(told)[:150]} · GET /status: {str(status.get('failure_reason'))[:80]}",
+    )
+    seen.expect(
+        again_code == 202 and again.get("status") == "completed" and final == {"trip": "completed", "itineraries": "1"},
+        "asked for again, the plan is saved whole: one itinerary, the trip 'completed'",
+        f"POST /plan {again_code} → {again.get('status')}; {final}",
+    )
+    counted = integrity(seen)
+    return keep(
+        label,
+        "postgres-kill-mid-save",
+        clock,
+        seen,
+        {
+            "asked_at_s": asked_at,
+            "killed_at_s": killed_at,
+            "the_transaction_that_was_waiting": {
+                "pid": parts[0],
+                "to_run": parts[1],
+                "had_written_to_itineraries": parts[2] == "1",
+            },
+            "both_tables_before_the_kill": before,
+            "both_tables_after_the_restart": after,
+            "both_tables_in_the_end": final,
+            "coming_back": back,
+            "status": status,
+            "heard_on_its_page": page.named(),
+            "asked_again": {"http": again_code, "status": again.get("status")},
+            "integrity": counted,
+            "log": list(dict.fromkeys(backend_log(since)))[:40],
+        },
+    )
+
+
+# ── Exercise 6: the backend is killed between saving an itinerary and embedding it ──
+
+
+def _embeddings_of(itinerary: str) -> dict:
+    counted = sql(
+        "select count(*) filter (where vector is not null) || '|' || count(*) filter (where embedding_model = 'pending_retry') "
+        f"from embeddings where itinerary_id = '{itinerary}'"
+    )
+    vectors, _, owed = counted.partition("|")
+    return {"vectors": int(vectors or 0), "pending_retry": int(owed or 0)}
+
+
+def backend_kill(label: str, pending: bool) -> int:
+    said = (
+        "restarted with an embedding owed from before"
+        if pending
+        else "killed between saving an itinerary and embedding it"
+    )
+    print(f"\n── Exercise 6{' (pending)' if pending else ''}: the backend is {said} ──", flush=True)
+    clock, seen, traveller = Clock(), Seen(), Traveller()
+    since = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if pending:
+        set_faults(embedding="500")  # the embedding API fails: the job will write a row that says it is owed
+    try:
+        trip = traveller.trip("Varanasi" if pending else "Madurai", ahead=65 if pending else 66)
+        time.sleep(9)
+        page = Page(traveller, trip, clock, reconnects=False)
+        page.start()
+        page.connected.wait(20)
+        asked = traveller.plan(trip)
+        page.ended.wait(90)
+        heard_at = clock.now()
+        if pending:
+            itinerary = ""
+
+            def owed() -> bool:
+                nonlocal itinerary
+                itinerary = sql(f"select id from itineraries where trip_id = '{trip}' order by created_at desc limit 1")
+                return bool(itinerary) and _embeddings_of(itinerary)["pending_retry"] == 1
+
+            wait_for(owed, 120, every=1.0)  # the job tries four times before it gives up and writes the row
+        else:
+            itinerary = ""
+    finally:
+        set_faults()  # the embedding API answers again from here on
+    docker("kill", BACKEND)
+    killed_at = clock.now()
+    itinerary = itinerary or sql(
+        f"select id from itineraries where trip_id = '{trip}' order by created_at desc limit 1"
+    )
+    at_the_kill = _embeddings_of(itinerary) if itinerary else {}
+    print(
+        f"  the backend was killed {killed_at - heard_at:.2f} s after "
+        f"{'the row that owes the embedding was written' if pending else 'planning_complete'}; "
+        f"the itinerary's embeddings then: {at_the_kill}",
+        flush=True,
+    )
+    page.close()
+    docker("start", BACKEND)
+    ready_again = _script("prodlike").wait_until_ready(180)
+    started_at = clock.now()
+    wait_for(
+        lambda: bool(itinerary) and _embeddings_of(itinerary) == {"vectors": 2, "pending_retry": 0}, 120, every=2.0
+    )
+    embedded_after = round(clock.now() - started_at, 1)
+    after = _embeddings_of(itinerary) if itinerary else {}
+    trip_status = sql(f"select status from trips where id = '{trip}'")
+    try:
+        similar = traveller.ask("GET", f"/trips/{trip}/similar", timeout=20)
+        similar_said = similar.json().get("status") if similar.status_code == 200 else similar.status_code
+    except httpx.HTTPError as failed:
+        similar_said = type(failed).__name__
+
+    seen.expect(asked.status_code == 202 and bool(itinerary), "the plan was made and its itinerary saved", itinerary)
+    if pending:
+        seen.expect(
+            at_the_kill == {"vectors": 0, "pending_retry": 1},
+            "with the embedding API failing, the job left one row that says the embedding is owed",
+            str(at_the_kill),
+        )
+    else:
+        seen.expect(
+            at_the_kill == {"vectors": 0, "pending_retry": 0} or at_the_kill == {"vectors": 0, "pending_retry": 1},
+            "the backend was killed before the itinerary had been embedded",
+            str(at_the_kill),
+        )
+        seen.expect(
+            at_the_kill.get("pending_retry") == 1,
+            "…and the itinerary was already on record as owed an embedding: saved in the same commit",
+            str(at_the_kill),
+        )
+    seen.expect(ready_again, "the backend starts again", "")
+    seen.expect(trip_status == "completed", "the trip is whole: 'completed', with its itinerary", trip_status)
+    seen.expect(
+        after == {"vectors": 2, "pending_retry": 0},
+        "after the restart the itinerary is embedded: two vectors, nothing owed — it was not lost",
+        f"{after}, {embedded_after} s after the backend was ready",
+    )
+    seen.expect(similar_said == "ready", "…and 'similar trips' can use it", str(similar_said))
+    counted = integrity(seen)
+    return keep(
+        label,
+        "backend-kill-pending" if pending else "backend-kill",
+        clock,
+        seen,
+        {
+            "itinerary": itinerary,
+            "killed_s_after_the_event": round(killed_at - heard_at, 2),
+            "embeddings_at_the_kill": at_the_kill,
+            "embeddings_after_the_restart": after,
+            "embedded_s_after_ready": embedded_after if after.get("vectors") == 2 else None,
+            "trip_status": trip_status,
+            "similar": similar_said,
+            "integrity": counted,
+            "log": list(dict.fromkeys(backend_log(since)))[:40],
+        },
+    )
+
+
 # ── The stack ──────────────────────────────────────────────────────────────
 
 
@@ -1024,6 +1485,8 @@ def fresh() -> bool:
     asked inside each exercise, before it ends.)
     """
     docker("start", REDIS)
+    docker("start", POSTGRES)
+    wait_for(postgres_accepts, 60, every=0.5)
     docker("restart", BACKEND)
     if not _script("prodlike").wait_until_ready(120):
         print("the backend did not come back after a restart.")
@@ -1042,6 +1505,8 @@ def main() -> int:
         "gemini-429": "Gemini answers 429",
         "builder-timeout": "the model that writes the itinerary never answers",
         "redis-kill": "Redis stopped under open event streams",
+        "postgres-kill": "Postgres killed while a plan is being made",
+        "backend-kill": "the backend killed between saving an itinerary and embedding it",
         "all": "each of them, one after another",
     }
     for name, said in exercises.items():
@@ -1056,6 +1521,12 @@ def main() -> int:
         if name in ("redis-kill", "all"):
             exercise.add_argument("--pages", type=int, default=20)
             exercise.add_argument("--away", type=int, default=30, help="seconds Redis stays down")
+        if name == "postgres-kill":
+            exercise.add_argument("--mid-save", action="store_true", help="between the two writes that save a plan")
+        if name in ("postgres-kill", "all"):
+            exercise.add_argument("--postgres-away", type=int, default=15, help="seconds Postgres stays down")
+        if name == "backend-kill":
+            exercise.add_argument("--pending", action="store_true", help="with an embedding owed from before")
     args = parser.parse_args()
 
     if args.what == "up":
@@ -1069,6 +1540,10 @@ def main() -> int:
         "gemini-429": lambda: gemini_429(args.label, args.both),
         "builder-timeout": lambda: builder_timeout(args.label, args.give_up_after),
         "redis-kill": lambda: redis_kill(args.label, args.pages, args.away),
+        "postgres-kill": lambda: (
+            postgres_kill_mid_save(args.label) if args.mid_save else postgres_kill(args.label, args.postgres_away)
+        ),
+        "backend-kill": lambda: backend_kill(args.label, args.pending),
     }
     if args.what in one:
         return one[args.what]() if fresh() else 1
@@ -1080,6 +1555,10 @@ def main() -> int:
         lambda: gemini_429(args.label, both=True),
         lambda: builder_timeout(args.label, args.give_up_after),
         lambda: redis_kill(args.label, args.pages, args.away),
+        lambda: postgres_kill(args.label, args.postgres_away),
+        lambda: postgres_kill_mid_save(args.label),
+        lambda: backend_kill(args.label, pending=False),
+        lambda: backend_kill(args.label, pending=True),
     )
     codes = [exercise() if fresh() else 1 for exercise in every]
     print(f"{codes.count(0)} of {len(codes)} exercises went as expected.")

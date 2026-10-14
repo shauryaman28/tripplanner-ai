@@ -23,6 +23,13 @@ def make_engine(database_url: str) -> AsyncEngine:
     prepared statement, so that a connection pooler can sit in between.
     """
     url, connect_args = async_engine_arguments(database_url)
+    # Phase 32 — no `command_timeout` is set here, and that is a decision. A pooler does not refuse a
+    # query while its database is away: it keeps it (PgBouncer for two minutes) and hands it over when
+    # the database is back — which is why a short outage is a pause and not an error. The driver's own
+    # timeout was tried as the app's limit on that wait and does not work as one: it takes effect only
+    # once the server has answered the cancel it sends, so with Postgres away for 45 seconds nine
+    # waiting requests "timed out" together three seconds *after* it returned — as errors, where they
+    # had been answers (docs/chaos-data-report.md). What bounds the wait is the pooler's patience.
     return sqlalchemy.ext.asyncio.create_async_engine(
         url,
         echo=settings.APP_ENV == "development",

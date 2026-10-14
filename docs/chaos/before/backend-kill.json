@@ -1,0 +1,75 @@
+{
+ "exercise": "backend-kill",
+ "began": "2026-10-14T01:25:24+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "itinerary": "91f9c112-8f94-4685-af5a-0794a814d08f",
+ "killed_s_after_the_event": 0.21,
+ "embeddings_at_the_kill": {
+  "vectors": 0,
+  "pending_retry": 0
+ },
+ "embeddings_after_the_restart": {
+  "vectors": 0,
+  "pending_retry": 0
+ },
+ "embedded_s_after_ready": null,
+ "trip_status": "completed",
+ "similar": "pending",
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 1,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: [STAND-INS] the models, the embeddings and the five providers are stand-ins: every plan made here is made up"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "the plan was made and its itinerary saved",
+   "detail": "91f9c112-8f94-4685-af5a-0794a814d08f"
+  },
+  {
+   "ok": true,
+   "what": "the backend was killed before the itinerary had been embedded",
+   "detail": "{'vectors': 0, 'pending_retry': 0}"
+  },
+  {
+   "ok": false,
+   "what": "\u2026and the itinerary was already on record as owed an embedding: saved in the same commit",
+   "detail": "{'vectors': 0, 'pending_retry': 0}"
+  },
+  {
+   "ok": true,
+   "what": "the backend starts again",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "the trip is whole: 'completed', with its itinerary",
+   "detail": "completed"
+  },
+  {
+   "ok": false,
+   "what": "after the restart the itinerary is embedded: two vectors, nothing owed \u2014 it was not lost",
+   "detail": "{'vectors': 0, 'pending_retry': 0}, 121.8 s after the backend was ready"
+  },
+  {
+   "ok": false,
+   "what": "\u2026and 'similar trips' can use it",
+   "detail": "pending"
+  },
+  {
+   "ok": false,
+   "what": "nothing in Postgres is left half-done",
+   "detail": "{\"trips whose rows do not end with the row that closes a run\": 1}"
+  }
+ ],
+ "as_expected": false,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

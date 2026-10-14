@@ -50,6 +50,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep, get_redis_or_none
 from app.core import error_reporting
 from app.core.config import settings
+from app.db.errors import database_is_away
 from app.db.session import AsyncSessionLocal, get_db
 from app.models.agent_run import AgentRun
 from app.models.itinerary import Itinerary
@@ -148,6 +149,68 @@ INTERRUPTED = "The server was restarted while this trip was being planned. Nothi
 # may make for a provider's rate limit, a few times that. Past this it is stopped and the trip marked.
 RUN_DEADLINE_S = 300.0
 TOOK_TOO_LONG = "Planning this trip took too long and was stopped. Nothing is lost — please start it again."
+
+# Phase 32 — what a traveller is told when a run ends for a reason that is not in their trip. Until
+# now it was `str(exc)`: with Postgres killed as a plan was being saved, the page showed
+# "(sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg…ConnectionDoesNotExistError'>…
+# [SQL: INSERT INTO itineraries …] [parameters: (UUID(…), …" — the statement, and the plan in it.
+# What went wrong is in the log and in the error report; it was never the traveller's to read.
+DATABASE_AWAY = (
+    "The plan could not be saved: the planner lost its database for a moment. Nothing is lost — please start it again."
+)
+WENT_WRONG = "Something went wrong while this trip was being planned. It has been reported — please start it again."
+# How long, and how often, a run that has ended goes on trying to write down that it has — the trip's
+# status, and why. The database being away is the likeliest reason a run crashed and the one thing
+# that stops it saying so: without this the trip stayed "planning" with nothing planning it.
+SETTLE_FOR_S = 600.0
+SETTLE_EVERY_S = 3.0
+
+
+def _told(exc: BaseException) -> str:
+    """Why a run ended, as the traveller is told it."""
+    if database_is_away(exc):
+        return DATABASE_AWAY
+    return TOOK_TOO_LONG if isinstance(exc, TimeoutError) else WENT_WRONG
+
+
+async def _settle(trip_id: uuid.UUID, turn: int, status: TripStatus, why: str | None) -> None:
+    """A run has ended without marking its trip: mark it — now, or as soon as the database lets it.
+
+    In a session of its own: the run's is in whatever state the failure left it. A trip is only
+    touched while it is as this run left it — still "planning", or "failed" by the graph when an
+    earlier plan stands and the trip is to be "completed" again — so that a write that comes late
+    cannot undo what the traveller has started since. `why` is written as the run's closing row,
+    where GET /status reads the reason from for a page that was not open to hear it.
+    """
+    as_this_run_left_it = (
+        (TripStatus.PLANNING, TripStatus.FAILED) if status == TripStatus.COMPLETED else (TripStatus.PLANNING,)
+    )
+    until = time.monotonic() + SETTLE_FOR_S
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                trip = await db.get(Trip, trip_id)
+                if trip is not None and trip.status in as_this_run_left_it:
+                    trip.status = status
+                    if why and status == TripStatus.FAILED:
+                        db.add(
+                            AgentRun(
+                                trip_id=trip_id,
+                                agent_name="interrupted",
+                                status="failed",
+                                turn=turn,
+                                input={},
+                                output={"reason": why},
+                                duration_ms=0,
+                            )
+                        )
+                    await db.commit()
+            return
+        except Exception as exc:
+            if not database_is_away(exc) or time.monotonic() >= until:
+                logger.error("The run of trip %s ended and could not be marked: %s", trip_id, type(exc).__name__)
+                return
+            await asyncio.sleep(SETTLE_EVERY_S)
 
 
 class _Publisher:
@@ -319,7 +382,7 @@ async def _run_orchestrator(
                     span.record_exception(exc)
                     traces.fail(span, f"{type(exc).__name__}: {exc}")
                     fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
-                    why = TOOK_TOO_LONG if isinstance(exc, TimeoutError) else str(exc)
+                    why = _told(exc)  # Phase 32: in a traveller's words — what was raised is in the log
                     try:
                         await publish(
                             {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": why}
@@ -331,13 +394,11 @@ async def _run_orchestrator(
                         return
                     measured.outcome = "no_plan"  # it ended, and with no itinerary: nothing found, or a question back
                     fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed
+                    why = None
 
-                if fallback is not None:
-                    await db.rollback()
-                    trip = await db.get(Trip, trip_id)
-                    if trip is not None:
-                        trip.status = fallback
-                        await db.commit()
+            if fallback is not None:
+                # Phase 32: outside the run's own session, and for as long as it takes — see _settle
+                await _settle(trip_id, turn, fallback, why)
         finally:
             _runs.discard(this_run)
             if alive is not None:
@@ -1218,7 +1279,7 @@ _AGENT_LABELS: dict[str, str] = {
     "nothing_found": "Nothing found for the destination — no plan built",
     "preference_extractor": "Learned traveller preferences from the trip",
     "refinement_classifier": "Read what the change asks for",
-    "interrupted": "Stopped: the server was restarted",  # Phase 27
+    "interrupted": "Stopped before it finished",  # Phase 27: the server restarted; Phase 32: or the run crashed
     "orchestrator": "Finished planning run",
 }
 

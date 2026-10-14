@@ -1,0 +1,231 @@
+{
+ "exercise": "postgres-kill",
+ "began": "2026-10-14T01:22:54+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "away_s": 15,
+ "asked_at_s": 9.52,
+ "postgres_gone_at_s": 12.54,
+ "coming_back": {
+  "started": 44.41,
+  "postgres_accepts": 44.82,
+  "pooler_serves": 44.88,
+  "app_answers": 44.88
+ },
+ "s_after_postgres_accepted": {
+  "pooler_serves": 0.1,
+  "app_answers": 0.1
+ },
+ "while_it_was_away": [
+  {
+   "GET /trips": "ReadTimeout",
+   "said": "",
+   "t": 30.2,
+   "took_s": 30.0
+  }
+ ],
+ "a_plan_asked_for_while_it_was_away": {
+  "http": 500,
+  "answer": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+  "took_s": 0.05
+ },
+ "the_plan_in_flight": {
+  "status": "completed",
+  "failure_reason": null,
+  "heard_on_its_page": [
+   {
+    "t": 9.53,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 44.85,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 44.88,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 44.88,
+    "event": "activities_agent: completed",
+    "summary": "Found 10 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 53.9,
+    "event": "planning_complete",
+    "status": "completed"
+   }
+  ],
+  "agent_runs": [
+   {
+    "agent": "intent_parsing",
+    "status": "completed",
+    "ms": 3250,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preferences",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "flight_agent",
+    "status": "completed",
+    "ms": 13,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "budget_decision",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Budget check passed. Flights \u20b916,636; \u20b953,364 (76%) remaining for hotels and activities."
+   },
+   {
+    "agent": "hotel_agent",
+    "status": "completed",
+    "ms": 10,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "activities_agent",
+    "status": "completed",
+    "ms": 11,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "destination_intelligence",
+    "status": "completed",
+    "ms": 2231,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "itinerary_builder",
+    "status": "completed",
+    "ms": 6735,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "evaluator",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "persist",
+    "status": "completed",
+    "ms": 10,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preference_extractor",
+    "status": "completed",
+    "ms": 1145,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "orchestrator",
+    "status": "completed",
+    "ms": 45509,
+    "turn": 1,
+    "error": null
+   }
+  ],
+  "asked_again": {
+   "http": null,
+   "status": null
+  }
+ },
+ "a_new_plan": {
+  "trip": "7021cb5a-9f79-45dc-afd6-70b4eaf5559e",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 14.8,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "error: Exception in ASGI application\n"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": false,
+   "what": "nothing hangs while Postgres is away: every request is answered",
+   "detail": "the slowest of 1 took 30.0 s"
+  },
+  {
+   "ok": false,
+   "what": "\u2026and answered as something that passes \u2014 503, in words \u2014 not as a fault of the app's",
+   "detail": "['ReadTimeout']: "
+  },
+  {
+   "ok": false,
+   "what": "a plan asked for meanwhile is refused in words, and its trip is not left 'planning'",
+   "detail": "{\"http\": 500, \"answer\": \"{\\\"detail\\\":\\\"Something went wrong on our side. It has been reported.\\\",\\\"error\\\":{\\\"code\\\":\\\"INTERNAL_SERVER_ERROR\\\",\\\"message\\\":\\\"Something went wrong on our side. It has be; the trip: pending"
+  },
+  {
+   "ok": true,
+   "what": "the app answers again within 10 s of Postgres accepting connections \u2014 nobody restarted it",
+   "detail": "the pooler after 0.1 s, the app after 0.1 s"
+  },
+  {
+   "ok": true,
+   "what": "the plan that was in flight ended: its trip is not left 'planning' with nothing planning it",
+   "detail": "completed"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and if it could not be made, the traveller is told why in their own words",
+   "detail": "None"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and can ask for it again",
+   "detail": "POST /plan None \u2192 None"
+  },
+  {
+   "ok": true,
+   "what": "a new plan works",
+   "detail": "completed, searches 3 of 3"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

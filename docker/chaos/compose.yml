@@ -10,6 +10,14 @@
 name: tripplanner-prodlike
 
 services:
+  # Phase 32: a Postgres that is killed and started again has to come back with its data — that is
+  # what a failover is. The production-like stack keeps its database in memory ("every start is a
+  # database nobody has migrated yet"); for chaos it gets a volume, removed with the stack.
+  neon-standin:
+    tmpfs: !reset []
+    volumes:
+      - chaos-pgdata:/var/lib/postgresql/data
+
   provider-faults:
     image: tripplanner-loadtest-backend
     command: ["python", "-m", "loadtest.standins.fault_server"]
@@ -24,3 +32,6 @@ services:
         condition: service_started
     environment:
       STANDIN_FAULT_SERVER: http://provider-faults:9099
+
+volumes:
+  chaos-pgdata:

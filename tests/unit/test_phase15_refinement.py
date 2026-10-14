@@ -565,7 +565,10 @@ async def test_run_orchestrator_crash_marks_trip_failed_and_notifies_sse():
 
     assert trip.status == TripStatus.FAILED
     event = __import__("json").loads(mock_redis.publish.await_args.args[1])
-    assert event["event"] == "planning_failed" and "LLM exploded" in event["error"]
+    # Phase 32: the traveller is told that it went wrong, not what was raised — that is the log's, and the report's
+    from app.api.routes.trips import WENT_WRONG
+
+    assert event["event"] == "planning_failed" and event["error"] == WENT_WRONG and "LLM exploded" not in event["error"]
     mock_redis.set.assert_not_called()  # a failed run never overwrites the last good state
 
 

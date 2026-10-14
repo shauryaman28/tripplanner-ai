@@ -1,0 +1,160 @@
+{
+ "exercise": "postgres-kill-mid-save",
+ "began": "2026-10-14T01:24:15+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "asked_at_s": 9.6,
+ "killed_at_s": 19.84,
+ "the_transaction_that_was_waiting": {
+  "pid": "46",
+  "to_run": "INSERT INTO itineraries (id, trip_id, content, structured_da",
+  "had_written_to_trips": false
+ },
+ "both_tables_before_the_kill": {
+  "trip": "planning",
+  "itineraries": "0"
+ },
+ "both_tables_after_the_restart": {
+  "trip": "failed",
+  "itineraries": "0",
+  "embeddings": "0"
+ },
+ "both_tables_in_the_end": {
+  "trip": "completed",
+  "itineraries": "1"
+ },
+ "coming_back": {
+  "started": 23.12,
+  "postgres_accepts": 23.52,
+  "pooler_serves": 35.43,
+  "app_answers": 35.08
+ },
+ "status": {
+  "status": "failed",
+  "trip_id": "39337a1c-8987-44e0-84f7-e39cca0e4233",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "heard_on_its_page": [
+  {
+   "t": 9.62,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 11.6,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 11.62,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 11.62,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 19.89,
+   "event": "planning_failed",
+   "error": "(sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.ConnectionDoesNotExistError'>: connection was closed in the middle of operation\n[SQL: INSERT INTO itineraries (id, trip_id, content, structured_data, total_cost, created_at) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::JSONB, $5::FLOAT, $6::TIMESTAMP WITHOUT TIME ZONE)]\n[parameters: (UUID('d3879c74-8d68-49f3-9cfc-bedb29b2d61d'), UUID('39337a1c-8987-44e0-84f7-e39cca0e4233'), None, '{\"days\": [{\"day\": 1, \"date\": \"2026-12-17\", \"morning\": {\"activity\": \"Agra Fort (stand-in)\", \"cost\": 0.0, \"lat\": 27.1827, \"lng\": 78.0131, \"category\": \" ... (3265 characters truncated) ...  \"activities\": 0.0, \"total\": 10132.0, \"shares\": [{\"name\": \"Traveller 1\", \"amount\": 10132}, {\"name\": \"Traveller 2\", \"amount\": 10132}]}, \"group\": null}', 20264.0, datetime.datetime(2026, 10, 14, 1, 24, 34, 645381))]\n(Background on this error at: https://sqlalche.me/e/20/dbapi)",
+   "status": "failed"
+  },
+  {
+   "t": 37.2,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 41.36,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 41.38,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 41.38,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 51.24,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "asked_again": {
+  "http": 202,
+  "status": "completed"
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "error: Planning run crashed for trip 39337a1c-8987-44e0-84f7-e39cca0e4233",
+  "error: Exception in ASGI application\n"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "the lock was held, and POST /plan accepted",
+   "detail": "202"
+  },
+  {
+   "ok": false,
+   "what": "Postgres was killed with the save half-made: `trips` written, the insert into `itineraries` waiting",
+   "detail": "46|INSERT INTO itineraries (id, trip_id, content, structured_da|0"
+  },
+  {
+   "ok": true,
+   "what": "after the restart, neither write is there: no itinerary, and the trip is not 'completed'",
+   "detail": "before the kill {'trip': 'planning', 'itineraries': '0'}; after the restart {'trip': 'failed', 'itineraries': '0', 'embeddings': '0'}"
+  },
+  {
+   "ok": true,
+   "what": "the trip is not left 'planning' with nothing planning it",
+   "detail": "failed \u2014 None"
+  },
+  {
+   "ok": true,
+   "what": "asked for again, the plan is saved whole: one itinerary, the trip 'completed'",
+   "detail": "POST /plan 202 \u2192 completed; {'trip': 'completed', 'itineraries': '1'}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

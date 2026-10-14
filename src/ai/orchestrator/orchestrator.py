@@ -58,6 +58,7 @@ from src.ai.agents.hotel_agent import HotelAgent
 from src.ai.agents.preference_extractor import PreferenceExtractor
 from src.ai.agents.refinement_classifier import RefinementType
 from src.ai.builder.builder import ItineraryBuilder
+from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
 from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import ask, parse_json_object
 from src.ai.usage import Usage
@@ -75,9 +76,11 @@ from src.ai.utils.tasks import spawn
 from src.telemetry import metrics, traces
 
 try:
+    from app.models.embedding import Embedding
     from app.models.itinerary import Itinerary
     from app.models.trip import Trip, TripStatus
 except ImportError:
+    from src.backend.app.models.embedding import Embedding
     from src.backend.app.models.itinerary import Itinerary
     from src.backend.app.models.trip import Trip, TripStatus
 
@@ -965,6 +968,16 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
             _sync_trip(trip, state)
             db.add(trip)
         db.add(itinerary)
+        # The itinerary is sent first: the row below points at it, and nothing but this tells the ORM so
+        # (there is a foreign key between the tables and no relationship between the classes — written
+        # in one flush, the embedding went first and the save failed). Still one transaction.
+        await db.flush()
+        # Phase 32: …and, in the same commit, a row that says its embeddings are owed. The embedding job
+        # is a task of this process and asks the embedding API before it writes anything: a backend
+        # killed in those seconds left an itinerary with no row at all — which start-up recovery,
+        # looking for rows that say "owed", never found (docs/chaos-data-report.md). Saved together,
+        # there is no itinerary that is neither embedded nor on record as waiting to be.
+        db.add(Embedding(itinerary_id=itinerary.id, embedding_model=PENDING_RETRY_MODEL, vector=None))
         await db.commit()
         await db.refresh(itinerary)
     metrics.itinerary_build("success")  # Phase 29: counted once it is saved — a build is a plan somebody has

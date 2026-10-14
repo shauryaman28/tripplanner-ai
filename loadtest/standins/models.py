@@ -247,5 +247,11 @@ def word_vector(text: str) -> list[float]:
 
 async def embed(text: str, task_type: str = "", timeout: float = 0.0) -> list[float]:
     """In place of `embedder._embed_once`: the one function that reaches the embedding API."""
+    how = faults.on().get("embedding")
+    if how == "hang":
+        await asyncio.sleep(timeout or 30.0)  # the client's own timeout is what would end it
+        raise TimeoutError("the embedding API did not answer (a fault is on)")
+    if how:  # Phase 32: it answers, and what it answers is an error
+        raise faults.EmbeddingFailed(f"{how} from the embedding API (a fault is on)")
     await asyncio.sleep(timing.EMBEDDING.seconds())
     return word_vector(text)
