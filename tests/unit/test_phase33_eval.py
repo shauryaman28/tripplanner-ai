@@ -253,6 +253,11 @@ def test_a_conflict_with_none_of_the_wanted_ways_out_ends_there_and_says_so():
     assert evidence["error"] == "none of the ways out it would take was offered"
 
 
+def test_a_conflict_with_no_way_out_to_take_is_recorded_once():
+    evidence = drive(FakePlanner("conflict"), "edge-tiny-budget")
+    assert evidence["outcome"] == "conflict" and evidence["events"] == ["created", "conflict"]
+
+
 def test_a_refused_trip_is_recorded_in_words():
     evidence = drive(FakePlanner(), "edge-past-date")
     assert evidence["outcome"] == "refused" and evidence["failure_reason"] == "start_date cannot be in the past"
@@ -578,6 +583,77 @@ def test_a_raise_that_does_not_pay_for_the_cheapest_flight_found_is_found():
     assert measured("edge-tiny-budget", evidence)[BUDGET].problems == [
         (2, "the budget it offered, ₹3,750, does not pay for the cheapest flight found, ₹9,800")
     ]
+
+
+# ── Found by the eval: "raise the budget" that led back into the same conflict ─
+
+
+def test_a_flight_search_with_nothing_within_the_budget_says_what_the_cheapest_costs():
+    from src.ai.mcp_server.models import Flight, FlightSearchInput
+    from src.ai.mcp_server.tools import search_flights
+
+    offered = [
+        Flight(
+            airline="ZZ",
+            flight_number=f"ZZ-{n}",
+            departure="2026-12-04T10:00:00",
+            arrival="2026-12-04T13:00:00",
+            duration_mins=180,
+            price_inr=price,
+            stops=0,
+        )
+        for n, price in ((1, 16_400.0), (2, 19_100.0))
+    ]
+    asked = FlightSearchInput(
+        origin="DEL", destination="COK", date=str(date.today() + timedelta(days=45)), budget=12_000, passengers=2
+    )
+    with (
+        pytest.MonkeyPatch.context() as patched,
+    ):
+        patched.setattr("src.ai.mcp_server.tools._flights_on_offer", lambda *_: offered)
+        patched.setattr("src.ai.mcp_server.tools.mcp_settings.DUFFEL_ACCESS_TOKEN", "test")
+        nothing = search_flights(asked)
+        patched.setattr("src.ai.mcp_server.tools._flights_on_offer", lambda *_: [])
+        none_at_all = search_flights(asked)
+    assert (nothing.code, nothing.cheapest_inr) == ("NO_RESULTS", 16_400.0)
+    assert nothing.error == "No flights from DEL to COK within ₹12,000 — the cheapest is ₹16,400."
+    assert none_at_all.cheapest_inr is None and none_at_all.error.endswith("within ₹12,000.")
+
+
+def test_the_budget_check_prices_its_ways_out_from_the_fare_the_search_saw():
+    from src.ai.agents.budget_decision import make_budget_decision, viable_budget
+
+    error = {
+        "error": "No flights from DEL to COK within ₹12,000 — the cheapest is ₹16,400.",
+        "code": "NO_RESULTS",
+        "cheapest_inr": 16_400.0,
+    }
+    decision = make_budget_decision([], 12_000, flight_error=error)
+    assert (decision.decision, decision.flight_cost) == ("escalate", 16_400.0)
+    assert decision.reason == "The cheapest flight costs ₹16,400 — more than the whole budget of ₹12,000."
+    unknown = make_budget_decision([], 12_000, flight_error={"error": "…", "code": "NO_RESULTS"})
+    assert unknown.flight_cost == 0.0 and unknown.reason.startswith("No flights found")  # as before: nothing to price
+    assert viable_budget(16_400) == 33_000
+
+
+async def test_raise_the_budget_now_pays_for_the_flights_and_no_way_out_claims_to_fit_that_does_not():
+    from src.ai.orchestrator.orchestrator import budget_decision_node
+
+    start = date.today() + timedelta(days=51)
+    state = {
+        "flights": [],
+        "budget": 12_000.0,
+        "flight_error": {"error": "…", "code": "NO_RESULTS", "cheapest_inr": 16_400.0},
+        "destination": "Kochi",
+        "start_date": str(start),
+        "end_date": str(start + timedelta(days=3)),
+        "group_size": 2,
+        "replan_attempts": 0,
+    }
+    options = {o["choice"]: o for o in (await budget_decision_node(state))["budget_conflict_options"]}
+    assert options["increase_budget"]["budget"] >= 33_000  # was 15,000: a 25% raise that bought no flight
+    assert "reduce_days" not in options  # no shorter trip fits when the flights alone are over the budget
+    assert all(not option.get("fits", False) for name, option in options.items() if name != "increase_budget")
 
 
 # ── The grader ──────────────────────────────────────────────────────────────

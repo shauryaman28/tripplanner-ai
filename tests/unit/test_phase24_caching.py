@@ -79,7 +79,12 @@ def test_the_same_flight_search_under_another_budget_is_a_cache_hit():
 
     assert [f.price_inr for f in everything] == [4200.0, 6100.0]
     assert [f.price_inr for f in cheaper] == [4200.0]
-    assert (nothing.code, nothing.error) == ("NO_RESULTS", "No flights from DEL to GOI within ₹3,000.")
+    # Phase 33: …and it says what the cheapest flight costs, for the budget check to price its ways out from
+    assert (nothing.code, nothing.error, nothing.cheapest_inr) == (
+        "NO_RESULTS",
+        "No flights from DEL to GOI within ₹3,000 — the cheapest is ₹4,200.",
+        4200.0,
+    )
     assert [f.airline for f in air_india_first] == ["AI", "6E"]
     assert providers.counts() == {"duffel": 1}
     assert len(kept) == 1

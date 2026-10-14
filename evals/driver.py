@@ -447,7 +447,9 @@ def _ended(evidence: dict, status: dict) -> None:
     else:
         evidence["outcome"] = "failed"
         evidence["failure_reason"] = status.get("failure_reason")
-    evidence["events"].append(evidence["outcome"] if evidence["outcome"] != "plan" else "planned")
+    ended = evidence["outcome"] if evidence["outcome"] != "plan" else "planned"
+    if evidence["events"][-1:] != [ended]:  # a conflict with no way out taken is already the last thing that happened
+        evidence["events"].append(ended)
 
 
 def _collect(api: Api, trip_id: str, evidence: dict) -> None:
