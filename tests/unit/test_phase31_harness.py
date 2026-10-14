@@ -335,8 +335,10 @@ def test_the_tool_server_is_found_by_what_it_was_started_as():
 
 
 def test_the_failing_server_is_one_more_container_of_the_load_tests_own_image():
-    overlay = yaml.safe_load((ROOT / "docker/chaos/compose.yml").read_text())
-    assert overlay["name"] == "tripplanner-prodlike" and set(overlay["services"]) == {"provider-faults", "backend"}
+    overlay = yaml.safe_load((ROOT / "docker/chaos/compose.yml").read_text().replace("!reset []", "[]"))
+    assert overlay["name"] == "tripplanner-prodlike"
+    # the failing server, where the backend finds it, and (Phase 32) a Postgres that keeps its data when it is killed
+    assert set(overlay["services"]) == {"provider-faults", "backend", "neon-standin"}
     far_end = overlay["services"]["provider-faults"]
     assert far_end["image"] == chaos.loadtest.LOADTEST_IMAGE and "build" not in far_end
     assert far_end["command"] == ["python", "-m", "loadtest.standins.fault_server"]

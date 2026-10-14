@@ -7,7 +7,7 @@ to be importable no matter which directory uvicorn is started from.
 import sys
 from pathlib import Path
 
-__version__ = "0.31.0"  # 0.<phase>.0 — tests/unit/test_version.py holds it to the README's status line
+__version__ = "0.32.0"  # 0.<phase>.0 — tests/unit/test_version.py holds it to the README's status line
 
 _PROJECT_ROOT = str(Path(__file__).resolve().parents[3])
 if _PROJECT_ROOT not in sys.path:

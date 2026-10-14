@@ -1,0 +1,369 @@
+{
+ "exercise": "postgres-kill-45s",
+ "began": "2026-10-14T01:36:11+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "away_s": 45,
+ "asked_at_s": 9.54,
+ "postgres_gone_at_s": 12.57,
+ "coming_back": {
+  "started": 58.98,
+  "postgres_accepts": 59.41,
+  "pooler_serves": 73.13,
+  "app_answers": 73.15
+ },
+ "s_after_postgres_accepted": {
+  "pooler_serves": 13.7,
+  "app_answers": 13.7
+ },
+ "while_it_was_away": [
+  {
+   "t": 0.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 60.18
+  },
+  {
+   "t": 2.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 58.18
+  },
+  {
+   "t": 4.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 56.14
+  },
+  {
+   "t": 6.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 54.14
+  },
+  {
+   "t": 8.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 52.14
+  },
+  {
+   "t": 10.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 50.14
+  },
+  {
+   "t": 12.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 48.16
+  },
+  {
+   "t": 14.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"ef730958-8781-492a-894d-2f499c86d227\",\"user_id\":\"0de734aa-8371-468c-b134-1337dc9afa3b\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 46.15
+  },
+  {
+   "t": 16.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 18.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 20.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 22.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.08
+  },
+  {
+   "t": 24.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 26.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 28.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.1
+  },
+  {
+   "t": 30.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 32.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 34.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 36.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 38.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 40.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 42.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  },
+  {
+   "t": 44.3,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 0.09
+  }
+ ],
+ "a_plan_asked_for_while_it_was_away": {
+  "http": 202,
+  "answer": "{\"status\":\"planning_started\",\"trip_id\":\"ef730958-8781-492a-894d-2f499c86d227\"}",
+  "took_s": 56.16
+ },
+ "the_plan_in_flight": {
+  "status": "completed",
+  "failure_reason": null,
+  "told_on_its_page": null,
+  "heard_on_its_page": [
+   {
+    "t": 9.57,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 73.0,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 73.04,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 73.05,
+    "event": "activities_agent: completed",
+    "summary": "Found 10 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 81.2,
+    "event": "planning_complete",
+    "status": "completed"
+   }
+  ],
+  "agent_runs": [
+   {
+    "agent": "intent_parsing",
+    "status": "completed",
+    "ms": 3633,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preferences",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "flight_agent",
+    "status": "completed",
+    "ms": 20,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "budget_decision",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Budget check passed. Flights \u20b916,636; \u20b953,364 (76%) remaining for hotels and activities."
+   },
+   {
+    "agent": "hotel_agent",
+    "status": "completed",
+    "ms": 9,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "activities_agent",
+    "status": "completed",
+    "ms": 11,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "destination_intelligence",
+    "status": "completed",
+    "ms": 1417,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "itinerary_builder",
+    "status": "completed",
+    "ms": 6674,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "evaluator",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "persist",
+    "status": "completed",
+    "ms": 10,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preference_extractor",
+    "status": "completed",
+    "ms": 836,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "orchestrator",
+    "status": "completed",
+    "ms": 72472,
+    "turn": 1,
+    "error": null
+   }
+  ],
+  "asked_again": {
+   "http": null,
+   "status": null
+  }
+ },
+ "a_new_plan": {
+  "trip": "98929334-282c-4b6f-a503-14076510edcd",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 14.8,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "error: Exception in ASGI application\n"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": false,
+   "what": "every request sent while Postgres was away was answered: served once it was back, or told to come back \u2014 none a 500",
+   "detail": "23 requests: ['200', '500']; the plan asked for meanwhile: 202"
+  },
+  {
+   "ok": false,
+   "what": "none was kept waiting past the app's own patience (20 s) \u2014 the pooler would have kept it two minutes",
+   "detail": "the slowest took 60.18 s"
+  },
+  {
+   "ok": false,
+   "what": "those that could not be served were told so in words (503, try again shortly)",
+   "detail": "0 of 23 refused"
+  },
+  {
+   "ok": true,
+   "what": "a plan refused meanwhile does not leave its trip 'planning'",
+   "detail": "{\"http\": 202, \"answer\": \"{\\\"status\\\":\\\"planning_started\\\",\\\"trip_id\\\":\\\"ef730958-8781-492a-894d-2f499c86d227\\\"}\", \"took_s\": 56.16}; the trip: completed"
+  },
+  {
+   "ok": false,
+   "what": "the app answers again within 10 s of Postgres accepting connections \u2014 nobody restarted it",
+   "detail": "the pooler after 13.7 s, the app after 13.7 s"
+  },
+  {
+   "ok": true,
+   "what": "the plan that was in flight ended: its trip is not left 'planning' with nothing planning it",
+   "detail": "completed, 71.7 s after it was asked for"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and if it could not be made, the traveller is told why in their own words \u2014 on the page and by GET /status",
+   "detail": "the page: None \u00b7 GET /status: None"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and can ask for it again",
+   "detail": "POST /plan None \u2192 None"
+  },
+  {
+   "ok": true,
+   "what": "a new plan works",
+   "detail": "completed, searches 3 of 3"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

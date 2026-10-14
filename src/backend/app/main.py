@@ -21,6 +21,8 @@ from fastapi.responses import JSONResponse
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import func
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import TimeoutError as PoolTimeout
 from sqlmodel import select, update
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -36,6 +38,7 @@ from app.core import error_reporting
 from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db import redis as redis_db
+from app.db.errors import database_is_away
 from app.db.redis import close_redis, init_redis
 from app.db.session import AsyncSessionLocal
 from app.db.url import where as database_at
@@ -137,7 +140,11 @@ async def _mark_interrupted(db, trip_ids: list) -> None:
     await db.commit()
 
 
-async def _recover_after_restart() -> None:
+RECOVER_EVERY_S = 15  # Phase 32: how long start-up recovery waits before it looks again for a database that was away
+RECOVER_TIMES = 40  # …and how often: ten minutes in all
+
+
+async def _recover_after_restart(again: int = RECOVER_TIMES) -> None:
     """Repair what an unclean shutdown leaves behind.
 
     Planning runs and embedding jobs are in-process tasks, so none survives a
@@ -190,7 +197,18 @@ async def _recover_after_restart() -> None:
             logger.info("[EMBEDDING RECOVERY] Re-queuing %d pending embedding(s)", len(pending))
             spawn(_regenerate_embeddings(pending))
     except Exception as exc:
-        logger.warning("[STARTUP RECOVERY] skipped: %s", exc)
+        # Phase 32: "skipped" used to be the end of it — a backend that started while its database was
+        # away never looked again, and what it should have recovered waited for the next restart.
+        if again > 0 and database_is_away(exc):
+            logger.warning("[STARTUP RECOVERY] the database cannot be reached — looking again in %d s", RECOVER_EVERY_S)
+            spawn(_recover_later(again - 1))
+        else:
+            logger.warning("[STARTUP RECOVERY] skipped: %s", exc)
+
+
+async def _recover_later(again: int) -> None:
+    await asyncio.sleep(RECOVER_EVERY_S)
+    await _recover_after_restart(again)
 
 
 async def _look_again(trip_ids: list) -> None:
@@ -415,6 +433,28 @@ async def redis_is_away_handler(_: Request, exc: Exception) -> JSONResponse:
     """
     logger.warning("A request could not be served: Redis cannot be reached (%s)", str(exc)[:160])
     message = "The planner cannot be reached for a moment. Nothing is lost — please try again shortly."
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "5"},
+        content={"detail": message, "error": {"code": "SERVICE_UNAVAILABLE", "message": message}},
+    )
+
+
+@app.exception_handler(DBAPIError)
+@app.exception_handler(PoolTimeout)
+@app.exception_handler(ConnectionError)
+async def database_is_away_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Phase 32 — the database cannot be reached: said as that, and as something that passes.
+
+    Postgres killed under a running stack was a 500 to every request that needed it, when it was
+    not simply a request that waited. Only an error that means "nobody is there" is answered here
+    (db/errors.py); a statement the database refused is a bug, and is raised again to be the 500 it
+    always was — with its report.
+    """
+    if not database_is_away(exc):
+        raise exc
+    logger.warning("A request could not be served: the database cannot be reached (%s)", type(exc).__name__)
+    message = "The planner cannot reach its database for a moment. Nothing is lost — please try again shortly."
     return JSONResponse(
         status_code=503,
         headers={"Retry-After": "5"},

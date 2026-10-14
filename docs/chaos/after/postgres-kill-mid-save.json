@@ -1,0 +1,165 @@
+{
+ "exercise": "postgres-kill-mid-save",
+ "began": "2026-10-14T01:53:00+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "asked_at_s": 9.5,
+ "killed_at_s": 20.75,
+ "the_transaction_that_was_waiting": {
+  "pid": "103",
+  "to_run": "UPDATE trips SET status=$1::VARCHAR WHERE trips.id = $2::UUI",
+  "had_written_to_itineraries": true
+ },
+ "both_tables_before_the_kill": {
+  "trip": "planning",
+  "itineraries": "0"
+ },
+ "both_tables_after_the_restart": {
+  "trip": "failed",
+  "itineraries": "0",
+  "embeddings": "0"
+ },
+ "both_tables_in_the_end": {
+  "trip": "completed",
+  "itineraries": "1"
+ },
+ "coming_back": {
+  "started": 24.02,
+  "postgres_accepts": 24.43,
+  "pooler_serves": 26.4,
+  "app_answers": 26.03
+ },
+ "status": {
+  "status": "failed",
+  "trip_id": "53459580-1b04-40c1-bc08-125abbbe31c6",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": "The plan could not be saved: the planner lost its database for a moment. Nothing is lost \u2014 please start it again."
+ },
+ "heard_on_its_page": [
+  {
+   "t": 9.53,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 11.94,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 11.96,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 11.96,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 20.8,
+   "event": "planning_failed",
+   "error": "The plan could not be saved: the planner lost its database for a moment. Nothing is lost \u2014 please start it again.",
+   "status": "failed"
+  },
+  {
+   "t": 28.13,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 32.09,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 32.11,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 32.12,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 40.36,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "asked_again": {
+  "http": 202,
+  "status": "completed"
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "error: Planning run crashed for trip 53459580-1b04-40c1-bc08-125abbbe31c6",
+  "warning: A request could not be served: the database cannot be reached (DBAPIError)"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "the lock was held, and POST /plan accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "Postgres was killed with the save half-made: the itinerary inserted, the update of `trips` waiting",
+   "detail": "103|UPDATE trips SET status=$1::VARCHAR WHERE trips.id = $2::UUI|1"
+  },
+  {
+   "ok": true,
+   "what": "after the restart, neither write is there: no itinerary, and the trip is not 'completed'",
+   "detail": "before the kill {'trip': 'planning', 'itineraries': '0'}; after the restart {'trip': 'failed', 'itineraries': '0', 'embeddings': '0'}"
+  },
+  {
+   "ok": true,
+   "what": "the trip is not left 'planning' with nothing planning it",
+   "detail": "failed"
+  },
+  {
+   "ok": true,
+   "what": "the traveller is told why in their own words \u2014 on the page, and by GET /status afterwards",
+   "detail": "the page: The plan could not be saved: the planner lost its database for a moment. Nothing is lost \u2014 please start it again. \u00b7 GET /status: The plan could not be saved: the planner lost its database for a moment. Nothing"
+  },
+  {
+   "ok": true,
+   "what": "asked for again, the plan is saved whole: one itinerary, the trip 'completed'",
+   "detail": "POST /plan 202 \u2192 completed; {'trip': 'completed', 'itineraries': '1'}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

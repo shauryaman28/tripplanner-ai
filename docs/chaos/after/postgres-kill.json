@@ -1,0 +1,279 @@
+{
+ "exercise": "postgres-kill",
+ "began": "2026-10-14T01:50:08+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "away_s": 15,
+ "asked_at_s": 9.52,
+ "postgres_gone_at_s": 12.55,
+ "coming_back": {
+  "started": 28.92,
+  "postgres_accepts": 29.34,
+  "pooler_serves": 30.13,
+  "app_answers": 30.15
+ },
+ "s_after_postgres_accepted": {
+  "pooler_serves": 0.8,
+  "app_answers": 0.8
+ },
+ "while_it_was_away": [
+  {
+   "t": 0.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 17.15
+  },
+  {
+   "t": 2.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 15.14
+  },
+  {
+   "t": 4.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 13.12
+  },
+  {
+   "t": 6.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 11.11
+  },
+  {
+   "t": 8.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 9.13
+  },
+  {
+   "t": 10.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 7.12
+  },
+  {
+   "t": 12.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 5.12
+  },
+  {
+   "t": 14.2,
+   "GET /trips": 200,
+   "said": "[{\"id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\",\"user_id\":\"091a0206-20c1-4126-8a8c-4f6ae62b6df6\",\"destination\":\"Srinagar\",\"start_date\":\"2026-12-15\",\"end_date\":\"2026-12-18\",\"budget\":70000.0,\"group_size\":",
+   "took_s": 3.12
+  }
+ ],
+ "a_plan_asked_for_while_it_was_away": {
+  "http": 202,
+  "answer": "{\"status\":\"planning_started\",\"trip_id\":\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\"}",
+  "took_s": 13.12
+ },
+ "the_plan_in_flight": {
+  "status": "completed",
+  "failure_reason": null,
+  "told_on_its_page": null,
+  "heard_on_its_page": [
+   {
+    "t": 9.55,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 29.95,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 29.99,
+    "event": "activities_agent: completed",
+    "summary": "Found 10 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 30.0,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 38.83,
+    "event": "planning_complete",
+    "status": "completed"
+   }
+  ],
+  "agent_runs": [
+   {
+    "agent": "intent_parsing",
+    "status": "completed",
+    "ms": 3959,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preferences",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "flight_agent",
+    "status": "completed",
+    "ms": 10,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "budget_decision",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Budget check passed. Flights \u20b916,636; \u20b953,364 (76%) remaining for hotels and activities."
+   },
+   {
+    "agent": "activities_agent",
+    "status": "completed",
+    "ms": 10,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "hotel_agent",
+    "status": "completed",
+    "ms": 11,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "destination_intelligence",
+    "status": "completed",
+    "ms": 1521,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "itinerary_builder",
+    "status": "completed",
+    "ms": 7236,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "evaluator",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "persist",
+    "status": "completed",
+    "ms": 17,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preference_extractor",
+    "status": "completed",
+    "ms": 997,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "orchestrator",
+    "status": "completed",
+    "ms": 30275,
+    "turn": 1,
+    "error": null
+   }
+  ],
+  "asked_again": {
+   "http": null,
+   "status": null
+  }
+ },
+ "a_new_plan": {
+  "trip": "ea703ef0-643f-456a-b628-f461a5679be7",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 15.8,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: A request could not be served: the database cannot be reached (DBAPIError)"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "every request sent while Postgres was away was answered: served once it was back, or told to come back \u2014 none a 500",
+   "detail": "8 requests: ['200']; the plan asked for meanwhile: 202"
+  },
+  {
+   "ok": true,
+   "what": "none was kept waiting once Postgres was back: all answered within 10 s of it accepting connections",
+   "detail": "the last was answered 0.6 s after; the longest any waited in all: 17.15 s"
+  },
+  {
+   "ok": true,
+   "what": "those that could not be served were told so in words (503, try again shortly)",
+   "detail": "0 of 8 refused"
+  },
+  {
+   "ok": true,
+   "what": "a plan refused meanwhile does not leave its trip 'planning'",
+   "detail": "{\"http\": 202, \"answer\": \"{\\\"status\\\":\\\"planning_started\\\",\\\"trip_id\\\":\\\"501db8cf-5eb6-4c4b-92de-5d3b4eace600\\\"}\", \"took_s\": 13.12}; the trip: completed"
+  },
+  {
+   "ok": true,
+   "what": "the app answers again within 10 s of Postgres accepting connections \u2014 nobody restarted it",
+   "detail": "the pooler after 0.8 s, the app after 0.8 s"
+  },
+  {
+   "ok": true,
+   "what": "the plan that was in flight ended: its trip is not left 'planning' with nothing planning it",
+   "detail": "completed, 29.3 s after it was asked for"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and if it could not be made, the traveller is told why in their own words \u2014 on the page and by GET /status",
+   "detail": "the page: None \u00b7 GET /status: None"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and can ask for it again",
+   "detail": "POST /plan None \u2192 None"
+  },
+  {
+   "ok": true,
+   "what": "a new plan works",
+   "detail": "completed, searches 3 of 3"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

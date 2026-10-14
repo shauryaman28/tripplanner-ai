@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 31 / 50 — Chaos Engineering: Agent Failures**
+**Status: Phase 32 / 50 — Chaos Engineering: Data Layer**
 
 ---
 
@@ -68,6 +68,11 @@ When something it depends on stops (Phase 31): a tool server that dies is replac
 asked again of the new one; a plan made without one of its searches says in the itinerary what it lacks and why;
 the model that writes the itinerary is waited for 30 seconds and a planning run 5 minutes, never for ever; Redis
 being away slows no run, and is answered 503 "try again shortly" where a request cannot begin without it.
+The database going away (Phase 32) is, behind the pooler, a pause: queries wait and are answered when it is
+back. A request that cannot be served is told 503 in words; a run that loses it tells the traveller so — never
+the statement it failed on — and marks its trip as soon as it can; half a save is rolled back by Postgres; and
+an itinerary is saved together with the row that says its embeddings are owed, so that a backend that dies
+before embedding it finds it again when it starts.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -127,10 +132,10 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 1,255 tests
+# Unit + contract tests (no Docker, no network) — 1,290 tests
 pytest tests/unit/ tests/contract/ -v
 
-# Integration tests (Docker Postgres + Redis) — 74 tests, incl. the full
+# Integration tests (Docker Postgres + Redis) — 79 tests, incl. the full
 # plan → export → refine → replan pipeline through the HTTP API. They use their own
 # `tripplanner_db_test` database, so dev data is never touched.
 RUN_INTEGRATION=1 pytest tests/integration/ -v
@@ -298,7 +303,7 @@ tripplanner-ai/
 ├── tests/
 │   ├── unit/                            ← Fast, no network, mock everything (1,086 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 74 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 79 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
@@ -354,9 +359,10 @@ tripplanner-ai/
 │                                          chaos.py (Phase 31: the tool server killed, Gemini answering 429, the
 │                                          builder's model silent, Redis killed — and what the app then does)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–31) + phase1-17_audit.md + load-test-report.md
+├── docs/                                ← phase build logs (1–32) + phase1-17_audit.md + load-test-report.md
 │                                          (Phase 30: before, the bottleneck, after) + loadtest/ (every run it is made of)
 │                                          + chaos-report.md (Phase 31: expected, what happened, what was changed)
+│                                          + chaos-data-report.md (Phase 32: the same for Postgres and the backend)
 │                                          + chaos/ (every exercise's record, before and after)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
@@ -408,9 +414,10 @@ tripplanner-ai/
 | 29 | Observability — Prometheus metrics per endpoint and of the app's own (model calls, cache hits, builds, plan durations), one OpenTelemetry trace from the request through both processes to the row, JSON log lines searchable by trip, a Grafana dashboard ([docs/phase29_build_log.md](docs/phase29_build_log.md)) | ✅ Built, and verified on the production-like stack with Prometheus, Grafana, Jaeger and Loki beside it — **not on a deployment**: there is none yet | 84 unit + 4 integration |
 | 30 | Load testing & performance baseline — k6 visits (create, stream, plan, itinerary) against the deployed image with stand-ins for the models and providers; before: 1.3 req/s at 210 ms p99, the bottleneck database connections held idle inside a transaction by every plan in flight; after: 43 req/s at 206 ms p99 ([docs/load-test-report.md](docs/load-test-report.md), [docs/phase30_build_log.md](docs/phase30_build_log.md)) | ✅ Measured on one laptop that ran both the load and the system — **not on a deployment**: there is none yet | 106 unit + 1 integration |
 | 31 | Chaos engineering — the tool server killed mid-plan, Gemini answering 429, the builder's model never answering, Redis killed under open streams; each written down as a hypothesis first, run on the app as it was, fixed, and run again ([docs/chaos-report.md](docs/chaos-report.md), [docs/phase31_build_log.md](docs/phase31_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment**: there is none, and none of this may be done to one | 55 unit + 9 integration |
-| 32–50 | Production & Polish | ⏳ | |
+| 32 | Chaos engineering, the data layer — Postgres killed while a plan is made and between the two writes that save one; the backend killed between saving an itinerary and embedding it ([docs/chaos-data-report.md](docs/chaos-data-report.md), [docs/phase32_build_log.md](docs/phase32_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment** | 35 unit + 5 integration |
+| 33–50 | Production & Polish | ⏳ | |
 
-**Total: 1,255 unit + contract, 74 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,290 unit + contract, 79 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -469,7 +476,7 @@ deploy to the real services.
 
 **CI/CD (Phase 28).** `.github/workflows/ci.yml` runs on every push: the `backend` job (lint, the migrations
 against a real Postgres — `alembic check` fails the build when a model says something no migration does —
-and the 1,255 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
+and the 1,290 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
 the `deploy` job follows only when both pass. It needs four things set in the repository — the secret
 `RAILWAY_TOKEN` and the variables `RAILWAY_SERVICE`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` — and until
 they are it says "Nothing was deployed" and passes. The frontend is deployed by Vercel's own GitHub
@@ -511,6 +518,15 @@ kept a trip "planning" for as long as the process lived. On the app as Phase 30 
 also took every later search with it until a restart, and a plan in flight took as long as a Redis outage did.
 All three are fixed and each exercise now goes as [docs/chaos-report.md](docs/chaos-report.md) says it should;
 Gemini's 429 needed nothing. `HOW_TO_RUN.md`, Step 29.
+
+**Chaos, the data layer (Phase 32).** The same script kills Postgres — for 15 seconds, for 45, and at the exact
+point between the two writes that save a plan — and kills the backend a fifth of a second after an itinerary is
+saved. Behind a pooler a short outage turned out to be a pause, not an error: three of my predictions were
+wrong about that, and are kept in [docs/chaos-data-report.md](docs/chaos-data-report.md). What was wrong was
+at the edges — a traveller shown the SQL a save had failed on, the pooler looking for its database only every
+15 seconds, and an itinerary whose backend died before embedding it never embedded — and each is fixed. One
+fix was tried and taken back out: the driver's own timeout does not bound a query that is waiting in a pooler.
+`HOW_TO_RUN.md`, Step 30.
 `HOW_TO_RUN.md`, Step 27.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.

@@ -1,0 +1,389 @@
+{
+ "exercise": "postgres-kill-45s",
+ "began": "2026-10-14T01:45:09+00:00",
+ "commit": "c0be16386d495fac1d58b4cda6cd66759eff1084",
+ "away_s": 45,
+ "asked_at_s": 9.53,
+ "postgres_gone_at_s": 12.55,
+ "coming_back": {
+  "started": 58.97,
+  "postgres_accepts": 59.04,
+  "pooler_serves": 62.4,
+  "app_answers": 62.56
+ },
+ "s_after_postgres_accepted": {
+  "pooler_serves": 3.4,
+  "app_answers": 3.5
+ },
+ "while_it_was_away": [
+  {
+   "t": 0.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 49.62
+  },
+  {
+   "t": 2.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 47.68
+  },
+  {
+   "t": 4.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 45.66
+  },
+  {
+   "t": 6.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 43.71
+  },
+  {
+   "t": 8.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 41.71
+  },
+  {
+   "t": 10.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 39.76
+  },
+  {
+   "t": 12.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 37.76
+  },
+  {
+   "t": 14.2,
+   "GET /trips": 500,
+   "said": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+   "took_s": 35.76
+  },
+  {
+   "t": 16.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 18.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 20.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 22.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 24.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 26.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 28.2,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 30.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 32.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 34.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 36.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 38.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 40.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 42.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  },
+  {
+   "t": 44.3,
+   "GET /trips": 503,
+   "said": "{\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot reach its database for a",
+   "took_s": 0.06
+  }
+ ],
+ "a_plan_asked_for_while_it_was_away": {
+  "http": 500,
+  "answer": "{\"detail\":\"Something went wrong on our side. It has been reported.\",\"error\":{\"code\":\"INTERNAL_SERVER_ERROR\",\"message\":\"Something went wrong on our side. It has been reported.\"}}",
+  "took_s": 45.64
+ },
+ "the_plan_in_flight": {
+  "status": "failed",
+  "failure_reason": "Planning this trip took too long and was stopped. Nothing is lost \u2014 please start it again.",
+  "told_on_its_page": "Planning this trip took too long and was stopped. Nothing is lost \u2014 please start it again.",
+  "heard_on_its_page": [
+   {
+    "t": 9.55,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 62.54,
+    "event": "planning_failed",
+    "error": "Planning this trip took too long and was stopped. Nothing is lost \u2014 please start it again.",
+    "status": "failed"
+   },
+   {
+    "t": 64.12,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 67.64,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 67.66,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 67.66,
+    "event": "activities_agent: completed",
+    "summary": "Found 10 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 76.2,
+    "event": "planning_complete",
+    "status": "completed"
+   }
+  ],
+  "agent_runs": [
+   {
+    "agent": "interrupted",
+    "status": "failed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Planning this trip took too long and was stopped. Nothing is lost \u2014 please start it again."
+   },
+   {
+    "agent": "intent_parsing",
+    "status": "completed",
+    "ms": 3417,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preferences",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "flight_agent",
+    "status": "completed",
+    "ms": 20,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "budget_decision",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Budget check passed. Flights \u20b916,636; \u20b953,364 (76%) remaining for hotels and activities."
+   },
+   {
+    "agent": "hotel_agent",
+    "status": "completed",
+    "ms": 9,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "activities_agent",
+    "status": "completed",
+    "ms": 11,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "destination_intelligence",
+    "status": "completed",
+    "ms": 1674,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "itinerary_builder",
+    "status": "completed",
+    "ms": 6809,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "evaluator",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "persist",
+    "status": "completed",
+    "ms": 17,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preference_extractor",
+    "status": "completed",
+    "ms": 1199,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "orchestrator",
+    "status": "completed",
+    "ms": 13273,
+    "turn": 1,
+    "error": null
+   }
+  ],
+  "asked_again": {
+   "http": 202,
+   "status": "completed"
+  }
+ },
+ "a_new_plan": {
+  "trip": "dd629dc5-1e26-4859-8bd2-1a93bb746254",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 13.8,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: A request could not be served: the database cannot be reached (DBAPIError)",
+  "error: Exception in ASGI application\n",
+  "error: Planning run crashed for trip 9ab6addd-011b-460a-bbda-bcd8a28ee147"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": false,
+   "what": "every request sent while Postgres was away was answered: served once it was back, or told to come back \u2014 none a 500",
+   "detail": "23 requests: ['500', '503']; the plan asked for meanwhile: 500"
+  },
+  {
+   "ok": false,
+   "what": "none was kept waiting past the app's own patience (20 s) \u2014 the pooler would have kept it two minutes",
+   "detail": "the slowest took 49.62 s"
+  },
+  {
+   "ok": true,
+   "what": "those that could not be served were told so in words (503, try again shortly)",
+   "detail": "15 of 23 refused: {\"detail\":\"The planner cannot reach its database for a moment. Nothing is lost \u2014 please try again shortly.\",\"e"
+  },
+  {
+   "ok": true,
+   "what": "a plan refused meanwhile does not leave its trip 'planning'",
+   "detail": "{\"http\": 500, \"answer\": \"{\\\"detail\\\":\\\"Something went wrong on our side. It has been reported.\\\",\\\"error\\\":{\\\"code\\\":\\\"INTERNAL_SERVER_ERROR\\\",\\\"message\\\":\\\"Som; the trip: pending"
+  },
+  {
+   "ok": true,
+   "what": "the app answers again within 10 s of Postgres accepting connections \u2014 nobody restarted it",
+   "detail": "the pooler after 3.4 s, the app after 3.5 s"
+  },
+  {
+   "ok": true,
+   "what": "the plan that was in flight ended: its trip is not left 'planning' with nothing planning it",
+   "detail": "failed, 66.7 s after it was asked for"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and if it could not be made, the traveller is told why in their own words \u2014 on the page and by GET /status",
+   "detail": "the page: Planning this trip took too long and was stopped. Nothing is lost \u2014 please start it again. \u00b7 GET /status: Planning this trip took too long and was stopped. Nothing is lost \u2014 please start it again."
+  },
+  {
+   "ok": true,
+   "what": "\u2026and can ask for it again",
+   "detail": "POST /plan 202 \u2192 completed"
+  },
+  {
+   "ok": true,
+   "what": "a new plan works",
+   "detail": "completed, searches 3 of 3"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": false,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

@@ -294,6 +294,7 @@ def _db(trip: Trip | None = None) -> MagicMock:
     db.added = []
     db.add = db.added.append
     db.commit, db.refresh, db.rollback, db.scalar = AsyncMock(), AsyncMock(), AsyncMock(), AsyncMock(return_value=None)
+    db.flush = AsyncMock()  # Phase 32: a plan is saved itinerary first, then the row that points at it
     db.get = AsyncMock(return_value=trip)
     db.execute = AsyncMock(return_value=MagicMock())
     return db
