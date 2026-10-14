@@ -1,0 +1,1691 @@
+{
+ "scenario": "refine-nicer-hotel",
+ "asked": {
+  "change": "Could we stay somewhere nicer? A better hotel please.",
+  "of": "happy-jaipur"
+ },
+ "events": [
+  "refined",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": {
+  "status": "refinement_started",
+  "turn": 2,
+  "refinement_type": "targeted_hotel"
+ },
+ "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+ "trip": {
+  "id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+  "user_id": "8ce59c4b-2262-4740-b048-47d2866b205c",
+  "destination": "Jaipur",
+  "start_date": "2026-11-25",
+  "end_date": "2026-11-28",
+  "budget": 70000,
+  "group_size": 2,
+  "interests": [
+   "history",
+   "food"
+  ],
+  "group_members": null,
+  "status": "completed",
+  "created_at": "2026-10-11T04:51:35.015482"
+ },
+ "status": {
+  "status": "completed",
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "50c93dfe-46b7-4263-b622-e858c5421fff",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-11-25",
+      "hotel": {
+       "lat": 26.880976,
+       "lng": 75.798005,
+       "name": "Sarovar Premiere Jaipur",
+       "stars": 5,
+       "rating": 10.0,
+       "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+       "cost_per_night": 11004.91
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "AA",
+       "arrival": "2026-11-25T19:27:00",
+       "departure": "2026-11-25T18:34:00",
+       "price_inr": 8321.04,
+       "destination": {
+        "lat": 26.826288,
+        "lng": 75.80897,
+        "code": "JAI",
+        "name": "Jaipur International Airport"
+       },
+       "duration_mins": 53,
+       "flight_number": "AA-10"
+      },
+      "evening": {
+       "lat": 26.912696838378906,
+       "lng": 75.82097625732422,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Jaipur Zoo",
+       "category": "nature"
+      },
+      "morning": {
+       "lat": 26.915300369262695,
+       "lng": 75.8187026977539,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Ram Niwas Garden",
+       "category": "nature"
+      },
+      "afternoon": {
+       "lat": 26.919588088989258,
+       "lng": 75.82604217529297,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Laxmi Mishthan Bhandar",
+       "category": "food"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-11-26",
+      "hotel": {
+       "lat": 26.880976,
+       "lng": 75.798005,
+       "name": "Sarovar Premiere Jaipur",
+       "stars": 5,
+       "rating": 10.0,
+       "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+       "cost_per_night": 11004.91
+      },
+      "flight": null,
+      "evening": {
+       "lat": 26.916872024536133,
+       "lng": 75.82019805908203,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Ganesh Restaurant",
+       "category": "food"
+      },
+      "morning": {
+       "lat": 26.925384521484375,
+       "lng": 75.8238525390625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "City Palace",
+       "category": "museum"
+      },
+      "afternoon": {
+       "lat": 26.911705017089844,
+       "lng": 75.81949615478516,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Albert Hall",
+       "category": "museum"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-11-27",
+      "hotel": {
+       "lat": 26.880976,
+       "lng": 75.798005,
+       "name": "Sarovar Premiere Jaipur",
+       "stars": 5,
+       "rating": 10.0,
+       "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+       "cost_per_night": 11004.91
+      },
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 26.915498733520508,
+       "lng": 75.81016540527344,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Raj Mandir Cinema, Jaipur",
+       "category": "culture"
+      },
+      "afternoon": {
+       "lat": 26.91709327697754,
+       "lng": 75.82001495361328,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Sweet Dreams Hotel Rooftop Restaurant",
+       "category": "food"
+      }
+     },
+     {
+      "day": 4,
+      "date": "2026-11-28",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 26.92473793029785,
+       "lng": 75.824462890625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Jantar Mantar",
+       "category": "history"
+      },
+      "afternoon": {
+       "lat": 26.917448043823242,
+       "lng": 75.81854248046875,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Mohan Restaurant",
+       "category": "food"
+      }
+     }
+    ],
+    "group": null,
+    "currency": "INR",
+    "total_cost": 41335.77,
+    "per_person_cost": 20667.88,
+    "local_intelligence": {
+     "best_times": {
+      "Jal Mahal": "Sunset (around 6 pm) when the palace reflects beautifully on the lake.",
+      "Amber Fort": "Early morning (7-9 am) to beat the crowds and catch soft light for photography.",
+      "City Palace": "Mid-day (12-2 pm) to avoid the heat and enjoy cooler indoor galleries.",
+      "Johari Bazaar": "Late afternoon (4-6 pm) when shops are fully stocked and bargaining is lively."
+     },
+     "safety_tips": [
+      "November evenings can be chilly; carry a light jacket to avoid sudden cold.",
+      "Traffic is chaotic near major attractions; cross roads using pedestrian signals and stay alert.",
+      "Beware of stray dogs near markets; keep food covered and avoid feeding them."
+     ],
+     "tourist_traps": [
+      "Avoid street vendors near the Hawa Mahal selling overpriced ‘hand-crafted’ jewellery; shop at Bapu Bazaar for authentic items.",
+      "Skip the overly-touristy camel rides at the city gate; instead explore the historic streets on foot for free.",
+      "Don’t rely on hotel-arranged tours that charge extra for entry fees; buy tickets yourself at the gate."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting temples and palaces; shoulders and knees should be covered.",
+      "Remove shoes before entering any religious site, and avoid pointing feet at idols.",
+      "Tipping 5-10 % in restaurants is customary, especially for good service."
+     ],
+     "local_transport": "Auto-rickshaws and app-based cabs are cheapest; for longer stretches use the city bus network or rent a scooter."
+    },
+    "per_person_breakdown": {
+     "stay": 16507.36,
+     "total": 20667.88,
+     "shares": [
+      {
+       "name": "Traveller 1",
+       "amount": 20668
+      },
+      {
+       "name": "Traveller 2",
+       "amount": 20668
+      }
+     ],
+     "flights": 4160.52,
+     "activities": 0.0,
+     "travellers": 2
+    }
+   },
+   "total_cost": 41335.77,
+   "created_at": "2026-10-11T04:52:09.24624"
+  },
+  {
+   "id": "f6e4d560-bdb0-4e4a-aceb-750eefe2a341",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-11-25",
+      "hotel": {
+       "lat": 26.927833,
+       "lng": 75.788946,
+       "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+       "stars": 4,
+       "rating": 8.8,
+       "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+       "cost_per_night": 6851.32
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "AA",
+       "arrival": "2026-11-25T19:27:00",
+       "departure": "2026-11-25T18:34:00",
+       "price_inr": 8321.04,
+       "destination": {
+        "lat": 26.826288,
+        "lng": 75.80897,
+        "code": "JAI",
+        "name": "Jaipur International Airport"
+       },
+       "duration_mins": 53,
+       "flight_number": "AA-10"
+      },
+      "evening": {
+       "lat": 26.912696838378906,
+       "lng": 75.82097625732422,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Jaipur Zoo",
+       "category": "nature"
+      },
+      "morning": {
+       "lat": 26.915300369262695,
+       "lng": 75.8187026977539,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Ram Niwas Garden",
+       "category": "nature"
+      },
+      "afternoon": {
+       "lat": 26.919588088989258,
+       "lng": 75.82604217529297,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Laxmi Mishthan Bhandar",
+       "category": "food"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-11-26",
+      "hotel": {
+       "lat": 26.927833,
+       "lng": 75.788946,
+       "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+       "stars": 4,
+       "rating": 8.8,
+       "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+       "cost_per_night": 6851.32
+      },
+      "flight": null,
+      "evening": {
+       "lat": 26.916872024536133,
+       "lng": 75.82019805908203,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Ganesh Restaurant",
+       "category": "food"
+      },
+      "morning": {
+       "lat": 26.925384521484375,
+       "lng": 75.8238525390625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "City Palace",
+       "category": "museum"
+      },
+      "afternoon": {
+       "lat": 26.911705017089844,
+       "lng": 75.81949615478516,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Albert Hall",
+       "category": "museum"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-11-27",
+      "hotel": {
+       "lat": 26.927833,
+       "lng": 75.788946,
+       "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+       "stars": 4,
+       "rating": 8.8,
+       "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+       "cost_per_night": 6851.32
+      },
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 26.915498733520508,
+       "lng": 75.81016540527344,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Raj Mandir Cinema, Jaipur",
+       "category": "culture"
+      },
+      "afternoon": {
+       "lat": 26.91709327697754,
+       "lng": 75.82001495361328,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Sweet Dreams Hotel Rooftop Restaurant",
+       "category": "food"
+      }
+     },
+     {
+      "day": 4,
+      "date": "2026-11-28",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 26.92473793029785,
+       "lng": 75.824462890625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Jantar Mantar",
+       "category": "history"
+      },
+      "afternoon": {
+       "lat": 26.917448043823242,
+       "lng": 75.81854248046875,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Mohan Restaurant",
+       "category": "food"
+      }
+     }
+    ],
+    "group": null,
+    "currency": "INR",
+    "total_cost": 28875.0,
+    "per_person_cost": 14437.5,
+    "local_intelligence": {
+     "best_times": {
+      "Jal Mahal": "Sunset (around 6 pm) when the palace reflects beautifully on the lake.",
+      "Amber Fort": "Early morning (7-9 am) to beat the crowds and catch soft light for photography.",
+      "City Palace": "Mid-day (12-2 pm) to avoid the heat and enjoy cooler indoor galleries.",
+      "Johari Bazaar": "Late afternoon (4-6 pm) when shops are fully stocked and bargaining is lively."
+     },
+     "safety_tips": [
+      "November evenings can be chilly; carry a light jacket to avoid sudden cold.",
+      "Traffic is chaotic near major attractions; cross roads using pedestrian signals and stay alert.",
+      "Beware of stray dogs near markets; keep food covered and avoid feeding them."
+     ],
+     "tourist_traps": [
+      "Avoid street vendors near the Hawa Mahal selling overpriced ‘hand-crafted’ jewellery; shop at Bapu Bazaar for authentic items.",
+      "Skip the overly-touristy camel rides at the city gate; instead explore the historic streets on foot for free.",
+      "Don’t rely on hotel-arranged tours that charge extra for entry fees; buy tickets yourself at the gate."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting temples and palaces; shoulders and knees should be covered.",
+      "Remove shoes before entering any religious site, and avoid pointing feet at idols.",
+      "Tipping 5-10 % in restaurants is customary, especially for good service."
+     ],
+     "local_transport": "Auto-rickshaws and app-based cabs are cheapest; for longer stretches use the city bus network or rent a scooter."
+    },
+    "per_person_breakdown": {
+     "stay": 10276.98,
+     "total": 14437.5,
+     "shares": [
+      {
+       "name": "Traveller 1",
+       "amount": 14438
+      },
+      {
+       "name": "Traveller 2",
+       "amount": 14437
+      }
+     ],
+     "flights": 4160.52,
+     "activities": 0.0,
+     "travellers": 2
+    }
+   },
+   "total_cost": 28875,
+   "created_at": "2026-10-11T04:51:49.243165"
+  }
+ ],
+ "runs": [
+  {
+   "id": "866c7245-4dca-4f81-b652-b0afbdcefeb1",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": "A relaxed long weekend of forts and good food",
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": false,
+    "extracted_fields": {}
+   },
+   "duration_ms": 1608,
+   "turn": 1,
+   "token_count": 432,
+   "cost_usd": 0.00031,
+   "created_at": "2026-10-11T04:51:42.718346"
+  },
+  {
+   "id": "2115d7e6-d590-4b8f-a8d2-aed348a8b466",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "8ce59c4b-2262-4740-b048-47d2866b205c"
+   },
+   "output": {
+    "loaded": true,
+    "preferences": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    },
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:42.741342"
+  },
+  {
+   "id": "f6ef8023-c5e4-40f1-ab31-778c0fa0b362",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-11-25",
+    "budget": 70000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Jaipur",
+    "return_date": "2026-11-28",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-11-25T19:27:00",
+      "departure": "2026-11-25T18:34:00",
+      "price_inr": 8321.04,
+      "destination": {
+       "lat": 26.826288,
+       "lng": 75.80897,
+       "code": "JAI",
+       "name": "Jaipur International Airport"
+      },
+      "duration_mins": 53,
+      "flight_number": "AA-10"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-11-25T19:27:00",
+      "departure": "2026-11-25T18:34:00",
+      "price_inr": 8519.42,
+      "destination": {
+       "lat": 26.826288,
+       "lng": 75.80897,
+       "code": "JAI",
+       "name": "Jaipur International Airport"
+      },
+      "duration_mins": 53,
+      "flight_number": "ZZ-9060"
+     }
+    ]
+   },
+   "duration_ms": 22,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:42.772149"
+  },
+  {
+   "id": "23369511-bd81-4140-887d-35998f25847f",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 70000.0,
+    "cheapest_flight": 8321.04,
+    "replan_attempts": 0,
+    "flights_evaluated": 2
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹8,321; ₹61,679 (88%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 8321.04,
+    "total_budget": 70000.0,
+    "remaining_budget": 61678.96
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:42.778618"
+  },
+  {
+   "id": "e141c988-935d-4074-962f-01d977056f46",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 2,
+    "check_in": "2026-11-25",
+    "check_out": "2026-11-28",
+    "destination": "Jaipur",
+    "budget_per_night": 20559.65
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 26.927833,
+      "lng": 75.788946,
+      "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+      "price_per_night_inr": 6851.32
+     },
+     {
+      "lat": 26.879439,
+      "lng": 75.768499,
+      "name": "Holiday Inn Express & Suites Jaipur Gopalpura by IHG",
+      "stars": 4,
+      "rating": 9.4,
+      "address": "Plot Number 21-22-23-37-38, Karoli Bagh, Jaipur",
+      "price_per_night_inr": 8693.99
+     },
+     {
+      "lat": 26.895776,
+      "lng": 75.828883,
+      "name": "Ramada By Wyndham Jaipur",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "Govind Marg Raja Park, 1st Avenue, Jaipur",
+      "price_per_night_inr": 10317.15
+     },
+     {
+      "lat": 26.865054,
+      "lng": 75.795346,
+      "name": "Four Points by Sheraton Jaipur, City Square",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "City Square, Vasundhara Colony, Tonk Road, Jaipur",
+      "price_per_night_inr": 10414.25
+     },
+     {
+      "lat": 26.880976,
+      "lng": 75.798005,
+      "name": "Sarovar Premiere Jaipur",
+      "stars": 5,
+      "rating": 10.0,
+      "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+      "price_per_night_inr": 11004.91
+     }
+    ]
+   },
+   "duration_ms": 72,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:42.857943"
+  },
+  {
+   "id": "8af73484-71f9-4a9c-a73c-224aef0ef53e",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "limit": 10,
+    "interests": [
+     "history",
+     "food"
+    ],
+    "destination": "Jaipur"
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 26.915300369262695,
+      "lng": 75.8187026977539,
+      "name": "Ram Niwas Garden",
+      "rating": 2.0,
+      "category": "nature",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular nature attraction in Jaipur."
+     },
+     {
+      "lat": 26.919588088989258,
+      "lng": 75.82604217529297,
+      "name": "Laxmi Mishthan Bhandar",
+      "rating": 2.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A popular food attraction in Jaipur."
+     },
+     {
+      "lat": 26.912696838378906,
+      "lng": 75.82097625732422,
+      "name": "Jaipur Zoo",
+      "rating": 2.0,
+      "category": "nature",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular nature attraction in Jaipur."
+     },
+     {
+      "lat": 26.925384521484375,
+      "lng": 75.8238525390625,
+      "name": "City Palace",
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "food"
+      ],
+      "description": "A popular museum attraction in Jaipur."
+     },
+     {
+      "lat": 26.911705017089844,
+      "lng": 75.81949615478516,
+      "name": "Albert Hall",
+      "rating": 7.0,
+      "category": "museum",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular museum attraction in Jaipur."
+     },
+     {
+      "lat": 26.916872024536133,
+      "lng": 75.82019805908203,
+      "name": "Ganesh Restaurant",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Jaipur."
+     },
+     {
+      "lat": 26.915498733520508,
+      "lng": 75.81016540527344,
+      "name": "Raj Mandir Cinema, Jaipur",
+      "rating": 3.0,
+      "category": "culture",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular culture attraction in Jaipur."
+     },
+     {
+      "lat": 26.91709327697754,
+      "lng": 75.82001495361328,
+      "name": "Sweet Dreams Hotel Rooftop Restaurant",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Jaipur."
+     },
+     {
+      "lat": 26.92473793029785,
+      "lng": 75.824462890625,
+      "name": "Jantar Mantar",
+      "rating": 7.0,
+      "category": "history",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular history attraction in Jaipur."
+     },
+     {
+      "lat": 26.917448043823242,
+      "lng": 75.81854248046875,
+      "name": "Mohan Restaurant",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Jaipur."
+     }
+    ]
+   },
+   "duration_ms": 68,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:42.858399"
+  },
+  {
+   "id": "fb829505-5930-4be6-8b57-707c859cdf4d",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "model": "openai/gpt-oss-120b",
+    "month": "November",
+    "interests": [
+     "history",
+     "food"
+    ],
+    "travellers": 2,
+    "destination": "Jaipur"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Jal Mahal": "Sunset (around 6 pm) when the palace reflects beautifully on the lake.",
+      "Amber Fort": "Early morning (7-9 am) to beat the crowds and catch soft light for photography.",
+      "City Palace": "Mid-day (12-2 pm) to avoid the heat and enjoy cooler indoor galleries.",
+      "Johari Bazaar": "Late afternoon (4-6 pm) when shops are fully stocked and bargaining is lively."
+     },
+     "safety_tips": [
+      "November evenings can be chilly; carry a light jacket to avoid sudden cold.",
+      "Traffic is chaotic near major attractions; cross roads using pedestrian signals and stay alert.",
+      "Beware of stray dogs near markets; keep food covered and avoid feeding them."
+     ],
+     "tourist_traps": [
+      "Avoid street vendors near the Hawa Mahal selling overpriced ‘hand-crafted’ jewellery; shop at Bapu Bazaar for authentic items.",
+      "Skip the overly-touristy camel rides at the city gate; instead explore the historic streets on foot for free.",
+      "Don’t rely on hotel-arranged tours that charge extra for entry fees; buy tickets yourself at the gate."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting temples and palaces; shoulders and knees should be covered.",
+      "Remove shoes before entering any religious site, and avoid pointing feet at idols.",
+      "Tipping 5-10 % in restaurants is customary, especially for good service."
+     ],
+     "local_transport": "Auto-rickshaws and app-based cabs are cheapest; for longer stretches use the city bus network or rent a scooter."
+    }
+   },
+   "duration_ms": 1430,
+   "turn": 1,
+   "token_count": 854,
+   "cost_usd": 0.0003735,
+   "created_at": "2026-10-11T04:51:44.220745"
+  },
+  {
+   "id": "74e40978-ab61-48e0-bb3a-af87188ab9ec",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-11-28",
+     "group_size": 2,
+     "start_date": "2026-11-25",
+     "destination": "Jaipur",
+     "preferences": {
+      "home_city": null,
+      "travel_style": "mid-range",
+      "preferred_airlines": [],
+      "dietary_restrictions": []
+     }
+    },
+    "hotels_count": 5,
+    "flights_count": 2,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-11-25",
+       "hotel": {
+        "lat": 26.927833,
+        "lng": 75.788946,
+        "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+        "stars": 4,
+        "rating": 8.8,
+        "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+        "cost_per_night": 6851.32
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "AA",
+        "arrival": "2026-11-25T19:27:00",
+        "departure": "2026-11-25T18:34:00",
+        "price_inr": 8321.04,
+        "destination": {
+         "lat": 26.826288,
+         "lng": 75.80897,
+         "code": "JAI",
+         "name": "Jaipur International Airport"
+        },
+        "duration_mins": 53,
+        "flight_number": "AA-10"
+       },
+       "evening": {
+        "lat": 26.912696838378906,
+        "lng": 75.82097625732422,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Jaipur Zoo",
+        "category": "nature"
+       },
+       "morning": {
+        "lat": 26.915300369262695,
+        "lng": 75.8187026977539,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Ram Niwas Garden",
+        "category": "nature"
+       },
+       "afternoon": {
+        "lat": 26.919588088989258,
+        "lng": 75.82604217529297,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Laxmi Mishthan Bhandar",
+        "category": "food"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-11-26",
+       "hotel": {
+        "lat": 26.927833,
+        "lng": 75.788946,
+        "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+        "stars": 4,
+        "rating": 8.8,
+        "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+        "cost_per_night": 6851.32
+       },
+       "flight": null,
+       "evening": {
+        "lat": 26.916872024536133,
+        "lng": 75.82019805908203,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Ganesh Restaurant",
+        "category": "food"
+       },
+       "morning": {
+        "lat": 26.925384521484375,
+        "lng": 75.8238525390625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "City Palace",
+        "category": "museum"
+       },
+       "afternoon": {
+        "lat": 26.911705017089844,
+        "lng": 75.81949615478516,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Albert Hall",
+        "category": "museum"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-11-27",
+       "hotel": {
+        "lat": 26.927833,
+        "lng": 75.788946,
+        "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+        "stars": 4,
+        "rating": 8.8,
+        "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+        "cost_per_night": 6851.32
+       },
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 26.915498733520508,
+        "lng": 75.81016540527344,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Raj Mandir Cinema, Jaipur",
+        "category": "culture"
+       },
+       "afternoon": {
+        "lat": 26.91709327697754,
+        "lng": 75.82001495361328,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Sweet Dreams Hotel Rooftop Restaurant",
+        "category": "food"
+       }
+      },
+      {
+       "day": 4,
+       "date": "2026-11-28",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 26.92473793029785,
+        "lng": 75.824462890625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Jantar Mantar",
+        "category": "history"
+       },
+       "afternoon": {
+        "lat": 26.917448043823242,
+        "lng": 75.81854248046875,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Mohan Restaurant",
+        "category": "food"
+       }
+      }
+     ],
+     "group": null,
+     "currency": "INR",
+     "total_cost": 28875.0,
+     "per_person_cost": 14437.5,
+     "local_intelligence": {
+      "best_times": {
+       "Jal Mahal": "Sunset (around 6 pm) when the palace reflects beautifully on the lake.",
+       "Amber Fort": "Early morning (7-9 am) to beat the crowds and catch soft light for photography.",
+       "City Palace": "Mid-day (12-2 pm) to avoid the heat and enjoy cooler indoor galleries.",
+       "Johari Bazaar": "Late afternoon (4-6 pm) when shops are fully stocked and bargaining is lively."
+      },
+      "safety_tips": [
+       "November evenings can be chilly; carry a light jacket to avoid sudden cold.",
+       "Traffic is chaotic near major attractions; cross roads using pedestrian signals and stay alert.",
+       "Beware of stray dogs near markets; keep food covered and avoid feeding them."
+      ],
+      "tourist_traps": [
+       "Avoid street vendors near the Hawa Mahal selling overpriced ‘hand-crafted’ jewellery; shop at Bapu Bazaar for authentic items.",
+       "Skip the overly-touristy camel rides at the city gate; instead explore the historic streets on foot for free.",
+       "Don’t rely on hotel-arranged tours that charge extra for entry fees; buy tickets yourself at the gate."
+      ],
+      "cultural_norms": [
+       "Dress modestly when visiting temples and palaces; shoulders and knees should be covered.",
+       "Remove shoes before entering any religious site, and avoid pointing feet at idols.",
+       "Tipping 5-10 % in restaurants is customary, especially for good service."
+      ],
+      "local_transport": "Auto-rickshaws and app-based cabs are cheapest; for longer stretches use the city bus network or rent a scooter."
+     },
+     "per_person_breakdown": {
+      "stay": 10276.98,
+      "total": 14437.5,
+      "shares": [
+       {
+        "name": "Traveller 1",
+        "amount": 14438
+       },
+       {
+        "name": "Traveller 2",
+        "amount": 14437
+       }
+      ],
+      "flights": 4160.52,
+      "activities": 0.0,
+      "travellers": 2
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 4990,
+   "turn": 1,
+   "token_count": 4315,
+   "cost_usd": 0.00195885,
+   "created_at": "2026-10-11T04:51:49.219379"
+  },
+  {
+   "id": "b866f4d4-e494-4774-8452-45f81929215a",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-11-28",
+    "trip_start": "2026-11-25",
+    "retry_count": 0,
+    "budget_range": [
+     23100.0,
+     34650.0
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 28875.0
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:49.235064"
+  },
+  {
+   "id": "69db7644-6fb9-475d-b0f6-8e4d5f06c3e4",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 28875.0
+   },
+   "output": {
+    "trip_status": "completed",
+    "itinerary_id": "f6e4d560-bdb0-4e4a-aceb-750eefe2a341",
+    "unmapped_activities": []
+   },
+   "duration_ms": 8,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:49.251662"
+  },
+  {
+   "id": "006fdda7-00c1-467e-baba-dc1de6a1bdca",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Umaid Mahal - A Heritage Style Boutique Hotel"
+     ],
+     "nights": 3,
+     "interests": [
+      "history",
+      "food"
+     ],
+     "group_size": 2,
+     "destination": "Jaipur",
+     "user_message": "A relaxed long weekend of forts and good food",
+     "top_activities": [
+      "Ram Niwas Garden",
+      "Laxmi Mishthan Bhandar",
+      "Jaipur Zoo",
+      "City Palace",
+      "Albert Hall",
+      "Ganesh Restaurant",
+      "Raj Mandir Cinema, Jaipur",
+      "Sweet Dreams Hotel Rooftop Restaurant"
+     ],
+     "total_cost_inr": 28875.0,
+     "avg_hotel_stars": 4.0,
+     "per_person_per_night_inr": 4812
+    }
+   },
+   "output": {
+    "applied": {},
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 1030,
+   "turn": 1,
+   "token_count": 816,
+   "cost_usd": 0.0002568,
+   "created_at": "2026-10-11T04:51:50.292606"
+  },
+  {
+   "id": "fe88b5a4-15d4-4fe9-9100-674a13e35682",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 70000.0,
+    "end_date": "2026-11-28",
+    "interests": [
+     "history",
+     "food"
+    ],
+    "raw_input": "A relaxed long weekend of forts and good food",
+    "group_size": 2,
+    "start_date": "2026-11-25",
+    "destination": "Jaipur"
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "f6e4d560-bdb0-4e4a-aceb-750eefe2a341",
+    "flight_status": "completed",
+    "flights_count": 2,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹8,321; ₹61,679 (88%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 8321.04,
+     "total_budget": 70000.0,
+     "remaining_budget": 61678.96
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 9230,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:50.306433"
+  },
+  {
+   "id": "c8077341-0116-4511-ae32-bbc98b7a9d4a",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "refinement_classifier",
+   "status": "completed",
+   "input": {
+    "message": "Could we stay somewhere nicer? A better hotel please."
+   },
+   "output": {
+    "reason": "The user is explicitly asking for a better hotel while keeping the rest of the trip unchanged.",
+    "refinement_type": "targeted_hotel"
+   },
+   "duration_ms": 1167,
+   "turn": 2,
+   "token_count": 524,
+   "cost_usd": 0.0002452,
+   "created_at": "2026-10-11T04:51:59.787666"
+  },
+  {
+   "id": "fbc5caf2-b976-47eb-8377-4fd4a9b0eccd",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 2,
+    "check_in": "2026-11-25",
+    "check_out": "2026-11-28",
+    "destination": "Jaipur",
+    "budget_per_night": 20559.65
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 26.927833,
+      "lng": 75.788946,
+      "name": "Umaid Mahal - A Heritage Style Boutique Hotel",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "C-20 B-2 Behari marg off Jaisingh Highway Bani Park, Jaipur",
+      "price_per_night_inr": 6851.32
+     },
+     {
+      "lat": 26.879439,
+      "lng": 75.768499,
+      "name": "Holiday Inn Express & Suites Jaipur Gopalpura by IHG",
+      "stars": 4,
+      "rating": 9.4,
+      "address": "Plot Number 21-22-23-37-38, Karoli Bagh, Jaipur",
+      "price_per_night_inr": 8693.99
+     },
+     {
+      "lat": 26.895776,
+      "lng": 75.828883,
+      "name": "Ramada By Wyndham Jaipur",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "Govind Marg Raja Park, 1st Avenue, Jaipur",
+      "price_per_night_inr": 10317.15
+     },
+     {
+      "lat": 26.865054,
+      "lng": 75.795346,
+      "name": "Four Points by Sheraton Jaipur, City Square",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "City Square, Vasundhara Colony, Tonk Road, Jaipur",
+      "price_per_night_inr": 10414.25
+     },
+     {
+      "lat": 26.880976,
+      "lng": 75.798005,
+      "name": "Sarovar Premiere Jaipur",
+      "stars": 5,
+      "rating": 10.0,
+      "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+      "price_per_night_inr": 11004.91
+     }
+    ]
+   },
+   "duration_ms": 13,
+   "turn": 2,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:51:59.845167"
+  },
+  {
+   "id": "d0cbcde6-d535-4900-a63f-470edbf07b46",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "request": "Could we stay somewhere nicer? A better hotel please.",
+     "end_date": "2026-11-28",
+     "group_size": 2,
+     "start_date": "2026-11-25",
+     "destination": "Jaipur",
+     "preferences": {
+      "home_city": null,
+      "travel_style": "mid-range",
+      "preferred_airlines": [],
+      "dietary_restrictions": []
+     },
+     "previous_plan": [
+      {
+       "date": "2026-11-25",
+       "hotel": "Umaid Mahal - A Heritage Style Boutique Hotel",
+       "evening": "Jaipur Zoo",
+       "morning": "Ram Niwas Garden",
+       "afternoon": "Laxmi Mishthan Bhandar"
+      },
+      {
+       "date": "2026-11-26",
+       "hotel": "Umaid Mahal - A Heritage Style Boutique Hotel",
+       "evening": "Ganesh Restaurant",
+       "morning": "City Palace",
+       "afternoon": "Albert Hall"
+      },
+      {
+       "date": "2026-11-27",
+       "hotel": "Umaid Mahal - A Heritage Style Boutique Hotel",
+       "evening": null,
+       "morning": "Raj Mandir Cinema, Jaipur",
+       "afternoon": "Sweet Dreams Hotel Rooftop Restaurant"
+      },
+      {
+       "date": "2026-11-28",
+       "hotel": null,
+       "evening": null,
+       "morning": "Jantar Mantar",
+       "afternoon": "Mohan Restaurant"
+      }
+     ]
+    },
+    "hotels_count": 5,
+    "flights_count": 2,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-11-25",
+       "hotel": {
+        "lat": 26.880976,
+        "lng": 75.798005,
+        "name": "Sarovar Premiere Jaipur",
+        "stars": 5,
+        "rating": 10.0,
+        "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+        "cost_per_night": 11004.91
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "AA",
+        "arrival": "2026-11-25T19:27:00",
+        "departure": "2026-11-25T18:34:00",
+        "price_inr": 8321.04,
+        "destination": {
+         "lat": 26.826288,
+         "lng": 75.80897,
+         "code": "JAI",
+         "name": "Jaipur International Airport"
+        },
+        "duration_mins": 53,
+        "flight_number": "AA-10"
+       },
+       "evening": {
+        "lat": 26.912696838378906,
+        "lng": 75.82097625732422,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Jaipur Zoo",
+        "category": "nature"
+       },
+       "morning": {
+        "lat": 26.915300369262695,
+        "lng": 75.8187026977539,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Ram Niwas Garden",
+        "category": "nature"
+       },
+       "afternoon": {
+        "lat": 26.919588088989258,
+        "lng": 75.82604217529297,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Laxmi Mishthan Bhandar",
+        "category": "food"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-11-26",
+       "hotel": {
+        "lat": 26.880976,
+        "lng": 75.798005,
+        "name": "Sarovar Premiere Jaipur",
+        "stars": 5,
+        "rating": 10.0,
+        "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+        "cost_per_night": 11004.91
+       },
+       "flight": null,
+       "evening": {
+        "lat": 26.916872024536133,
+        "lng": 75.82019805908203,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Ganesh Restaurant",
+        "category": "food"
+       },
+       "morning": {
+        "lat": 26.925384521484375,
+        "lng": 75.8238525390625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "City Palace",
+        "category": "museum"
+       },
+       "afternoon": {
+        "lat": 26.911705017089844,
+        "lng": 75.81949615478516,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Albert Hall",
+        "category": "museum"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-11-27",
+       "hotel": {
+        "lat": 26.880976,
+        "lng": 75.798005,
+        "name": "Sarovar Premiere Jaipur",
+        "stars": 5,
+        "rating": 10.0,
+        "address": "LAL KOTHI, TONK ROAD SAHAKAR MARG,, Jaipur",
+        "cost_per_night": 11004.91
+       },
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 26.915498733520508,
+        "lng": 75.81016540527344,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Raj Mandir Cinema, Jaipur",
+        "category": "culture"
+       },
+       "afternoon": {
+        "lat": 26.91709327697754,
+        "lng": 75.82001495361328,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Sweet Dreams Hotel Rooftop Restaurant",
+        "category": "food"
+       }
+      },
+      {
+       "day": 4,
+       "date": "2026-11-28",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 26.92473793029785,
+        "lng": 75.824462890625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Jantar Mantar",
+        "category": "history"
+       },
+       "afternoon": {
+        "lat": 26.917448043823242,
+        "lng": 75.81854248046875,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Mohan Restaurant",
+        "category": "food"
+       }
+      }
+     ],
+     "group": null,
+     "currency": "INR",
+     "total_cost": 41335.77,
+     "per_person_cost": 20667.88,
+     "local_intelligence": {
+      "best_times": {
+       "Jal Mahal": "Sunset (around 6 pm) when the palace reflects beautifully on the lake.",
+       "Amber Fort": "Early morning (7-9 am) to beat the crowds and catch soft light for photography.",
+       "City Palace": "Mid-day (12-2 pm) to avoid the heat and enjoy cooler indoor galleries.",
+       "Johari Bazaar": "Late afternoon (4-6 pm) when shops are fully stocked and bargaining is lively."
+      },
+      "safety_tips": [
+       "November evenings can be chilly; carry a light jacket to avoid sudden cold.",
+       "Traffic is chaotic near major attractions; cross roads using pedestrian signals and stay alert.",
+       "Beware of stray dogs near markets; keep food covered and avoid feeding them."
+      ],
+      "tourist_traps": [
+       "Avoid street vendors near the Hawa Mahal selling overpriced ‘hand-crafted’ jewellery; shop at Bapu Bazaar for authentic items.",
+       "Skip the overly-touristy camel rides at the city gate; instead explore the historic streets on foot for free.",
+       "Don’t rely on hotel-arranged tours that charge extra for entry fees; buy tickets yourself at the gate."
+      ],
+      "cultural_norms": [
+       "Dress modestly when visiting temples and palaces; shoulders and knees should be covered.",
+       "Remove shoes before entering any religious site, and avoid pointing feet at idols.",
+       "Tipping 5-10 % in restaurants is customary, especially for good service."
+      ],
+      "local_transport": "Auto-rickshaws and app-based cabs are cheapest; for longer stretches use the city bus network or rent a scooter."
+     },
+     "per_person_breakdown": {
+      "stay": 16507.36,
+      "total": 20667.88,
+      "shares": [
+       {
+        "name": "Traveller 1",
+        "amount": 20668
+       },
+       {
+        "name": "Traveller 2",
+        "amount": 20668
+       }
+      ],
+      "flights": 4160.52,
+      "activities": 0.0,
+      "travellers": 2
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 9383,
+   "turn": 2,
+   "token_count": 5137,
+   "cost_usd": 0.00240315,
+   "created_at": "2026-10-11T04:52:09.234195"
+  },
+  {
+   "id": "a05d5ff4-c516-4a15-9cbf-5accd1ee0880",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-11-28",
+    "trip_start": "2026-11-25",
+    "retry_count": 0,
+    "budget_range": [
+     33068.616,
+     49602.92399999999
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 41335.77
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 2,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:52:09.242697"
+  },
+  {
+   "id": "1f6d16fe-b1ce-40ec-bd2d-1eed8a3aebee",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 41335.77
+   },
+   "output": {
+    "trip_status": "completed",
+    "itinerary_id": "50c93dfe-46b7-4263-b622-e858c5421fff",
+    "unmapped_activities": []
+   },
+   "duration_ms": 5,
+   "turn": 2,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:52:09.251845"
+  },
+  {
+   "id": "f786de97-f454-4900-be4d-8690f8369e73",
+   "trip_id": "acb0faa7-1a4c-4521-81b7-4d2b1b8ac490",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "message": "Could we stay somewhere nicer? A better hotel please.",
+    "refinement_type": "targeted_hotel"
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "50c93dfe-46b7-4263-b622-e858c5421fff",
+    "flight_status": "completed",
+    "flights_count": 2,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹8,321; ₹61,679 (88%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 8321.04,
+     "total_budget": 70000.0,
+     "remaining_budget": 61678.96
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 9429,
+   "turn": 2,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-11T04:52:09.257903"
+  }
+ ],
+ "graded_turn": 2,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "legs": [],
+ "seconds": 9.6
+}

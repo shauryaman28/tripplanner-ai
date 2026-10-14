@@ -56,3 +56,6 @@ docker/observability/secrets/
 
 # Phase 30: the k6 built for the load test (scripts/loadtest.py k6), and k6's own logs
 .loadtest/
+
+# Phase 33: what each eval run asked and got back (scripts/run_eval.py); a run worth keeping goes in docs/evals/
+.evals/

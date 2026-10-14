@@ -222,9 +222,14 @@ def test_every_night_at_two_the_integration_tests_run_on_real_services():
     }
     steps = {step["name"]: step for step in job["steps"] if "name" in step}
     assert steps["Integration tests"]["run"] == "pytest tests/integration/ -v --junitxml=reports/integration.xml"
-    evals = steps["Eval suite (Phase 33 — runs once there is one)"]["run"]
-    assert "if [ -d tests/eval ]" in evals and "--junitxml=reports/evals.xml" in evals
-    assert not (ROOT / "tests" / "eval").exists(), "Phase 33 is here: take --absent evals out of the nightly summary"
+    # Phase 33: the eval suite itself — real plans and a real grader, with the keys as repository secrets
+    evals = steps["Eval suite (Phase 33)"]
+    assert "python scripts/run_eval.py --assert-min-score 3.5" in evals["run"]
+    assert "--junit reports/evals.xml" in evals["run"] and "--no-history" in evals["run"]
+    assert "|| verdict=$?" in evals["run"] and "exit $verdict" in evals["run"]  # the table reaches the page either way
+    assert evals["env"]["ANTHROPIC_API_KEY"] == "${{ secrets.ANTHROPIC_API_KEY }}"
+    assert set(evals["env"]) >= {"GROQ_API_KEY", "DUFFEL_ACCESS_TOKEN", "LITEAPI_API_KEY", "OPENTRIPMAP_API_KEY"}
+    assert job["timeout-minutes"] == 35 and evals["timeout-minutes"] == 25  # the suite cannot use up the job
 
 
 def test_the_night_is_reported_whatever_happened_and_a_bad_night_is_a_failed_run():
@@ -234,11 +239,11 @@ def test_the_night_is_reported_whatever_happened_and_a_bad_night_is_a_failed_run
 
     # a suite that fails does not stop the night: the comment has to be written either way
     assert steps["Integration tests"]["continue-on-error"] is True
-    assert steps["Eval suite (Phase 33 — runs once there is one)"]["continue-on-error"] is True
+    assert steps["Eval suite (Phase 33)"]["continue-on-error"] is True
     summary = steps["Write the night's summary"]
     assert summary["id"] == "summary" and summary["continue-on-error"] is True
     assert "--require integration" in summary["run"]  # no report from them is a failed night, not an empty one
-    assert '--absent evals="no eval suite yet (Phase 33)"' in summary["run"]
+    assert "--require evals" in summary["run"] and "--absent" not in summary["run"]  # Phase 33: it exists
     assert "exit $verdict" in summary["run"] and 'cat summary.md >> "$GITHUB_STEP_SUMMARY"' in summary["run"]
 
     post = steps["Post it to the nightly issue"]
@@ -282,8 +287,12 @@ def test_the_summary_step_as_github_runs_it_puts_a_bad_night_on_the_runs_page_to
     assert code == 1 and "DID NOT RUN — no report was written" in said
 
     junit(tmp_path / "reports", "integration", passed=60)
+    code, said = night()  # Phase 33: the eval suite's report is required too
+    assert code == 1 and "| evals |" in said and "DID NOT RUN" in said
+
+    junit(tmp_path / "reports", "evals", passed=17)
     code, said = night()
-    assert code == 0 and "— 60 passed" in said and "[the run](https://github.com/o/r/actions/runs/1)" in said
+    assert code == 0 and "— 77 passed" in said and "[the run](https://github.com/o/r/actions/runs/1)" in said
 
 
 # ── All three ──────────────────────────────────────────────────────────────
@@ -293,7 +302,8 @@ def test_every_job_has_a_time_limit_and_no_workflow_may_write_to_the_repository(
     for name, job in all_jobs().items():
         if "uses" in job:  # a job that is another workflow: its own jobs carry the limits
             continue
-        assert 0 < job["timeout-minutes"] <= 20, name  # a hung job is stopped, not billed for six hours
+        # a hung job is stopped, not billed for six hours — the nightly allows the eval suite's real plans (Phase 33)
+        assert 0 < job["timeout-minutes"] <= (35 if name == "nightly.yml:tests" else 20), name
         assert job["runs-on"] == "ubuntu-latest", name
     for file in WORKFLOWS.glob("*.yml"):
         permissions = workflow(file.name)["permissions"]
@@ -333,6 +343,7 @@ def test_everything_a_workflow_runs_from_the_repository_is_in_the_repository():
         "scripts/wait_for_release.py",
         "scripts/nightly_summary.py",
         "scripts/nightly_post.sh",
+        "scripts/run_eval.py",
         "./.github/workflows/deploy.yml",
     }
     for path in named:
