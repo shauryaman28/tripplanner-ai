@@ -1,0 +1,249 @@
+{
+ "exercise": "mcp-kill-late",
+ "began": "2026-10-13T15:08:52+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "tool_server_pids": {
+  "before": [
+   24
+  ],
+  "killed": [
+   24,
+   59,
+   68
+  ],
+  "right_after_the_run": [],
+  "now": [
+   262
+  ]
+ },
+ "asked_at_s": 18.39,
+ "killed_at_s": 21.14,
+ "ended_at_s": 32.0,
+ "events": [
+  {
+   "t": 18.39,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 21.13,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 21.24,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 22.17,
+   "event": "activities_agent: failed",
+   "summary": "The search service stopped answering. Try again in a moment.",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 30.41,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "status": {
+  "status": "completed",
+  "trip_id": "f55d3802-74c1-4320-b781-f317d8eb12ea",
+  "progress": {
+   "agents_done": 2,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "failed"
+   },
+   "errors": {
+    "activities_agent": "The search service stopped answering. Try again in a moment."
+   },
+   "retryable": {
+    "activities_agent": true
+   }
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 2610,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 6,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 49,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b918,376; \u20b991,624 (83%) remaining for hotels and activities."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 81,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "activities_agent",
+   "status": "failed",
+   "ms": 1003,
+   "turn": 1,
+   "error": {
+    "code": "CONNECTION_REFUSED",
+    "error": "The tool server could not be reached."
+   }
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 1421,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "completed",
+   "ms": 7712,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "persist",
+   "status": "completed",
+   "ms": 23,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preference_extractor",
+   "status": "completed",
+   "ms": 1069,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "orchestrator",
+   "status": "completed",
+   "ms": 13101,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "itinerary": {
+  "days": 4,
+  "missing": [
+   {
+    "why": "The search service stopped answering. Try again in a moment.",
+    "what": "things to do",
+    "search": "activities_agent",
+    "retryable": true
+   }
+  ]
+ },
+ "the_next_plan": {
+  "trip": "bceb2a56-5b90-4e48-b94d-22e9dcdb2b77",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 17.9,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: The tool server is gone during get_attractions (its pipe closed before it answered) \u2014 starting another and asking again",
+  "warning: The tool server is gone during get_attractions (Connection closed) \u2014 starting another and asking again",
+  "error: The tool server would not start a second time during get_attractions (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again",
+  "error: The tool server would not start a second time during get_attractions (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "the run ended \u2014 the trip is not left planning",
+   "detail": "completed 10.9 s after the kill"
+  },
+  {
+   "ok": true,
+   "what": "the searches it took are 'failed' rows in agent_runs",
+   "detail": "activities_agent"
+  },
+  {
+   "ok": true,
+   "what": "\u2026each with a reason that names the cause",
+   "detail": "{\"activities_agent\": {\"code\": \"CONNECTION_REFUSED\", \"error\": \"The tool server could not be reached.\"}}"
+  },
+  {
+   "ok": true,
+   "what": "the traveller is told in their own words, not the program's",
+   "detail": "The search service stopped answering. Try again in a moment."
+  },
+  {
+   "ok": true,
+   "what": "the plan is made from what was found before it died",
+   "detail": "completed, 2 of 3 searches"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and the itinerary itself says what is missing from it, and why",
+   "detail": "[{\"why\": \"The search service stopped answering. Try again in a moment.\", \"what\": \"things to do\", \"search\": \"activities_agent\", \"retryable\": true}]"
+  },
+  {
+   "ok": true,
+   "what": "the next plan works: a new tool server is running, and nobody restarted the backend",
+   "detail": "completed, searches 3 of 3, {}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

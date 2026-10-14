@@ -1,0 +1,417 @@
+{
+ "exercise": "redis-kill",
+ "began": "2026-10-13T15:12:20+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "pages": 20,
+ "away_s": 30,
+ "asked": 202,
+ "asked_at_s": 12.15,
+ "redis_gone_at_s": 15.18,
+ "redis_back_at_s": 46.94,
+ "before": {
+  "redis": {
+   "connections": 32,
+   "subscribed": 21,
+   "channels": 21
+  },
+  "streams_open": 21.0
+ },
+ "after_the_restart": {
+  "redis": {
+   "connections": 21,
+   "subscribed": 21,
+   "channels": 21
+  },
+  "streams_open": 21.0
+ },
+ "after_every_page_closed": {
+  "redis": {
+   "connections": 4,
+   "subscribed": 0,
+   "channels": 0
+  },
+  "streams_open": 0.0
+ },
+ "streams_ended_s_after_the_kill": [
+  0.8,
+  0.8,
+  0.8,
+  0.8,
+  0.8,
+  0.8,
+  0.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8,
+  5.8
+ ],
+ "streams_reconnected_s_after_redis_was_back": [
+  3.5,
+  3.7,
+  3.7,
+  3.7,
+  3.7,
+  3.7,
+  3.7,
+  8.9,
+  9.3,
+  9.3,
+  9.4,
+  9.6,
+  9.6,
+  9.9,
+  9.9,
+  10.3,
+  10.4,
+  10.4,
+  10.4,
+  10.4
+ ],
+ "attempts_of_one_page": [
+  {
+   "asked_at": 9.47,
+   "connected_at": 10.5,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 20.96
+  },
+  {
+   "asked_at": 21.97,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 23.42
+  },
+  {
+   "asked_at": 25.43,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 27.08
+  },
+  {
+   "asked_at": 31.08,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 32.13
+  },
+  {
+   "asked_at": 40.13,
+   "connected_at": null,
+   "http": 200,
+   "how": "the stream ended",
+   "ended_at": 41.05
+  },
+  {
+   "asked_at": 57.06,
+   "connected_at": 57.24,
+   "http": 200
+  }
+ ],
+ "while_it_was_away": [
+  {
+   "t": 0.2,
+   "pages_connected": 20,
+   "status_answers": "planning"
+  },
+  {
+   "t": 3.0,
+   "pages_connected": 13,
+   "status_answers": "planning"
+  },
+  {
+   "t": 5.7,
+   "pages_connected": 13,
+   "status_answers": "planning"
+  },
+  {
+   "t": 8.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 10.6,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 13.4,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 15.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 17.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 19.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 21.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 23.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 25.5,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 27.6,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  },
+  {
+   "t": 29.6,
+   "pages_connected": 0,
+   "status_answers": "completed"
+  }
+ ],
+ "a_plan_asked_for_while_it_was_away": {
+  "http": 503,
+  "answer": "{\"detail\":\"The planner cannot be reached for a moment. Nothing is lost \u2014 please try again shortly.\",\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The planner cannot be reached for a moment. Nothing",
+  "trip_status_right_after": "pending"
+ },
+ "the_plan_in_flight": {
+  "status": "completed",
+  "saved": true,
+  "heard_on_its_page": [
+   {
+    "t": 12.19,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 14.52,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 14.54,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 14.54,
+    "event": "activities_agent: completed",
+    "summary": "Found 10 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 64.78,
+    "event": "planning_started",
+    "status": "planning"
+   },
+   {
+    "t": 75.48,
+    "event": "flight_agent: completed",
+    "summary": "Found 4 flights",
+    "status": "completed"
+   },
+   {
+    "t": 79.11,
+    "event": "activities_agent: completed",
+    "summary": "Found 6 attractions",
+    "status": "completed"
+   },
+   {
+    "t": 82.22,
+    "event": "hotel_agent: completed",
+    "summary": "Found 5 hotels",
+    "status": "completed"
+   },
+   {
+    "t": 90.64,
+    "event": "planning_complete",
+    "status": "completed"
+   }
+  ],
+  "agent_runs": [
+   {
+    "agent": "intent_parsing",
+    "status": "completed",
+    "ms": 2274,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preferences",
+    "status": "completed",
+    "ms": 1,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "flight_agent",
+    "status": "completed",
+    "ms": 20,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "budget_decision",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": "Budget check passed. Flights \u20b911,656; \u20b958,344 (83%) remaining for hotels and activities."
+   },
+   {
+    "agent": "hotel_agent",
+    "status": "completed",
+    "ms": 16,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "activities_agent",
+    "status": "completed",
+    "ms": 14,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "destination_intelligence",
+    "status": "completed",
+    "ms": 1661,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "itinerary_builder",
+    "status": "completed",
+    "ms": 6859,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "evaluator",
+    "status": "completed",
+    "ms": 0,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "persist",
+    "status": "completed",
+    "ms": 15,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "preference_extractor",
+    "status": "completed",
+    "ms": 1205,
+    "turn": 1,
+    "error": null
+   },
+   {
+    "agent": "orchestrator",
+    "status": "completed",
+    "ms": 13793,
+    "turn": 1,
+    "error": null
+   }
+  ]
+ },
+ "refine_afterwards": {
+  "http": 200,
+  "answer": "{\"status\":\"refinement_started\",\"trip_id\":\"ad94e2e0-ba9e-4ee5-8e8a-19c65f9ef13a\",\"turn\":2,\"refinement_type\":\"full_replan\",\"reason\":\"targeted_hotel, carried out as a full re-plan: the earlier searches a"
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: Event stream of trip f73b249a-3d40-4bd7-add8-5bd118043980: Redis could not be reached again (Error -2 connecting to upstash-standin:6379. Name or service not known.) \u2014 closing it",
+  "warning: Event stream of trip ad94e2e0-ba9e-4ee5-8e8a-19c65f9ef13a: Redis could not be reached again (Error -2 connecting to upstash-standin:6379. Name or service not known.) \u2014 closing it",
+  "warning: Redis cannot be reached (Error -2 connecting to upstash-standin:6379. Name or service not known.): the events of trip ad94e2e0-ba9e-4ee5-8e8a-19c65f9ef13a are not published until it can be \u2014 the page reads GET /status meanwhile",
+  "warning: on_complete hook failed",
+  "warning: A request could not be served: Redis cannot be reached (Error -2 connecting to upstash-standin:6379. Name or service not known.)",
+  "warning: Could not clear the run note of trip ad94e2e0-ba9e-4ee5-8e8a-19c65f9ef13a"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "no stream is left open and silent: each ends, or goes on being served",
+   "detail": "20 of 20 ended, 0.8 to 5.8 s after the kill"
+  },
+  {
+   "ok": true,
+   "what": "every page's stream is connected again after Redis returns \u2014 by the page's own backoff",
+   "detail": "20 reconnected, 3.5 to 10.4 s after it was back"
+  },
+  {
+   "ok": true,
+   "what": "CLIENT LIST after the restart: no more subscribed connections than there are open streams",
+   "detail": "21 subscribed for 21 streams (the backend counts 21.0)"
+  },
+  {
+   "ok": true,
+   "what": "the plan that was in flight is made, and saved",
+   "detail": "completed; the page heard: planning_started, flight_agent: completed, hotel_agent: completed, activities_agent: completed"
+  },
+  {
+   "ok": true,
+   "what": "GET /status goes on answering while Redis is away \u2014 it is what the page falls back on",
+   "detail": "['completed', 'planning']"
+  },
+  {
+   "ok": true,
+   "what": "a plan asked for while Redis is away is started, or refused in words \u2014 not a 500",
+   "detail": "{\"http\": 503, \"answer\": \"{\\\"detail\\\":\\\"The planner cannot be reached for a moment. Nothing is lost \\u2014 please try again shortly.\\\",\\\"error\\\":{\\\"code\\\":\\\"SERVICE_UNAVAILABLE\\\",\\\"message\\\":\\\"The planner cannot be reached for a moment. Noth"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and a refused one does not leave its trip 'planning'",
+   "detail": "pending"
+  },
+  {
+   "ok": true,
+   "what": "the planned trip can still be changed, although what Redis held about it is gone",
+   "detail": "200 {\"status\":\"refinement_started\",\"trip_id\":\"ad94e2e0-ba9e-4ee5-8e8a-19c65f9ef13a\",\"turn\":2,\"refinement_type\":\"full_replan\",\"reason\":\"targeted_hotel, carried out a"
+  },
+  {
+   "ok": true,
+   "what": "with every page closed, CLIENT LIST shows no subscription left behind",
+   "detail": "0 subscribed, 0.0 streams open"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

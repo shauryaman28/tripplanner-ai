@@ -358,7 +358,11 @@ async def test_get_trip_runs_no_filter_returns_all():
 
 @pytest.mark.asyncio
 async def test_refine_409_when_no_prior_state():
-    """POST /trips/{id}/refine returns 409 if no Redis planning state exists."""
+    """POST /trips/{id}/refine returns 409 if the trip has no planning state in Redis and no itinerary either.
+
+    Phase 31: no state *and* a saved itinerary is not this case — that trip is changed by a full
+    re-plan (tests/integration/test_phase31_chaos_integration.py).
+    """
     from app.api.deps import get_current_user, get_db, get_redis_dep
     from src.backend.app.main import app
 
@@ -368,6 +372,7 @@ async def test_refine_409_when_no_prior_state():
 
     trip_result = MagicMock()
     trip_result.scalar_one_or_none.return_value = mock_trip
+    trip_result.first.return_value = None  # …and it was never planned: there is no itinerary of it
     mock_db = AsyncMock()
     mock_db.execute = AsyncMock(return_value=trip_result)
 

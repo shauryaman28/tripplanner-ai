@@ -1,0 +1,184 @@
+{
+ "exercise": "builder-timeout",
+ "began": "2026-10-13T02:19:00+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "marked_failed_after_s": null,
+ "gave_up_waiting_after_s": 900,
+ "requests_to_the_failing_server": [
+  {
+   "at": 1791857952.681,
+   "method": "POST",
+   "path": "/hang/openai/v1/chat/completions",
+   "did": "hang",
+   "provider": "groq"
+  }
+ ],
+ "builds": [],
+ "status": {
+  "status": "planning",
+  "trip_id": "9ce737ed-7249-4a01-b1ff-7a964d8bca65",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": {
+   "turn": 1
+  },
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 2081,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 17,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b915,104; \u20b954,896 (78%) remaining for hotels and activities."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 11,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 13,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 1705,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "asked_again_while_planning": 409,
+ "planned_again_afterwards": null,
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 1,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: [COST] no price on record for model 'gemini-3.5-flash' \u2014 its tokens are counted, its cost is not. Add one with LLM_PRICES in .env.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "warning: Transient error HTTPConnectionPool(host='host.docker.internal', port=4318): Max retries exceeded with url: /v1/traces (Caused by NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=4318): Failed to establish a new connection: [Errno 101] Network is unreachable\")) encountered while e",
+  "error: Failed to export span batch due to timeout, max retries or shutdown.",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=2, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=1, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/",
+  "warning: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"HTTPConnection(host='host.docker.internal', port=9010): Failed to establish a new connection: [Errno 101] Network is unreachable\")': /api/1/envelope/"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": false,
+   "what": "the trip is marked failed \u2014 not left planning",
+   "detail": "planning after 901.2 s"
+  },
+  {
+   "ok": false,
+   "what": "\u2026within 60 seconds",
+   "detail": "901.2 s; the client asked 1 time(s) and stayed [None] s"
+  },
+  {
+   "ok": false,
+   "what": "the traveller is told why in their own words",
+   "detail": "no reason given"
+  },
+  {
+   "ok": false,
+   "what": "the page is told on its stream",
+   "detail": "None"
+  },
+  {
+   "ok": true,
+   "what": "asking again while it was still trying was refused",
+   "detail": "409"
+  },
+  {
+   "ok": false,
+   "what": "asked again once the model answers, the same trip is planned",
+   "detail": "409 \u2192 None in 0.0 s"
+  },
+  {
+   "ok": false,
+   "what": "nothing in Postgres is left half-done",
+   "detail": "{\"trips left in 'planning' with nothing planning them\": 1}"
+  }
+ ],
+ "as_expected": false
+}

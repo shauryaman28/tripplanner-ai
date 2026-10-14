@@ -188,9 +188,10 @@ def small_pooler() -> Path:
     return SMALL_POOLER
 
 
-def compose(*args: str, env: dict | None = None, small_pools: bool = False) -> int:
+def compose(*args: str, env: dict | None = None, small_pools: bool = False, also: tuple[Path, ...] = ()) -> int:
+    """docker compose on the stack's files. `also`: further files laid over them (scripts/chaos.py has one)."""
     command = ["docker", "compose"]
-    for file in (*COMPOSE_FILES, *([SMALL_POOLS] if small_pools else [])):
+    for file in (*COMPOSE_FILES, *([SMALL_POOLS] if small_pools else []), *also):
         command += ["-f", file]
     # Only the stack's own two secrets. Not the repository's .env: this stack is never shown a real key.
     command += ["--env-file", SECRETS]
@@ -202,7 +203,7 @@ def stand_ins_are_in() -> bool:
     return STAND_INS_SAY in log.stdout + log.stderr
 
 
-def up(small_pools: bool = False) -> int:
+def up(small_pools: bool = False, also: tuple[Path, ...] = ()) -> int:
     prodlike = _script("prodlike")
     prodlike.make_secrets()
     if small_pools:
@@ -218,7 +219,7 @@ def up(small_pools: bool = False) -> int:
         "PRODLIKE_OTLP_ENDPOINT": os.environ.get("PRODLIKE_OTLP_ENDPOINT", "http://host.docker.internal:4318"),
         "PRODLIKE_COMMIT": os.environ.get("PRODLIKE_COMMIT", commit()),
     }
-    if compose("up", "-d", "--build", env=told, small_pools=small_pools) != 0:
+    if compose("up", "-d", "--build", env=told, small_pools=small_pools, also=also) != 0:
         print("docker compose could not start the stack — its own message is above.")
         return 1
     print("waiting for the backend to say it is ready…", flush=True)

@@ -1,0 +1,246 @@
+{
+ "exercise": "mcp-kill-early",
+ "began": "2026-10-13T15:08:18+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "tool_server_pids": {
+  "before": [
+   24
+  ],
+  "killed": [
+   24,
+   47,
+   56,
+   66,
+   105,
+   113,
+   124,
+   133,
+   142,
+   151
+  ],
+  "right_after_the_run": [],
+  "now": [
+   309
+  ]
+ },
+ "asked_at_s": 0.51,
+ "killed_at_s": 1.53,
+ "ended_at_s": 8.13,
+ "events": [
+  {
+   "t": 0.52,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 3.87,
+   "event": "flight_agent: failed",
+   "summary": "The search service stopped answering. Try again in a moment.",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 4.76,
+   "event": "hotel_agent: failed",
+   "summary": "The search service stopped answering. Try again in a moment.",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 4.76,
+   "event": "activities_agent: failed",
+   "summary": "The search service stopped answering. Try again in a moment.",
+   "retryable": true,
+   "status": "failed"
+  },
+  {
+   "t": 5.77,
+   "event": "planning_failed",
+   "error": "None of the searches could be run just now, so there is nothing to build a plan from yet. Nothing is wrong with your trip \u2014 try again in a moment.",
+   "status": "failed"
+  }
+ ],
+ "status": {
+  "status": "failed",
+  "trip_id": "5ab8bf75-4c11-41a3-91da-8d36c5c0bb5b",
+  "progress": {
+   "agents_done": 0,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "failed",
+    "hotel_agent": "failed",
+    "activities_agent": "failed"
+   },
+   "errors": {
+    "flight_agent": "The search service stopped answering. Try again in a moment.",
+    "hotel_agent": "The search service stopped answering. Try again in a moment.",
+    "activities_agent": "The search service stopped answering. Try again in a moment."
+   },
+   "retryable": {
+    "flight_agent": true,
+    "hotel_agent": true,
+    "activities_agent": true
+   }
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": "None of the searches could be run just now, so there is nothing to build a plan from yet. Nothing is wrong with your trip \u2014 try again in a moment."
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 3006,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "failed",
+   "ms": 313,
+   "turn": 1,
+   "error": {
+    "code": "CONNECTION_REFUSED",
+    "error": "The tool server could not be reached."
+   }
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Flight search unavailable (CONNECTION_REFUSED) \u2014 planning hotels and activities without flights."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "failed",
+   "ms": 871,
+   "turn": 1,
+   "error": {
+    "code": "CONNECTION_REFUSED",
+    "error": "The tool server could not be reached."
+   }
+  },
+  {
+   "agent": "activities_agent",
+   "status": "failed",
+   "ms": 870,
+   "turn": 1,
+   "error": {
+    "code": "CONNECTION_REFUSED",
+    "error": "The tool server could not be reached."
+   }
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 1877,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "nothing_found",
+   "status": "failed",
+   "ms": 2,
+   "turn": 1,
+   "error": "None of the searches could be run just now, so there is nothing to build a plan from yet. Nothing is wrong with your trip \u2014 try again in a moment."
+  },
+  {
+   "agent": "orchestrator",
+   "status": "failed",
+   "ms": 5239,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "itinerary": null,
+ "the_next_plan": {
+  "trip": "297466e6-1798-46d8-90da-7daffb29ad82",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 15.8,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: The tool server is gone during search_hotels (its pipe closed before it answered) \u2014 starting another and asking again",
+  "warning: The tool server is gone during search_flights (Connection closed) \u2014 starting another and asking again",
+  "warning: The tool server is gone during get_attractions (its pipe closed before it answered) \u2014 starting another and asking again",
+  "error: The tool server would not start a second time during search_hotels (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again",
+  "error: The tool server would not start a second time during search_flights (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again",
+  "error: The tool server would not start a second time during get_attractions (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again",
+  "warning: The tool server would not start during search_flights (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 starting another and asking again",
+  "error: The tool server would not start a second time during search_flights (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again",
+  "warning: The tool server would not start during search_hotels (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 starting another and asking again",
+  "warning: The tool server would not start during get_attractions (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 starting another and asking again",
+  "error: The tool server would not start a second time during search_hotels (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again",
+  "error: The tool server would not start a second time during get_attractions (unhandled errors in a TaskGroup (1 sub-exception)) \u2014 not asked again"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "the run ended \u2014 the trip is not left planning",
+   "detail": "failed 6.6 s after the kill"
+  },
+  {
+   "ok": true,
+   "what": "the searches it took are 'failed' rows in agent_runs",
+   "detail": "flight_agent, hotel_agent, activities_agent"
+  },
+  {
+   "ok": true,
+   "what": "\u2026each with a reason that names the cause",
+   "detail": "{\"flight_agent\": {\"code\": \"CONNECTION_REFUSED\", \"error\": \"The tool server could not be reached.\"}, \"hotel_agent\": {\"code\": \"CONNECTION_REFUSED\", \"error\": \"The tool server could not be reached.\"}, \"activities_agent\": {\"code\": \"CONNECTION_REFUSED\", \"error\": \"The tool server could not be reached.\"}}"
+  },
+  {
+   "ok": true,
+   "what": "the traveller is told in their own words, not the program's",
+   "detail": "The search service stopped answering. Try again in a moment."
+  },
+  {
+   "ok": true,
+   "what": "with no search answered there is no plan: the trip is 'failed'",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "\u2026and the reason given is that the searches could not be run, not that the destination has nothing",
+   "detail": "None of the searches could be run just now, so there is nothing to build a plan from yet. Nothing is wrong with your trip \u2014 try again in a moment."
+  },
+  {
+   "ok": true,
+   "what": "the next plan works: a new tool server is running, and nobody restarted the backend",
+   "detail": "completed, searches 3 of 3, {}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

@@ -29,6 +29,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import date, timedelta
@@ -39,7 +40,9 @@ import redis.asyncio as aioredis
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from fastapi.responses import JSONResponse
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
@@ -71,7 +74,7 @@ from app.schemas.types import as_utc
 from app.search import Match, search_trips, similar_trips
 from src.ai import tracing
 from src.ai.agents.budget_decision import viable_budget
-from src.ai.agents.refinement_classifier import classify_refinement
+from src.ai.agents.refinement_classifier import RefinementClassification, classify_refinement
 from src.ai.embeddings.embedder import EMBEDDING_MODEL, embed_query
 from src.ai.orchestrator.orchestrator import RETRY_REFINEMENTS, TRIP_FIELDS, OrchestratorAgent
 from src.ai.orchestrator.warming import start_cache_warming
@@ -139,6 +142,57 @@ _runs: set[asyncio.Task] = set()
 
 # What the traveller is told when a run was cut short by the server stopping — a deploy, most often.
 INTERRUPTED = "The server was restarted while this trip was being planned. Nothing is lost — please start it again."
+
+# Phase 31 — nothing bounded a planning run as a whole: a step that never came back kept the trip
+# "planning" for as long as the process lived. A plan takes 10 to 16 seconds; with every wait a search
+# may make for a provider's rate limit, a few times that. Past this it is stopped and the trip marked.
+RUN_DEADLINE_S = 300.0
+TOOK_TOO_LONG = "Planning this trip took too long and was stopped. Nothing is lost — please start it again."
+
+
+class _Publisher:
+    """A run's events, published to the trip's channel — and not waited on while Redis is away (Phase 31).
+
+    "A dead Redis must never fail a planning run" held: a publish that failed was logged and the
+    run went on. It also has to not *slow* one. Each failed publish took a second or two of
+    reconnecting, and the itinerary is published in dozens of pieces while it is written: with Redis
+    killed for 30 seconds a build that takes 7 took 32 — the run lasted as long as the outage did
+    (docs/chaos-report.md). So after a publish fails none is tried for a few seconds, and a single
+    one is given no longer than TRY_S. What is not published is lost either way — pub/sub keeps
+    nothing — and the page reads GET /status for it. The events that end a run are always tried.
+    """
+
+    QUIET_S = 5.0
+    TRY_S = 2.0
+    _ENDS = ("planning_complete", "planning_failed")
+
+    def __init__(self, redis: aioredis.Redis, trip_id: uuid.UUID) -> None:
+        self._redis, self._trip_id = redis, trip_id
+        self._quiet_until = 0.0
+        self.dropped = 0
+
+    async def __call__(self, event: dict) -> None:
+        if time.monotonic() < self._quiet_until and event.get("event") not in self._ENDS:
+            self.dropped += 1
+            return
+        try:
+            await asyncio.wait_for(
+                self._redis.publish(_events_channel(self._trip_id), json.dumps(event, default=str)), self.TRY_S
+            )
+        except (RedisError, OSError, asyncio.TimeoutError) as lost:
+            if not self.dropped:
+                logger.warning(
+                    "Redis cannot be reached (%s): the events of trip %s are not published until it can be — "
+                    "the page reads GET /status meanwhile",
+                    str(lost)[:120] or type(lost).__name__,
+                    self._trip_id,
+                )
+            self.dropped += 1
+            self._quiet_until = time.monotonic() + self.QUIET_S
+        else:
+            if self.dropped:
+                logger.warning("Redis is back: %d event(s) of trip %s were not published", self.dropped, self._trip_id)
+                self.dropped = 0
 
 
 async def _keep_noted(redis: aioredis.Redis, trip_id: uuid.UUID, note: dict) -> None:
@@ -227,8 +281,7 @@ async def _run_orchestrator(
     beside this one leaves the trip alone.
     """
 
-    async def publish(event: dict) -> None:
-        await redis.publish(_events_channel(trip_id), json.dumps(event, default=str))
+    publish = _Publisher(redis, trip_id)
 
     async def save_state(state: dict) -> None:
         await save_trip_state(redis, str(trip_id), {k: v for k, v in state.items() if k != "itinerary_id"})
@@ -251,7 +304,10 @@ async def _run_orchestrator(
             async with AsyncSessionLocal() as db:
                 try:
                     with error_reporting.run_scope(trip_id, turn):  # an error reported from here on names its trip
-                        result = await run(OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state})
+                        async with asyncio.timeout(RUN_DEADLINE_S):  # Phase 31: no run is waited for for ever
+                            result = await run(
+                                OrchestratorAgent(), db, {"publish_fn": publish, "on_complete": save_state}
+                            )
                 except asyncio.CancelledError:
                     logger.warning("Planning run for trip %s was cut short: the server is stopping", trip_id)
                     await asyncio.shield(_give_up(trip_id, turn, has_itinerary, publish))
@@ -263,9 +319,10 @@ async def _run_orchestrator(
                     span.record_exception(exc)
                     traces.fail(span, f"{type(exc).__name__}: {exc}")
                     fallback = TripStatus.COMPLETED if has_itinerary else TripStatus.FAILED
+                    why = TOOK_TOO_LONG if isinstance(exc, TimeoutError) else str(exc)
                     try:
                         await publish(
-                            {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": str(exc)}
+                            {"event": "planning_failed", "agent": "orchestrator", "status": "failed", "error": why}
                         )
                     except Exception:
                         logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
@@ -316,20 +373,28 @@ async def _start_run(
         if event_extra.get("choice")
         else "plan"
     )
-    await save_current_run(redis, str(trip.id), note)
-    await redis.publish(
-        _events_channel(trip.id),
-        json.dumps(
-            {
-                "event": "planning_started",
-                "agent": "orchestrator",
-                "status": "planning",
-                "trip_id": str(trip.id),
-                "turn": turn,
-                **event_extra,
-            }
-        ),
-    )
+    # Phase 31: the trip already says "planning" — so from here on nothing may stop the run from being
+    # started. Redis going away between that commit and the two writes below would otherwise leave a
+    # trip that is being planned by nobody, and refuses to be planned again.
+    try:
+        await save_current_run(redis, str(trip.id), note)
+        await redis.publish(
+            _events_channel(trip.id),
+            json.dumps(
+                {
+                    "event": "planning_started",
+                    "agent": "orchestrator",
+                    "status": "planning",
+                    "trip_id": str(trip.id),
+                    "turn": turn,
+                    **event_extra,
+                }
+            ),
+        )
+    except (RedisError, OSError) as lost:
+        logger.warning(
+            "Redis could not be reached as the run of trip %s began (%s): it is planned all the same", trip.id, lost
+        )
     spawn(_run_orchestrator(trip.id, redis, run, turn=turn, has_itinerary=has_itinerary, note=note, kind=kind))
 
 
@@ -653,8 +718,17 @@ async def refine_trip(
     Classifies the message into one of five action types (full_replan,
     targeted_flights, targeted_hotel, targeted_activities, add_day), then runs
     OrchestratorAgent.refine() in the background on the state the last
-    successful run saved to Redis. No saved state → 409: there is nothing to
-    refine until the trip has been planned once.
+    successful run saved to Redis. A trip that has never been planned → 409:
+    there is nothing to refine.
+
+    Phase 31: a trip that *has* a plan, and whose saved state is not there, is
+    not refused. The state lives in Redis for a day; it is also what a run
+    cannot save when Redis is away as it ends, and what a Redis that comes back
+    empty has lost (docs/chaos-report.md: Redis killed for 30 seconds, the plan
+    in flight made and saved to Postgres — and "nothing to refine" for ever
+    after). What a targeted change needs is the earlier searches' results, and
+    those are gone; so the change is carried out the way that needs none of
+    them — as a full re-plan, from the trip as Postgres has it.
 
     Every agent_runs row written during this pass carries the new turn number.
     """
@@ -662,13 +736,21 @@ async def refine_trip(
     _ensure_not_planning(trip)
 
     prior_state = await get_trip_state(redis, str(trip_id))
+    from_the_trip_itself = False
     if not prior_state:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="No prior planning state found. Run POST /plan first.",
-        )
+        planned = (await db.execute(select(Itinerary.id).where(Itinerary.trip_id == trip_id).limit(1))).first()
+        if planned is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No prior planning state found. Run POST /plan first.",
+            )
+        prior_state, from_the_trip_itself = _trip_state(trip), True
 
     turn = max(await get_current_turn(redis, str(trip_id)), 1) + 1  # the initial plan is always turn 1
+    if from_the_trip_itself:
+        # the conversation went with the state: the turns this trip has had are counted where they are kept
+        had = (await db.execute(select(func.max(AgentRun.turn)).where(AgentRun.trip_id == trip_id))).scalar()
+        turn = max(turn, (had or 1) + 1)
     await hand_back(db)  # Phase 30: a model reads the request next — not with a connection in hand
     # Phase 26: reading the request is a model call like any other — a trace of this trip, and a row
     # of its own in agent_runs with what it cost. (Until now its tokens were counted nowhere.)
@@ -677,6 +759,12 @@ async def refine_trip(
             "classify refinement", "classify", trip_id, current_user.id, turn, inputs={"message": body.message}
         ) as trace:
             classification = await classify_refinement(body.message, await get_history(redis, str(trip_id)))
+            if from_the_trip_itself and classification.refinement_type not in ("full_replan", "add_day"):
+                classification = RefinementClassification(
+                    refinement_type="full_replan",
+                    reason=f"{classification.refinement_type}, carried out as a full re-plan: "
+                    "the earlier searches are no longer at hand",
+                )
             trace.end(outputs=classification.model_dump())
     try:
         await log_agent_run(
@@ -897,8 +985,12 @@ async def get_trip_status(
         elif (output := latest_run.get("nothing_found") or latest_run.get("interrupted")) is not None:
             failure_reason = output.get("reason")  # "interrupted" (Phase 27): the server stopped under the run
         elif (output := latest_run.get("builder_failed")) is not None:
-            failure_reason = (output.get("builder_error") or {}).get("error") or "; ".join(
-                failure.get("detail", "") for failure in output.get("evaluator_failures") or []
+            # Phase 31: what the page was told on its stream, when the run wrote it down (`reason`) —
+            # a page loaded afterwards is told the same, not what the model's client raised.
+            failure_reason = (
+                output.get("reason")
+                or (output.get("builder_error") or {}).get("error")
+                or "; ".join(failure.get("detail", "") for failure in output.get("evaluator_failures") or [])
             )
 
     def latest_searches(rows: list[AgentRun]) -> dict[str, AgentRun]:

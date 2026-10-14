@@ -1,0 +1,271 @@
+{
+ "exercise": "gemini-429-both",
+ "began": "2026-10-13T15:10:29+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "plan_seconds": 12.9,
+ "asked": 202,
+ "requests_to_the_failing_server": [
+  {
+   "at": 1791904238.317,
+   "method": "POST",
+   "path": "/429/v1beta/models/gemini-3.5-flash:generateContent",
+   "did": "429",
+   "provider": "gemini"
+  },
+  {
+   "at": 1791904238.356,
+   "method": "POST",
+   "path": "/429/openai/v1/chat/completions",
+   "did": "429",
+   "provider": "groq"
+  },
+  {
+   "at": 1791904240.358,
+   "method": "POST",
+   "path": "/429/openai/v1/chat/completions",
+   "did": "429",
+   "provider": "groq"
+  }
+ ],
+ "seconds_between_them": [
+  0.04,
+  2.0
+ ],
+ "intent_parsing": {
+  "agent": "intent_parsing",
+  "status": "failed",
+  "ms": 2100,
+  "turn": 1,
+  "error": null
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "ce74692a-767a-41c9-8acd-089f94da0516",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "failed",
+   "ms": 2100,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 12,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b913,064; \u20b956,936 (81%) remaining for hotels and activities."
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 10,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 12,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 1317,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "completed",
+   "ms": 6873,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "persist",
+   "status": "completed",
+   "ms": 10,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preference_extractor",
+   "status": "completed",
+   "ms": 1072,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "orchestrator",
+   "status": "completed",
+   "ms": 11486,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "refinement": {
+  "http": 200,
+  "answer": "{\"status\":\"refinement_started\",\"trip_id\":\"ce74692a-767a-41c9-8acd-089f94da0516\",\"turn\":2,\"refinement_type\":\"full_replan\",\"reason\":\"Classification failed (Error code: 429 - {'error': {'message': 'Rate ",
+  "status": "completed"
+ },
+ "events": [
+  {
+   "t": 8.57,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 10.71,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 10.73,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 10.73,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 18.97,
+   "event": "planning_complete",
+   "status": "completed"
+  },
+  {
+   "t": 23.48,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 25.59,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 25.6,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 25.61,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 33.27,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: Direct use of automatic function calling (AFC) in AsyncModels.generate_content is not recommended. Instead, we recommend to use AFC in AsyncChat.send_message. Similarly, direct use of AFC in AsyncModels.generate_content_stream is not recommended. Instead, we recommend to use AFC in AsyncChat.send_me",
+  "warning: Gemini unavailable (Error calling model 'gemini-3.5-flash' (RESOURCE_EXHAUSTED): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': ) \u2014 asking Groq openai/gpt-oss-20b instead",
+  "warning: Intent parsing failed \u2014 continuing with existing trip fields",
+  "warning: Gemini unavailable (Error calling model 'gemini-3.5-flash' (RESOURCE_EXHAUSTED): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': ) \u2014 asking Groq openai/gpt-oss-20b instead",
+  "warning: RefinementClassifier failed (Error code: 429 - {'error': {'message': 'Rate limit reached for this model on tokens per minute. Please try again in 2s.', 'type': 'tokens', 'code': 'rate_limit_exceeded'}}) \u2014 defaulting to full_replan",
+  "warning: Gemini unavailable (Error calling model 'gemini-3.5-flash' (RESOURCE_EXHAUSTED): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': ) \u2014 asking Groq openai/gpt-oss-20b instead",
+  "warning: Intent parsing failed \u2014 continuing with existing trip fields"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "Gemini's own client asked, and was told 429",
+   "detail": "1 request(s)"
+  },
+  {
+   "ok": true,
+   "what": "it did not sit out the 36 seconds the error asks for",
+   "detail": "1 to Gemini, 2 to Groq; seconds between them: [0.04, 2.0]"
+  },
+  {
+   "ok": true,
+   "what": "the plan is made all the same",
+   "detail": "completed in 12.9 s"
+  },
+  {
+   "ok": true,
+   "what": "\u2026and in a plan's usual time",
+   "detail": "12.9 s"
+  },
+  {
+   "ok": true,
+   "what": "the model asked instead was asked, and said 429 too",
+   "detail": "2 request(s)"
+  },
+  {
+   "ok": true,
+   "what": "intent parsing is logged as failed",
+   "detail": "failed"
+  },
+  {
+   "ok": true,
+   "what": "a change request nobody could read is still carried out",
+   "detail": "{\"http\": 200, \"answer\": \"{\\\"status\\\":\\\"refinement_started\\\",\\\"trip_id\\\":\\\"ce74692a-767a-41c9-8acd-089f94da0516\\\",\\\"turn\\\":2,\\\"refinement_type\\\":\\\"full_replan\\\",\\\"reason\\\":\\\"Classification failed (Erro"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

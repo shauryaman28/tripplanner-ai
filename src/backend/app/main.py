@@ -18,6 +18,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import func
 from sqlmodel import select, update
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -399,6 +401,24 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
             "detail": jsonable_encoder(exc.errors()),
             "error": {"code": "VALIDATION_ERROR", "message": message},
         },
+    )
+
+
+@app.exception_handler(RedisConnectionError)
+@app.exception_handler(RedisTimeoutError)
+async def redis_is_away_handler(_: Request, exc: Exception) -> JSONResponse:
+    """Phase 31 — Redis cannot be reached: said as what it is, something that passes.
+
+    A request that needs Redis before it can begin (a plan's conversation is kept there) used to
+    be answered 500, "something went wrong on our side": true, and of no use to someone deciding
+    whether to try again. Nothing has been changed by a request that ends here.
+    """
+    logger.warning("A request could not be served: Redis cannot be reached (%s)", str(exc)[:160])
+    message = "The planner cannot be reached for a moment. Nothing is lost — please try again shortly."
+    return JSONResponse(
+        status_code=503,
+        headers={"Retry-After": "5"},
+        content={"detail": message, "error": {"code": "SERVICE_UNAVAILABLE", "message": message}},
     )
 
 

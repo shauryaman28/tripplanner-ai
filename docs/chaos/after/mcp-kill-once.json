@@ -1,0 +1,213 @@
+{
+ "exercise": "mcp-kill-once",
+ "began": "2026-10-13T15:07:34+00:00",
+ "commit": "485d1e4d16ce18e76dfa0925235248b79d891711",
+ "tool_server_pids": {
+  "before": [
+   25
+  ],
+  "killed": [
+   25
+  ],
+  "right_after_the_run": [
+   48
+  ],
+  "now": [
+   48
+  ]
+ },
+ "asked_at_s": 0.57,
+ "killed_at_s": 1.59,
+ "ended_at_s": 19.48,
+ "events": [
+  {
+   "t": 0.59,
+   "event": "planning_started",
+   "status": "planning"
+  },
+  {
+   "t": 7.98,
+   "event": "flight_agent: completed",
+   "summary": "Found 4 flights",
+   "status": "completed"
+  },
+  {
+   "t": 8.01,
+   "event": "activities_agent: completed",
+   "summary": "Found 10 attractions",
+   "status": "completed"
+  },
+  {
+   "t": 8.93,
+   "event": "hotel_agent: completed",
+   "summary": "Found 5 hotels",
+   "status": "completed"
+  },
+  {
+   "t": 17.61,
+   "event": "planning_complete",
+   "status": "completed"
+  }
+ ],
+ "status": {
+  "status": "completed",
+  "trip_id": "be841a56-3336-4ed4-918e-874429abcfd1",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "agent_runs": [
+  {
+   "agent": "intent_parsing",
+   "status": "completed",
+   "ms": 2612,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preferences",
+   "status": "completed",
+   "ms": 1,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "flight_agent",
+   "status": "completed",
+   "ms": 4742,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "budget_decision",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": "Budget check passed. Flights \u20b915,536; \u20b954,464 (78%) remaining for hotels and activities."
+  },
+  {
+   "agent": "activities_agent",
+   "status": "completed",
+   "ms": 13,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "hotel_agent",
+   "status": "completed",
+   "ms": 941,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "destination_intelligence",
+   "status": "completed",
+   "ms": 2500,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "itinerary_builder",
+   "status": "completed",
+   "ms": 7056,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "evaluator",
+   "status": "completed",
+   "ms": 0,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "persist",
+   "status": "completed",
+   "ms": 10,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "preference_extractor",
+   "status": "completed",
+   "ms": 1065,
+   "turn": 1,
+   "error": null
+  },
+  {
+   "agent": "orchestrator",
+   "status": "completed",
+   "ms": 18094,
+   "turn": 1,
+   "error": null
+  }
+ ],
+ "itinerary": {
+  "days": 4,
+  "missing": null
+ },
+ "the_next_plan": {
+  "trip": "3ae388c3-4add-4612-ae10-740f0f69d45b",
+  "asked": 202,
+  "status": "completed",
+  "seconds": 14.8,
+  "searches_done": "3 of 3",
+  "errors": {},
+  "failure_reason": null
+ },
+ "integrity": {
+  "trips left in 'planning' with nothing planning them": 0,
+  "completed trips with no itinerary": 0,
+  "failed trips whose only run saved an itinerary": 0,
+  "agent_runs rows that are neither completed nor failed": 0,
+  "trips whose rows do not end with the row that closes a run": 0,
+  "itineraries with half their embeddings": 0,
+  "itineraries with both vectors and a row still owing them": 0
+ },
+ "log": [
+  "warning: The tool server is gone during search_hotels (its pipe closed before it answered) \u2014 starting another and asking again",
+  "warning: The tool server is gone during search_flights (Connection closed) \u2014 starting another and asking again",
+  "warning: The tool server is gone during get_attractions (its pipe closed before it answered) \u2014 starting another and asking again"
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "POST /plan was accepted",
+   "detail": "202"
+  },
+  {
+   "ok": true,
+   "what": "the run ended \u2014 the trip is not left planning",
+   "detail": "completed 17.9 s after the kill"
+  },
+  {
+   "ok": true,
+   "what": "the plan is whole: a new tool server was started, and the searches were asked of it",
+   "detail": "completed, 3 of 3 searches, {}"
+  },
+  {
+   "ok": true,
+   "what": "the next plan works: a new tool server is running, and nobody restarted the backend",
+   "detail": "completed, searches 3 of 3, {}"
+  },
+  {
+   "ok": true,
+   "what": "nothing in Postgres is left half-done",
+   "detail": ""
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

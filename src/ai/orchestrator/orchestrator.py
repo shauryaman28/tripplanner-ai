@@ -871,6 +871,8 @@ async def evaluate_node(state: OrchestratorState) -> OrchestratorState:
 
 def route_after_evaluator(state: OrchestratorState) -> str:
     if state.get("builder_error") is not None and state.get("draft_itinerary") is None:
+        if (state.get("builder_error") or {}).get("code") == "LLM_TIMEOUT":
+            return "failed"  # Phase 31: a model that did not answer is not waited for a second time
         retry_count = state.get("evaluator_retry_count", 0)
         return "failed" if retry_count >= MAX_EVALUATOR_RETRIES else "retry"
 
@@ -949,6 +951,12 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
     if unmapped:
         logger.warning("Itinerary for trip %s has activities without coordinates: %s", trip_id, unmapped)
 
+    # Phase 31: a plan made without one of its searches says so itself — in what is saved, and so in
+    # whatever is made of it later — not only on the page that happened to be open.
+    missing = missing_searches(state)
+    if missing:
+        draft = {**draft, "missing": missing}
+
     async with timed_run("persist") as timer:
         itinerary = Itinerary(trip_id=trip_id, structured_data=draft, total_cost=draft.get("total_cost"))
         trip = await db.get(Trip, trip_id)
@@ -969,7 +977,12 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
             "days_count": len(draft.get("days", [])),
             "currency": draft.get("currency", "INR"),
         },
-        output={"itinerary_id": str(itinerary.id), "trip_status": "completed", "unmapped_activities": unmapped},
+        output={
+            "itinerary_id": str(itinerary.id),
+            "trip_status": "completed",
+            "unmapped_activities": unmapped,
+            "missing": [gap["search"] for gap in missing],
+        },
         duration_ms=timer.duration_ms,
     )
 
@@ -983,6 +996,31 @@ async def persist_node(state: OrchestratorState) -> OrchestratorState:
 # A destination the tools could not use: these explain the failure better than "nothing found".
 _DESTINATION_ERROR_CODES = ("OUTSIDE_COVERAGE", "NOT_FOUND")
 
+# Phase 31 — what the traveller is told when a run ends without a plan for a reason that is not theirs.
+SEARCHES_DID_NOT_RUN = (
+    "None of the searches could be run just now, so there is nothing to build a plan from yet. "
+    "Nothing is wrong with your trip — try again in a moment."
+)
+_BUILDER_WORDS = {
+    "LLM_TIMEOUT": "The plan could not be written: the model that writes it did not answer in time. Try again in a moment.",
+    "LLM_ERROR": "The plan could not be written: the model that writes it could not be reached. Try again in a moment.",
+}
+# The three searches, as a plan that lacks one says so: (the agent, its error in the state, what is missing).
+_SEARCHES = (
+    ("flight_agent", "flight_error", "flights"),
+    ("hotel_agent", "hotel_error", "a place to stay"),
+    ("activities_agent", "activities_error", "things to do"),
+)
+
+
+def missing_searches(state: dict) -> list[dict]:
+    """The searches a plan is being made without, each with why — in the traveller's words — and whether asking again could help."""
+    return [
+        {"search": agent, "what": what, "why": failure_words(state[key]), "retryable": can_retry(state[key])}
+        for agent, key, what in _SEARCHES
+        if state.get(key)
+    ]
+
 
 def route_after_search(state: OrchestratorState) -> str:
     """With no flights, no hotel and nothing to do there is no trip to build — stop instead of saving an empty plan."""
@@ -994,8 +1032,14 @@ async def nothing_found_node(state: OrchestratorState) -> OrchestratorState:
     """Every search came back empty: fail the trip and say why (usually the destination)."""
     errors = [e for e in (state.get("activities_error"), state.get("hotel_error"), state.get("flight_error")) if e]
     destination_error = next((e for e in errors if e.get("code") in _DESTINATION_ERROR_CODES), None)
+    # Phase 31: "nothing was found" is one thing and "nothing could be looked for" another. With the
+    # tool server dead every search failed in milliseconds, and the traveller was told their
+    # destination had no flights, no hotels and nothing to do.
+    could_not_search = len(errors) == 3 and all(can_retry(error) for error in errors)
     reason = (destination_error or {}).get("error") or (
-        f"No flights, places to stay or things to do were found for {state.get('destination') or 'this trip'}, "
+        SEARCHES_DID_NOT_RUN
+        if could_not_search
+        else f"No flights, places to stay or things to do were found for {state.get('destination') or 'this trip'}, "
         "so there is nothing to build a plan from."
     )
 
@@ -1019,7 +1063,10 @@ async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
     builder_error = state.get("builder_error") or {}
     failures = (state.get("evaluator_verdict") or {}).get("failures", [])
     reason = (
-        builder_error.get("error")
+        _BUILDER_WORDS.get(
+            builder_error.get("code") or ""
+        )  # Phase 31: the traveller's words; the row keeps the model's
+        or builder_error.get("error")
         or "; ".join(f["detail"] for f in failures)
         or "Itinerary could not be built after maximum retries."
     )
@@ -1035,7 +1082,12 @@ async def builder_failed_node(state: OrchestratorState) -> OrchestratorState:
             "evaluator_retry_count": state.get("evaluator_retry_count", 0),
             "builder_error_code": builder_error.get("code"),
         },
-        output={"builder_error": builder_error, "evaluator_failures": failures, "trip_status": "failed"},
+        output={
+            "reason": reason,  # Phase 31: as the traveller is told it; GET /status reads it for a page loaded later
+            "builder_error": builder_error,
+            "evaluator_failures": failures,
+            "trip_status": "failed",
+        },
         duration_ms=timer.duration_ms,
         status="failed",
     )

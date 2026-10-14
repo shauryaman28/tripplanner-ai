@@ -251,7 +251,9 @@ test("a run that fails outright says what failed, and Retry plans it again", asy
 
   const failed = page.getByLabel("Planning failed");
   await expect(failed).toBeVisible({ timeout: 90_000 });
-  await expect(failed).toContainText("No flights, places to stay or things to do were found for Shimla");
+  // Phase 31: every provider failed — the searches could not be run, which is not "nothing was found for Shimla"
+  await expect(failed).toContainText("None of the searches could be run just now");
+  await expect(failed).not.toContainText("were found for Shimla");
   const searches = failed.getByRole("list", { name: "Searches that failed" }).getByRole("listitem");
   await expect(searches).toHaveCount(3);
   await expect(searches.first()).toContainText("Flights");
@@ -259,7 +261,7 @@ test("a run that fails outright says what failed, and Retry plans it again", asy
 
   // the same after a reload: the reason and each search's own error come back from GET /status
   await page.reload();
-  await expect(failed).toContainText("No flights, places to stay or things to do were found for Shimla");
+  await expect(failed).toContainText("None of the searches could be run just now");
   await expect(searches).toHaveCount(3);
   await expect(page.locator('[data-stream="connected"]')).toBeAttached();
 

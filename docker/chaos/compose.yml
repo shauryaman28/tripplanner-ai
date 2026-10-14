@@ -1,0 +1,26 @@
+# Chaos (Phase 31): laid over docker/prodlike/compose.yml and docker/loadtest/compose.yml by
+# scripts/chaos.py. It adds one container — the far end of a model call that goes wrong
+# (loadtest/standins/fault_server.py: it says 429, it says 500, or it never answers) — and tells the
+# stand-ins where it is. Nothing here is switched on by being there: a model only talks to it while
+# a file in the backend's container says so (loadtest/standins/faults.py), and the script that
+# writes that file removes it again.
+#
+# The image is the load test's own: the deployed image with loadtest/standins/ added.
+
+name: tripplanner-prodlike
+
+services:
+  provider-faults:
+    image: tripplanner-loadtest-backend
+    command: ["python", "-m", "loadtest.standins.fault_server"]
+    environment:
+      PORT: "9099"
+    ports:
+      - "8209:9099"  # GET /log: what the clients asked it, and when
+
+  backend:
+    depends_on:
+      provider-faults:
+        condition: service_started
+    environment:
+      STANDIN_FAULT_SERVER: http://provider-faults:9099
