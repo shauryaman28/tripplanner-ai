@@ -292,7 +292,7 @@ async def test_a_backend_that_starts_while_its_database_is_away_looks_again():
     later: list = []
 
     def spawned(job) -> None:
-        later.append(job)
+        later.append((job.__name__, job.cr_frame.f_locals["again"]))
         job.close()
 
     class Away:
@@ -304,8 +304,8 @@ async def test_a_backend_that_starts_while_its_database_is_away_looks_again():
 
     with patch.object(main, "AsyncSessionLocal", Away), patch.object(main, "spawn", spawned):
         await main._recover_after_restart()
-        assert len(later) == 1 and later[0].__name__ == "_recover_later"
-        await main._recover_after_restart(again=0)  # …but not for ever
+        assert later == [("_recover_later", main.RECOVER_TIMES - 1)]  # one look fewer is left: it counts down
+        await main._recover_after_restart(again=0)  # …and at none left it is not asked for again
         assert len(later) == 1
     assert main.RECOVER_EVERY_S * main.RECOVER_TIMES == 600
 

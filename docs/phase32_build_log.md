@@ -79,6 +79,31 @@ The roadmap's question is still answered where it arises: an integration test en
 
 Every exercise on the tree as committed, the machine awake (07:20–07:24 IST, 14 October): **5 of 5 as expected** — the table is the report's section 4, the records `docs/chaos/after/`. In short: Postgres away 15 s → every request answered once it was back, the plan in flight made, the app back 0.8 s after Postgres; away 45 s → no 500 (23 of 23 told to try again shortly, where 15 had been a 500), the plan still made, the app back 2.7 s after Postgres (13.7 before); killed between the two writes → no itinerary and the trip not `completed`, the traveller told "the planner lost its database for a moment", and asked for again one itinerary and the trip `completed`; the backend killed 0.23 s after `planning_complete` → the itinerary on record as owed, two vectors 4.3 s after the backend was ready; with an embedding owed from before → two vectors 4.3 s after ready.
 
+### On real providers and models, the tree as committed
+
+The chaos stack taken down and the production-like stack of Phase 27 brought up — real keys, the pooler with
+its new retry, version `0.32.0`:
+
+```
+$ python scripts/prod_check.py --prodlike
+  ✓ the plan arrives over the stream — 23.3 s; 31 events (26 pieces of the itinerary as it was written); ended with 'planning_complete'
+25 passed, 0 failed, 1 skipped                                 ← skipped: the frontend (no --web)
+
+$ python scripts/observability_check.py --prodlike
+45 passed, 0 failed
+
+$ python scripts/loadtest.py one-plan --api http://localhost:8200 --destination Jaipur
+the plan took 22.19 s: 40 events, 35 of them pieces of the itinerary
+
+$ psql … -c "select embedding_model, count(*), count(vector) from embeddings group by 1"
+gemini-embedding-001|6|6                                       ← three plans: six vectors, and no row left that says "owed"
+```
+
+The last line is the new row at work with the real embedding API: each of the three itineraries was saved
+owing its embeddings, and each debt was paid by the ordinary job within seconds. (The plans took 22 seconds
+where 12 is usual: Gemini did not answer within its 15 and Groq's small model did — the fallback of Phase 31's
+exercise 2, again.)
+
 ## Tests
 
 **1,290 unit + contract, 79 integration, 60 browser — all passing** on the tree as committed. New in this phase: 35 unit, 5 integration.
@@ -89,7 +114,20 @@ Every exercise on the tree as committed, the machine awake (07:20–07:24 IST, 1
 
 ### Break it on purpose
 
-Not run yet when this was first committed (the laptop at 9 % battery, as in Phase 31): see the end of this section for what came of it.
+48 deliberate breakages, each applied to a scratch copy of the repository with a database of its own; the Phase 32 unit tests and the five older files the phase touched run on it, then the whole unit and contract suite, then the integration suite, stopping at the first that fails. **47 caught on the first pass; all 48 on the second**, of the whole set again, after one assertion was added.
+
+The one that survived: *start-up recovery is tried again for ever* — the look that is scheduled was not asked how many it has left. The test saw that a later look was scheduled, not with what count; it now reads the count.
+
+| Where | Breakages | For example |
+|---|---|---|
+| "the database cannot be reached" (`db/errors.py`) | 9 | what is under SQLAlchemy's error not looked at · every database error "away" · any deadline anywhere "the database" · a server that is starting up not "away" |
+| the app (`main.py`) | 9 | a refused statement told "try again" · the answer carrying what the driver said · a pool timeout a 500 · recovery skipped for good, or tried whatever stopped it, or for ever |
+| a run that ends (`routes/trips.py`) | 12 | the traveller shown what was raised · a trip not tried again · tried for ever · a late mark undoing what the traveller has started since · a refinement that made no plan left failed · no reason for a page loaded later |
+| saving a plan (`orchestrator.py`) | 4 | an itinerary saved owing nothing · the row that points at it sent with it · the owed row committed on its own |
+| the engine, the pooler, the stack | 6 | the driver given a timeout again · no test before use · the pooler looking every 15 s · for chaos, Postgres still in memory |
+| the faults and the script | 8 | the embedding fault ignored · the exercise's lock stopping the insert too · the driver's words passing for a traveller's · a minute allowed where the roadmap says ten seconds |
+
+Not one of the 48 needed the integration suite to be caught — unlike Phase 31's, where seven did. The integration tests here earn their place differently: they are what would have caught the two mistakes this phase's own fixes made on the way (a foreign-key order no mock knows about; a driver timeout nothing but a real pooler shows), which no breakage in a list is a substitute for.
 
 ## Done criterion checklist
 
