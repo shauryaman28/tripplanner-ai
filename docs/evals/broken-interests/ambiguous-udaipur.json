@@ -1,0 +1,1150 @@
+{
+ "scenario": "ambiguous-udaipur",
+ "asked": {
+  "trip": {
+   "destination": "Udaipur",
+   "start_date": "2026-12-11",
+   "end_date": "2026-12-14",
+   "budget": 65000,
+   "group_size": 2
+  },
+  "message": "Something slow and pretty — we're really not museum people",
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+ "trip": {
+  "id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+  "user_id": "96062294-7808-4e7e-bedf-a0c9cfeaf0e0",
+  "destination": "Udaipur",
+  "start_date": "2026-12-11",
+  "end_date": "2026-12-14",
+  "budget": 65000.0,
+  "group_size": 2,
+  "interests": null,
+  "group_members": null,
+  "status": "completed",
+  "created_at": "2026-10-15T12:40:30.925886Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "df5fc375-e81c-4239-89c9-4d2a60161139",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-11",
+      "hotel": {
+       "lat": 24.592349,
+       "lng": 73.703565,
+       "name": "Gadh Ganesh Homestay",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+       "cost_per_night": 1722.53
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "ZZ",
+       "arrival": "2026-12-11T09:02:00",
+       "departure": "2026-12-11T07:44:00",
+       "price_inr": 12148.5,
+       "destination": {
+        "lat": 24.618606,
+        "lng": 73.893357,
+        "code": "UDR",
+        "name": "Maharana Pratap Airport"
+       },
+       "duration_mins": 78,
+       "flight_number": "ZZ-3744"
+      },
+      "evening": {
+       "lat": 24.579736709594727,
+       "lng": 73.6823959350586,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Bagore-ki-Haveli",
+       "category": "history"
+      },
+      "morning": {
+       "lat": 24.579099655151367,
+       "lng": 73.68470764160156,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Jagdish Temple",
+       "category": "spiritual"
+      },
+      "afternoon": {
+       "lat": 24.576465606689453,
+       "lng": 73.68358612060547,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "City Palace",
+       "category": "history"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-12-12",
+      "hotel": {
+       "lat": 24.592349,
+       "lng": 73.703565,
+       "name": "Gadh Ganesh Homestay",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+       "cost_per_night": 1722.53
+      },
+      "flight": null,
+      "evening": {
+       "lat": 24.574413299560547,
+       "lng": 73.68380737304688,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "shiv niwas palace by hrh group of hotels",
+       "category": "history"
+      },
+      "morning": {
+       "lat": 24.579994201660156,
+       "lng": 73.68194580078125,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Gangaur Ghat",
+       "category": "sightseeing"
+      },
+      "afternoon": {
+       "lat": 24.57451057434082,
+       "lng": 73.68809509277344,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Ganesh Temple",
+       "category": "spiritual"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-12-13",
+      "hotel": {
+       "lat": 24.592349,
+       "lng": 73.703565,
+       "name": "Gadh Ganesh Homestay",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+       "cost_per_night": 1722.53
+      },
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 24.577726364135742,
+       "lng": 73.679931640625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Ambrai Ghat",
+       "category": "sightseeing"
+      },
+      "afternoon": {
+       "lat": 24.575698852539062,
+       "lng": 73.69451141357422,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Vintage and Classic Car Museum",
+       "category": "museum"
+      }
+     },
+     {
+      "day": 4,
+      "date": "2026-12-14",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 24.571388244628906,
+       "lng": 73.69277954101562,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Gulab Bagh and Zoo",
+       "category": "nature"
+      },
+      "afternoon": {
+       "lat": 24.579660415649414,
+       "lng": 73.68367004394531,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Jagdish Mandir",
+       "category": "spiritual"
+      }
+     }
+    ],
+    "group": null,
+    "missing": null,
+    "currency": "INR",
+    "total_cost": 17316.09,
+    "per_person_cost": 8658.05,
+    "local_intelligence": {
+     "best_times": {
+      "City Palace": "Visit early morning (7-8 am) for soft light and fewer crowds.",
+      "Lake Pichola": "Sunset is ideal for reflections of the palaces on the water.",
+      "Jagdish Temple": "Late afternoon (4-5 pm) when the marble glows and prayer chants create a serene atmosphere.",
+      "Monsoon Palace (Sajjangarh)": "Go around 4 pm to catch the golden hour and panoramic city views."
+     },
+     "safety_tips": [
+      "Evenings can be chilly near the lake; carry a light jacket to avoid sudden cold.",
+      "Watch out for slippery stones on the lake promenade after light rain; wear sturdy shoes.",
+      "Traffic is chaotic near the market lanes; cross streets at designated crossings only."
+     ],
+     "tourist_traps": [
+      "Avoid the overpriced boat rides from the main jetty; hire a local rower at the lakeside for half the price.",
+      "Skip the souvenir shops on Lake Pichola promenade that sell mass-produced items; head to Hathi Pol market for authentic crafts.",
+      "Don’t rely on street-food stalls near the railway station after dark; choose eateries near the City Palace for cleaner options."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting temples; shoulders and knees should be covered.",
+      "Remove shoes before entering private homes or traditional haveli restaurants.",
+      "Tipping 5-10 % is customary for good service at hotels and guided walks."
+     ],
+     "local_transport": "Hire a private auto-rickshaw for short hops; city buses are infrequent in December evenings."
+    },
+    "per_person_breakdown": {
+     "stay": 2583.8,
+     "total": 8658.05,
+     "shares": [
+      {
+       "name": "Traveller 1",
+       "amount": 8658
+      },
+      {
+       "name": "Traveller 2",
+       "amount": 8658
+      }
+     ],
+     "flights": 6074.25,
+     "activities": 0.0,
+     "travellers": 2
+    }
+   },
+   "total_cost": 17316.09,
+   "created_at": "2026-10-15T12:41:14.122828Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "d429cf4c-b6d7-4600-bf30-2938497c3e18",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": "Something slow and pretty — we're really not museum people",
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": false,
+    "extracted_fields": {
+     "interests": [
+      "slow travel",
+      "scenic views",
+      "sightseeing"
+     ]
+    }
+   },
+   "duration_ms": 5207,
+   "turn": 1,
+   "token_count": 432,
+   "cost_usd": 0.0003034,
+   "created_at": "2026-10-15T12:41:06.971822Z"
+  },
+  {
+   "id": "adcd400b-a832-4ba8-ad0f-58283a394061",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "96062294-7808-4e7e-bedf-a0c9cfeaf0e0"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:06.990030Z"
+  },
+  {
+   "id": "0f5b76e5-6ab9-4eb3-ab9c-269a6159d8ed",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-11",
+    "budget": 65000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Udaipur",
+    "return_date": "2026-12-14",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-11T09:02:00",
+      "departure": "2026-12-11T07:44:00",
+      "price_inr": 12148.5,
+      "destination": {
+       "lat": 24.618606,
+       "lng": 73.893357,
+       "code": "UDR",
+       "name": "Maharana Pratap Airport"
+      },
+      "duration_mins": 78,
+      "flight_number": "ZZ-3744"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-11T09:02:00",
+      "departure": "2026-12-11T07:44:00",
+      "price_inr": 12286.82,
+      "destination": {
+       "lat": 24.618606,
+       "lng": 73.893357,
+       "code": "UDR",
+       "name": "Maharana Pratap Airport"
+      },
+      "duration_mins": 78,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-11T07:50:00",
+      "departure": "2026-12-11T06:30:00",
+      "price_inr": 35814.87,
+      "destination": {
+       "lat": 24.618606,
+       "lng": 73.893357,
+       "code": "UDR",
+       "name": "Maharana Pratap Airport"
+      },
+      "duration_mins": 80,
+      "flight_number": "AI-1771"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-11T07:50:00",
+      "departure": "2026-12-11T06:30:00",
+      "price_inr": 36334.48,
+      "destination": {
+       "lat": 24.618606,
+       "lng": 73.893357,
+       "code": "UDR",
+       "name": "Maharana Pratap Airport"
+      },
+      "duration_mins": 80,
+      "flight_number": "AI-1771"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-11T12:00:00",
+      "departure": "2026-12-11T10:40:00",
+      "price_inr": 36334.48,
+      "destination": {
+       "lat": 24.618606,
+       "lng": 73.893357,
+       "code": "UDR",
+       "name": "Maharana Pratap Airport"
+      },
+      "duration_mins": 80,
+      "flight_number": "AI-1737"
+     }
+    ]
+   },
+   "duration_ms": 24,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:07.020756Z"
+  },
+  {
+   "id": "4cbdd117-2c6d-4cbe-ad95-0a32c7f89187",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 65000.0,
+    "cheapest_flight": 12148.5,
+    "replan_attempts": 0,
+    "flights_evaluated": 5
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹12,148; ₹52,852 (81%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 12148.5,
+    "total_budget": 65000.0,
+    "remaining_budget": 52851.5
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:07.026834Z"
+  },
+  {
+   "id": "f69a6261-0938-4556-8c2e-09a1f6d8e293",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 2,
+    "check_in": "2026-12-11",
+    "check_out": "2026-12-14",
+    "destination": "Udaipur",
+    "budget_per_night": 17617.17
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 24.592349,
+      "lng": 73.703565,
+      "name": "Gadh Ganesh Homestay",
+      "stars": 0,
+      "rating": 9.0,
+      "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+      "price_per_night_inr": 1722.53
+     },
+     {
+      "lat": 24.598863,
+      "lng": 73.691531,
+      "name": "Hotel Horizon - Near Fateh Sagar Lake Udaipur",
+      "stars": 3,
+      "rating": 7.3,
+      "address": "57/2 New Fatehpura road. Nr. Sukhadia Circle, Udaipur",
+      "price_per_night_inr": 2893.84
+     },
+     {
+      "lat": 24.581915,
+      "lng": 73.683132,
+      "name": "Madri Haveli",
+      "stars": 3,
+      "rating": 9.3,
+      "address": "70, Ganesh Gati Inside Chandpole, Udaipur",
+      "price_per_night_inr": 3630.83
+     },
+     {
+      "lat": 24.582812,
+      "lng": 73.675807,
+      "name": "Bloom Boutique | Lake Pichola",
+      "stars": 3,
+      "rating": 8.2,
+      "address": "Dr.Chhagan Nath Ji Ki Bari, Outside Bhrampole, Udaipur, Rajasthan, 313001, Udaipur",
+      "price_per_night_inr": 5255.7
+     },
+     {
+      "lat": 24.606712,
+      "lng": 73.709253,
+      "name": "Medalio Resort Udaipur Shobhagpura",
+      "stars": 4,
+      "rating": 8.1,
+      "address": "Plot No. 1, Shobhagpura Circle, Shobhagpura, Udaipur",
+      "price_per_night_inr": 5401.31
+     }
+    ]
+   },
+   "duration_ms": 38,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:07.073718Z"
+  },
+  {
+   "id": "231eda63-3781-4fd5-8add-5f896024ba27",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "limit": 10,
+    "interests": [
+     "sightseeing"
+    ],
+    "destination": "Udaipur"
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 24.579099655151367,
+      "lng": 73.68470764160156,
+      "name": "Jagdish Temple",
+      "rating": 7.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Udaipur."
+     },
+     {
+      "lat": 24.576465606689453,
+      "lng": 73.68358612060547,
+      "name": "City Palace",
+      "rating": 3.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Udaipur."
+     },
+     {
+      "lat": 24.579736709594727,
+      "lng": 73.6823959350586,
+      "name": "Bagore-ki-Haveli",
+      "rating": 2.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Udaipur."
+     },
+     {
+      "lat": 24.579994201660156,
+      "lng": 73.68194580078125,
+      "name": "Gangaur Ghat",
+      "rating": 2.0,
+      "category": "sightseeing",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular sightseeing attraction in Udaipur."
+     },
+     {
+      "lat": 24.57451057434082,
+      "lng": 73.68809509277344,
+      "name": "Ganesh Temple",
+      "rating": 3.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Udaipur."
+     },
+     {
+      "lat": 24.574413299560547,
+      "lng": 73.68380737304688,
+      "name": "shiv niwas palace by hrh group of hotels",
+      "rating": 3.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Udaipur."
+     },
+     {
+      "lat": 24.577726364135742,
+      "lng": 73.679931640625,
+      "name": "Ambrai Ghat",
+      "rating": 2.0,
+      "category": "sightseeing",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular sightseeing attraction in Udaipur."
+     },
+     {
+      "lat": 24.575698852539062,
+      "lng": 73.69451141357422,
+      "name": "Vintage and Classic Car Museum",
+      "rating": 2.0,
+      "category": "museum",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular museum attraction in Udaipur."
+     },
+     {
+      "lat": 24.571388244628906,
+      "lng": 73.69277954101562,
+      "name": "Gulab Bagh and Zoo",
+      "rating": 3.0,
+      "category": "nature",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular nature attraction in Udaipur."
+     },
+     {
+      "lat": 24.579660415649414,
+      "lng": 73.68367004394531,
+      "name": "Jagdish Mandir",
+      "rating": 1.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A lesser-known spiritual attraction in Udaipur."
+     }
+    ]
+   },
+   "duration_ms": 39,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:07.077830Z"
+  },
+  {
+   "id": "e02c1c06-62d3-4d5e-b755-1eb52b5d1ccf",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "slow travel",
+     "scenic views",
+     "sightseeing"
+    ],
+    "travellers": 2,
+    "destination": "Udaipur"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "City Palace": "Visit early morning (7-8 am) for soft light and fewer crowds.",
+      "Lake Pichola": "Sunset is ideal for reflections of the palaces on the water.",
+      "Jagdish Temple": "Late afternoon (4-5 pm) when the marble glows and prayer chants create a serene atmosphere.",
+      "Monsoon Palace (Sajjangarh)": "Go around 4 pm to catch the golden hour and panoramic city views."
+     },
+     "safety_tips": [
+      "Evenings can be chilly near the lake; carry a light jacket to avoid sudden cold.",
+      "Watch out for slippery stones on the lake promenade after light rain; wear sturdy shoes.",
+      "Traffic is chaotic near the market lanes; cross streets at designated crossings only."
+     ],
+     "tourist_traps": [
+      "Avoid the overpriced boat rides from the main jetty; hire a local rower at the lakeside for half the price.",
+      "Skip the souvenir shops on Lake Pichola promenade that sell mass-produced items; head to Hathi Pol market for authentic crafts.",
+      "Don’t rely on street-food stalls near the railway station after dark; choose eateries near the City Palace for cleaner options."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting temples; shoulders and knees should be covered.",
+      "Remove shoes before entering private homes or traditional haveli restaurants.",
+      "Tipping 5-10 % is customary for good service at hotels and guided walks."
+     ],
+     "local_transport": "Hire a private auto-rickshaw for short hops; city buses are infrequent in December evenings."
+    }
+   },
+   "duration_ms": 1390,
+   "turn": 1,
+   "token_count": 863,
+   "cost_usd": 0.0003135,
+   "created_at": "2026-10-15T12:41:08.429740Z"
+  },
+  {
+   "id": "d2ea9fa5-6541-4e09-b7fb-70af2f7af253",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-14",
+     "group_size": 2,
+     "start_date": "2026-12-11",
+     "destination": "Udaipur"
+    },
+    "hotels_count": 5,
+    "flights_count": 5,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-11",
+       "hotel": {
+        "lat": 24.592349,
+        "lng": 73.703565,
+        "name": "Gadh Ganesh Homestay",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+        "cost_per_night": 1722.53
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "ZZ",
+        "arrival": "2026-12-11T09:02:00",
+        "departure": "2026-12-11T07:44:00",
+        "price_inr": 12148.5,
+        "destination": {
+         "lat": 24.618606,
+         "lng": 73.893357,
+         "code": "UDR",
+         "name": "Maharana Pratap Airport"
+        },
+        "duration_mins": 78,
+        "flight_number": "ZZ-3744"
+       },
+       "evening": {
+        "lat": 24.579736709594727,
+        "lng": 73.6823959350586,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Bagore-ki-Haveli",
+        "category": "history"
+       },
+       "morning": {
+        "lat": 24.579099655151367,
+        "lng": 73.68470764160156,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Jagdish Temple",
+        "category": "spiritual"
+       },
+       "afternoon": {
+        "lat": 24.576465606689453,
+        "lng": 73.68358612060547,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "City Palace",
+        "category": "history"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-12-12",
+       "hotel": {
+        "lat": 24.592349,
+        "lng": 73.703565,
+        "name": "Gadh Ganesh Homestay",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+        "cost_per_night": 1722.53
+       },
+       "flight": null,
+       "evening": {
+        "lat": 24.574413299560547,
+        "lng": 73.68380737304688,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "shiv niwas palace by hrh group of hotels",
+        "category": "history"
+       },
+       "morning": {
+        "lat": 24.579994201660156,
+        "lng": 73.68194580078125,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Gangaur Ghat",
+        "category": "sightseeing"
+       },
+       "afternoon": {
+        "lat": 24.57451057434082,
+        "lng": 73.68809509277344,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Ganesh Temple",
+        "category": "spiritual"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-12-13",
+       "hotel": {
+        "lat": 24.592349,
+        "lng": 73.703565,
+        "name": "Gadh Ganesh Homestay",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "5/6 Patanjali Vihar, Behind CPS School New Bhopalpura, Udaipur",
+        "cost_per_night": 1722.53
+       },
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 24.577726364135742,
+        "lng": 73.679931640625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Ambrai Ghat",
+        "category": "sightseeing"
+       },
+       "afternoon": {
+        "lat": 24.575698852539062,
+        "lng": 73.69451141357422,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Vintage and Classic Car Museum",
+        "category": "museum"
+       }
+      },
+      {
+       "day": 4,
+       "date": "2026-12-14",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 24.571388244628906,
+        "lng": 73.69277954101562,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Gulab Bagh and Zoo",
+        "category": "nature"
+       },
+       "afternoon": {
+        "lat": 24.579660415649414,
+        "lng": 73.68367004394531,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Jagdish Mandir",
+        "category": "spiritual"
+       }
+      }
+     ],
+     "group": null,
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 17316.09,
+     "per_person_cost": 8658.05,
+     "local_intelligence": {
+      "best_times": {
+       "City Palace": "Visit early morning (7-8 am) for soft light and fewer crowds.",
+       "Lake Pichola": "Sunset is ideal for reflections of the palaces on the water.",
+       "Jagdish Temple": "Late afternoon (4-5 pm) when the marble glows and prayer chants create a serene atmosphere.",
+       "Monsoon Palace (Sajjangarh)": "Go around 4 pm to catch the golden hour and panoramic city views."
+      },
+      "safety_tips": [
+       "Evenings can be chilly near the lake; carry a light jacket to avoid sudden cold.",
+       "Watch out for slippery stones on the lake promenade after light rain; wear sturdy shoes.",
+       "Traffic is chaotic near the market lanes; cross streets at designated crossings only."
+      ],
+      "tourist_traps": [
+       "Avoid the overpriced boat rides from the main jetty; hire a local rower at the lakeside for half the price.",
+       "Skip the souvenir shops on Lake Pichola promenade that sell mass-produced items; head to Hathi Pol market for authentic crafts.",
+       "Don’t rely on street-food stalls near the railway station after dark; choose eateries near the City Palace for cleaner options."
+      ],
+      "cultural_norms": [
+       "Dress modestly when visiting temples; shoulders and knees should be covered.",
+       "Remove shoes before entering private homes or traditional haveli restaurants.",
+       "Tipping 5-10 % is customary for good service at hotels and guided walks."
+      ],
+      "local_transport": "Hire a private auto-rickshaw for short hops; city buses are infrequent in December evenings."
+     },
+     "per_person_breakdown": {
+      "stay": 2583.8,
+      "total": 8658.05,
+      "shares": [
+       {
+        "name": "Traveller 1",
+        "amount": 8658
+       },
+       {
+        "name": "Traveller 2",
+        "amount": 8658
+       }
+      ],
+      "flights": 6074.25,
+      "activities": 0.0,
+      "travellers": 2
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 5657,
+   "turn": 1,
+   "token_count": 5007,
+   "cost_usd": 0.00182655,
+   "created_at": "2026-10-15T12:41:14.099848Z"
+  },
+  {
+   "id": "340288cc-a95c-4626-9865-a95e92cfebb9",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-14",
+    "trip_start": "2026-12-11",
+    "retry_count": 0,
+    "budget_range": [
+     13852.872000000001,
+     20779.308
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 17316.09
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:14.116682Z"
+  },
+  {
+   "id": "cbac23bc-69de-4d7c-a6d5-d26eeca84cdc",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 17316.09
+   },
+   "output": {
+    "missing": [],
+    "trip_status": "completed",
+    "itinerary_id": "df5fc375-e81c-4239-89c9-4d2a60161139",
+    "unmapped_activities": []
+   },
+   "duration_ms": 12,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:14.134921Z"
+  },
+  {
+   "id": "897d968f-5f98-46d8-8f57-35f285c37d04",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Gadh Ganesh Homestay"
+     ],
+     "nights": 3,
+     "interests": [
+      "slow travel",
+      "scenic views",
+      "sightseeing"
+     ],
+     "group_size": 2,
+     "destination": "Udaipur",
+     "user_message": "Something slow and pretty — we're really not museum people",
+     "top_activities": [
+      "Jagdish Temple",
+      "City Palace",
+      "Bagore-ki-Haveli",
+      "Gangaur Ghat",
+      "Ganesh Temple",
+      "shiv niwas palace by hrh group of hotels",
+      "Ambrai Ghat",
+      "Vintage and Classic Car Museum"
+     ],
+     "total_cost_inr": 17316.09,
+     "avg_hotel_stars": 0.0,
+     "per_person_per_night_inr": 2886
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "budget"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "budget",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 792,
+   "turn": 1,
+   "token_count": 753,
+   "cost_usd": 0.00018,
+   "created_at": "2026-10-15T12:41:14.954733Z"
+  },
+  {
+   "id": "1ebe83dc-86f5-4af5-a13c-3788e988b172",
+   "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 65000.0,
+    "end_date": "2026-12-14",
+    "interests": [],
+    "raw_input": "Something slow and pretty — we're really not museum people",
+    "group_size": 2,
+    "start_date": "2026-12-11",
+    "destination": "Udaipur"
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "df5fc375-e81c-4239-89c9-4d2a60161139",
+    "flight_status": "completed",
+    "flights_count": 5,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹12,148; ₹52,852 (81%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 12148.5,
+     "total_budget": 65000.0,
+     "remaining_budget": 52851.5
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 13200,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:14.963693Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-5c9b68e726@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Udaipur",
+    "start_date": "2026-12-11",
+    "end_date": "2026-12-14",
+    "budget": 65000,
+    "group_size": 2
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6",
+    "user_id": "96062294-7808-4e7e-bedf-a0c9cfeaf0e0",
+    "destination": "Udaipur",
+    "start_date": "2026-12-11",
+    "end_date": "2026-12-14",
+    "budget": 65000.0,
+    "group_size": 2,
+    "interests": null,
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-15T12:40:30.925886Z"
+   }
+  },
+  {
+   "request": "POST /trips/3ecb0925-4a4e-4a6a-b6ea-359599239cf6/plan",
+   "sent": {
+    "raw_input": "Something slow and pretty — we're really not museum people"
+   },
+   "status": 202,
+   "seconds": 0.02,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "3ecb0925-4a4e-4a6a-b6ea-359599239cf6"
+   }
+  }
+ ],
+ "seconds": 45.0,
+ "asleep_s": 0.0
+}

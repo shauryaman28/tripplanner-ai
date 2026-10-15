@@ -1,0 +1,1491 @@
+{
+ "scenario": "group-kochi-family",
+ "asked": {
+  "trip": {
+   "destination": "Kochi",
+   "start_date": "2026-12-15",
+   "end_date": "2026-12-18",
+   "budget": 120000,
+   "group_members": [
+    {
+     "name": "Asha",
+     "interests": [
+      "museums"
+     ]
+    },
+    {
+     "name": "Ravi",
+     "interests": [
+      "food"
+     ]
+    },
+    {
+     "name": "Mira",
+     "interests": [
+      "nature"
+     ]
+    }
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+ "trip": {
+  "id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+  "user_id": "159f9821-13d6-4d4a-aca1-da2ea1a4f243",
+  "destination": "Kochi",
+  "start_date": "2026-12-15",
+  "end_date": "2026-12-18",
+  "budget": 120000.0,
+  "group_size": 3,
+  "interests": [
+   "museums",
+   "food",
+   "nature"
+  ],
+  "group_members": [
+   {
+    "name": "Asha",
+    "interests": [
+     "museums"
+    ]
+   },
+   {
+    "name": "Ravi",
+    "interests": [
+     "food"
+    ]
+   },
+   {
+    "name": "Mira",
+    "interests": [
+     "nature"
+    ]
+   }
+  ],
+  "status": "completed",
+  "created_at": "2026-10-15T12:35:53.365742Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "8282a7af-6049-403c-b169-27bf61955172",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-15",
+      "hotel": {
+       "lat": 9.95212,
+       "lng": 76.248764,
+       "name": "Hotel Fort Queen",
+       "stars": 3,
+       "rating": 8.2,
+       "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+       "cost_per_night": 5476.88
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "ZZ",
+       "arrival": "2026-12-15T14:08:00",
+       "departure": "2026-12-15T10:50:00",
+       "price_inr": 46868.64,
+       "destination": {
+        "lat": 10.151891,
+        "lng": 76.397429,
+        "code": "COK",
+        "name": "Cochin International Airport"
+       },
+       "duration_mins": 198,
+       "flight_number": "ZZ-3744"
+      },
+      "evening": {
+       "lat": 9.990082740783691,
+       "lng": 76.27546691894531,
+       "cost": 0.0,
+       "suits": [
+        "Mira"
+       ],
+       "rating": 3.0,
+       "activity": "Mangalavanam Bird WLS",
+       "category": "nature"
+      },
+      "morning": {
+       "lat": 9.96231460571289,
+       "lng": 76.24027252197266,
+       "cost": 0.0,
+       "suits": [
+        "Asha"
+       ],
+       "rating": 3.0,
+       "activity": "Indo-Portuguese Museum",
+       "category": "museum"
+      },
+      "afternoon": {
+       "lat": 9.890469551086426,
+       "lng": 76.2770004272461,
+       "cost": 0.0,
+       "suits": [
+        "Ravi"
+       ],
+       "rating": 2.0,
+       "activity": "kallanchery retreat",
+       "category": "food"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-12-16",
+      "hotel": {
+       "lat": 9.95212,
+       "lng": 76.248764,
+       "name": "Hotel Fort Queen",
+       "stars": 3,
+       "rating": 8.2,
+       "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+       "cost_per_night": 5476.88
+      },
+      "flight": null,
+      "evening": {
+       "lat": 9.863480567932129,
+       "lng": 76.3593978881836,
+       "cost": 0.0,
+       "suits": [
+        "Mira"
+       ],
+       "rating": 7.0,
+       "activity": "Kerala backwaters",
+       "category": "nature"
+      },
+      "morning": {
+       "lat": 9.95834732055664,
+       "lng": 76.25933837890625,
+       "cost": 0.0,
+       "suits": [
+        "Asha"
+       ],
+       "rating": 7.0,
+       "activity": "Mattancherry Dutch Palace",
+       "category": "history"
+      },
+      "afternoon": {
+       "lat": 10.091514587402344,
+       "lng": 76.44153594970703,
+       "cost": 0.0,
+       "suits": [
+        "Ravi"
+       ],
+       "rating": 2.0,
+       "activity": "Safayar Hotel Ponjassery",
+       "category": "food"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-12-17",
+      "hotel": {
+       "lat": 9.95212,
+       "lng": 76.248764,
+       "name": "Hotel Fort Queen",
+       "stars": 3,
+       "rating": 8.2,
+       "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+       "cost_per_night": 5476.88
+      },
+      "flight": null,
+      "evening": {
+       "lat": 9.967170715332031,
+       "lng": 76.23998260498047,
+       "cost": 0.0,
+       "suits": [
+        "Mira"
+       ],
+       "rating": 2.0,
+       "activity": "Mahatma Gandhi Beach",
+       "category": "beach"
+      },
+      "morning": {
+       "lat": 10.037985801696777,
+       "lng": 76.31474304199219,
+       "cost": 0.0,
+       "suits": [
+        "Asha"
+       ],
+       "rating": 3.0,
+       "activity": "Kerala Museum",
+       "category": "museum"
+      },
+      "afternoon": {
+       "lat": 9.967679023742676,
+       "lng": 76.24454498291016,
+       "cost": 0.0,
+       "suits": [
+        "Ravi"
+       ],
+       "rating": 1.0,
+       "activity": "Pizza Hut",
+       "category": "food"
+      }
+     },
+     {
+      "day": 4,
+      "date": "2026-12-18",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 10.038472175598145,
+       "lng": 76.31427764892578,
+       "cost": 0.0,
+       "suits": [
+        "Asha"
+       ],
+       "rating": 3.0,
+       "activity": "Kerala Museum Art Gallery",
+       "category": "museum"
+      },
+      "afternoon": null
+     }
+    ],
+    "group": {
+     "members": [
+      {
+       "name": "Asha",
+       "stops": 4,
+       "interests": [
+        "museums"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Ravi",
+       "stops": 3,
+       "interests": [
+        "food"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Mira",
+       "stops": 3,
+       "interests": [
+        "nature"
+       ],
+       "nothing_for": []
+      }
+     ],
+     "balanced": true
+    },
+    "missing": null,
+    "currency": "INR",
+    "total_cost": 63299.28,
+    "per_person_cost": 21099.76,
+    "local_intelligence": {
+     "best_times": {
+      "Willingdon Island": "Early dawn, for peaceful views of the harbor and birdwatching.",
+      "Fort Kochi streets": "Early morning, when the light is soft and streets are quiet for photography.",
+      "Chinese Fishing Nets": "Sunset, to capture the silhouettes against the golden sky.",
+      "Marine Drive promenade": "Evening, for a breezy walk and the illuminated skyline.",
+      "Mattancherry Palace (Dutch Palace)": "Late morning, when the interior murals are illuminated without harsh glare."
+     },
+     "safety_tips": [
+      "December evenings can be damp; keep an umbrella handy to avoid slipping on wet pavements.",
+      "Watch out for stray dogs near market areas; carry a small bottle of hand sanitizer.",
+      "Keep valuables in a zip-locked bag and avoid flashing expensive jewelry in crowded spots."
+     ],
+     "tourist_traps": [
+      "Avoid overpriced ‘seafood platters’ on Marine Drive; head to local eateries in Fort Kochi for authentic fare.",
+      "Skip the souvenir stalls near the ferry jetty that sell low-quality handicrafts; buy directly from the artisans at the Jew Town market.",
+      "Don’t rely on unlicensed boat operators for backwater tours; book through reputable agencies or the state tourism office."
+     ],
+     "cultural_norms": [
+      "Remove shoes before entering temples and some heritage homes.",
+      "Dress modestly when visiting churches and mosques; shoulders and knees covered.",
+      "Tipping 10 % in restaurants is customary but not mandatory."
+     ],
+     "local_transport": "Use app-based cabs or auto-rickshaws for city trips; the local ferry connects Fort Kochi, Mattancherry and the mainland cheaply."
+    },
+    "per_person_breakdown": {
+     "stay": 5476.88,
+     "total": 21099.76,
+     "shares": [
+      {
+       "name": "Asha",
+       "amount": 21100
+      },
+      {
+       "name": "Ravi",
+       "amount": 21100
+      },
+      {
+       "name": "Mira",
+       "amount": 21099
+      }
+     ],
+     "flights": 15622.88,
+     "activities": 0.0,
+     "travellers": 3
+    }
+   },
+   "total_cost": 63299.28,
+   "created_at": "2026-10-15T12:36:05.164751Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "4a9775ba-6cc4-4678-bb27-cf94386e686a",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:35:53.397396Z"
+  },
+  {
+   "id": "57aac376-2b66-4eff-9a9b-ed3c143dd3a0",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "159f9821-13d6-4d4a-aca1-da2ea1a4f243"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:35:53.408250Z"
+  },
+  {
+   "id": "d26dd8de-4408-4545-841c-2873546b824c",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-15",
+    "budget": 120000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 3,
+    "destination": "Kochi",
+    "return_date": "2026-12-18",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 46868.64,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "ZZ-3744"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 49148.19,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-15T18:35:00",
+      "departure": "2026-12-15T15:25:00",
+      "price_inr": 100313.85,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 190,
+      "flight_number": "AI-2473"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-15T18:35:00",
+      "departure": "2026-12-15T15:25:00",
+      "price_inr": 100313.85,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 190,
+      "flight_number": "AI-2473"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-15T18:35:00",
+      "departure": "2026-12-15T15:25:00",
+      "price_inr": 104403.39,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 190,
+      "flight_number": "AI-2473"
+     }
+    ]
+   },
+   "duration_ms": 2231,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:35:55.642857Z"
+  },
+  {
+   "id": "7eddeec8-bc3a-4267-a4e3-938cdcf266a0",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 120000.0,
+    "cheapest_flight": 46868.64,
+    "replan_attempts": 0,
+    "flights_evaluated": 5
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹46,869; ₹73,131 (61%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 46868.64,
+    "total_budget": 120000.0,
+    "remaining_budget": 73131.36
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:35:55.650468Z"
+  },
+  {
+   "id": "76539063-1459-4d33-91b5-7a068d430e0e",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 3,
+    "check_in": "2026-12-15",
+    "check_out": "2026-12-18",
+    "destination": "Kochi",
+    "budget_per_night": 24377.12
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 9.95212,
+      "lng": 76.248764,
+      "name": "Hotel Fort Queen",
+      "stars": 3,
+      "rating": 8.2,
+      "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+      "price_per_night_inr": 5476.88
+     },
+     {
+      "lat": 9.959546,
+      "lng": 76.239776,
+      "name": "Nathan's Holiday Home",
+      "stars": 2,
+      "rating": 9.0,
+      "address": "11/637-A, MacKenzie Garden, Pattalam, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+      "price_per_night_inr": 5722.0
+     },
+     {
+      "lat": 10.140974,
+      "lng": 76.19395,
+      "name": "V K G Group Holiday Hotel",
+      "stars": 4,
+      "rating": 10.0,
+      "address": "Munambam Road, Cherai, Kochi, Kerala, 683514, Kochi",
+      "price_per_night_inr": 6738.43
+     },
+     {
+      "lat": 9.96879,
+      "lng": 76.25132,
+      "name": "Alpha Old Court House",
+      "stars": 3,
+      "rating": 8.8,
+      "address": "Opposite Coastal Police Station, Calvathy Road, Kochi, KL, 682001, Kochi",
+      "price_per_night_inr": 15963.33
+     },
+     {
+      "lat": 9.968037,
+      "lng": 76.2459,
+      "name": "Fort Beach Service Apartment",
+      "stars": 2,
+      "rating": 7.8,
+      "address": "1/506R, 3rd Floor, Cycril's Estuary, Opp Brunton Boatyard Hotel, Kochi, Kerala, 682001, Kochi",
+      "price_per_night_inr": 21808.86
+     }
+    ]
+   },
+   "duration_ms": 70,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:35:55.727451Z"
+  },
+  {
+   "id": "1a2b4eda-b272-4f91-946e-0a5367ecad3d",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "limit": 10,
+    "interests": [
+     "museums",
+     "food",
+     "nature"
+    ],
+    "destination": "Kochi",
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 9.96231460571289,
+      "lng": 76.24027252197266,
+      "name": "Indo-Portuguese Museum",
+      "suits": [
+       "Asha"
+      ],
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "museums"
+      ],
+      "description": "A popular museum attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 9.890469551086426,
+      "lng": 76.2770004272461,
+      "name": "kallanchery retreat",
+      "suits": [
+       "Ravi"
+      ],
+      "rating": 2.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A popular food attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 9.990082740783691,
+      "lng": 76.27546691894531,
+      "name": "Mangalavanam Bird WLS",
+      "suits": [
+       "Mira"
+      ],
+      "rating": 3.0,
+      "category": "nature",
+      "interests": [
+       "nature"
+      ],
+      "description": "A popular nature attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 9.95834732055664,
+      "lng": 76.25933837890625,
+      "name": "Mattancherry Dutch Palace",
+      "suits": [
+       "Asha"
+      ],
+      "rating": 7.0,
+      "category": "history",
+      "interests": [
+       "museums"
+      ],
+      "description": "A popular history attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 10.091514587402344,
+      "lng": 76.44153594970703,
+      "name": "Safayar Hotel Ponjassery",
+      "suits": [
+       "Ravi"
+      ],
+      "rating": 2.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A popular food attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 9.863480567932129,
+      "lng": 76.3593978881836,
+      "name": "Kerala backwaters",
+      "suits": [
+       "Mira"
+      ],
+      "rating": 7.0,
+      "category": "nature",
+      "interests": [
+       "nature"
+      ],
+      "description": "A popular nature attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 10.037985801696777,
+      "lng": 76.31474304199219,
+      "name": "Kerala Museum",
+      "suits": [
+       "Asha"
+      ],
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "museums"
+      ],
+      "description": "A popular museum attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 9.967679023742676,
+      "lng": 76.24454498291016,
+      "name": "Pizza Hut",
+      "suits": [
+       "Ravi"
+      ],
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 9.967170715332031,
+      "lng": 76.23998260498047,
+      "name": "Mahatma Gandhi Beach",
+      "suits": [
+       "Mira"
+      ],
+      "rating": 2.0,
+      "category": "beach",
+      "interests": [
+       "nature"
+      ],
+      "description": "A popular beach attraction in Kochi.",
+      "group_score": 0.333
+     },
+     {
+      "lat": 10.038472175598145,
+      "lng": 76.31427764892578,
+      "name": "Kerala Museum Art Gallery",
+      "suits": [
+       "Asha"
+      ],
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "museums"
+      ],
+      "description": "A popular museum attraction in Kochi.",
+      "group_score": 0.333
+     }
+    ],
+    "group_searches": [
+     {
+      "name": "Asha",
+      "found": 10,
+      "interests": [
+       "museums"
+      ],
+      "nothing_for": []
+     },
+     {
+      "name": "Ravi",
+      "found": 10,
+      "interests": [
+       "food"
+      ],
+      "nothing_for": []
+     },
+     {
+      "name": "Mira",
+      "found": 10,
+      "interests": [
+       "nature"
+      ],
+      "nothing_for": []
+     }
+    ]
+   },
+   "duration_ms": 773,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:35:56.432678Z"
+  },
+  {
+   "id": "b6fbf9b8-c0f0-4259-814e-43812c84c46b",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "museums",
+     "food",
+     "nature"
+    ],
+    "travellers": 3,
+    "destination": "Kochi"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Willingdon Island": "Early dawn, for peaceful views of the harbor and birdwatching.",
+      "Fort Kochi streets": "Early morning, when the light is soft and streets are quiet for photography.",
+      "Chinese Fishing Nets": "Sunset, to capture the silhouettes against the golden sky.",
+      "Marine Drive promenade": "Evening, for a breezy walk and the illuminated skyline.",
+      "Mattancherry Palace (Dutch Palace)": "Late morning, when the interior murals are illuminated without harsh glare."
+     },
+     "safety_tips": [
+      "December evenings can be damp; keep an umbrella handy to avoid slipping on wet pavements.",
+      "Watch out for stray dogs near market areas; carry a small bottle of hand sanitizer.",
+      "Keep valuables in a zip-locked bag and avoid flashing expensive jewelry in crowded spots."
+     ],
+     "tourist_traps": [
+      "Avoid overpriced ‘seafood platters’ on Marine Drive; head to local eateries in Fort Kochi for authentic fare.",
+      "Skip the souvenir stalls near the ferry jetty that sell low-quality handicrafts; buy directly from the artisans at the Jew Town market.",
+      "Don’t rely on unlicensed boat operators for backwater tours; book through reputable agencies or the state tourism office."
+     ],
+     "cultural_norms": [
+      "Remove shoes before entering temples and some heritage homes.",
+      "Dress modestly when visiting churches and mosques; shoulders and knees covered.",
+      "Tipping 10 % in restaurants is customary but not mandatory."
+     ],
+     "local_transport": "Use app-based cabs or auto-rickshaws for city trips; the local ferry connects Fort Kochi, Mattancherry and the mainland cheaply."
+    }
+   },
+   "duration_ms": 1976,
+   "turn": 1,
+   "token_count": 963,
+   "cost_usd": 0.00037485,
+   "created_at": "2026-10-15T12:35:57.636286Z"
+  },
+  {
+   "id": "cce2003a-bf1e-4288-a6aa-c9cdd12e8fc5",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-18",
+     "group_size": 3,
+     "start_date": "2026-12-15",
+     "destination": "Kochi",
+     "group_members": [
+      {
+       "name": "Asha",
+       "interests": [
+        "museums"
+       ]
+      },
+      {
+       "name": "Ravi",
+       "interests": [
+        "food"
+       ]
+      },
+      {
+       "name": "Mira",
+       "interests": [
+        "nature"
+       ]
+      }
+     ],
+     "group_searches": [
+      {
+       "name": "Asha",
+       "found": 10,
+       "interests": [
+        "museums"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Ravi",
+       "found": 10,
+       "interests": [
+        "food"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Mira",
+       "found": 10,
+       "interests": [
+        "nature"
+       ],
+       "nothing_for": []
+      }
+     ]
+    },
+    "hotels_count": 5,
+    "flights_count": 5,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-15",
+       "hotel": {
+        "lat": 9.95212,
+        "lng": 76.248764,
+        "name": "Hotel Fort Queen",
+        "stars": 3,
+        "rating": 8.2,
+        "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+        "cost_per_night": 5476.88
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "ZZ",
+        "arrival": "2026-12-15T14:08:00",
+        "departure": "2026-12-15T10:50:00",
+        "price_inr": 46868.64,
+        "destination": {
+         "lat": 10.151891,
+         "lng": 76.397429,
+         "code": "COK",
+         "name": "Cochin International Airport"
+        },
+        "duration_mins": 198,
+        "flight_number": "ZZ-3744"
+       },
+       "evening": {
+        "lat": 9.990082740783691,
+        "lng": 76.27546691894531,
+        "cost": 0.0,
+        "suits": [
+         "Mira"
+        ],
+        "rating": 3.0,
+        "activity": "Mangalavanam Bird WLS",
+        "category": "nature"
+       },
+       "morning": {
+        "lat": 9.96231460571289,
+        "lng": 76.24027252197266,
+        "cost": 0.0,
+        "suits": [
+         "Asha"
+        ],
+        "rating": 3.0,
+        "activity": "Indo-Portuguese Museum",
+        "category": "museum"
+       },
+       "afternoon": {
+        "lat": 9.890469551086426,
+        "lng": 76.2770004272461,
+        "cost": 0.0,
+        "suits": [
+         "Ravi"
+        ],
+        "rating": 2.0,
+        "activity": "kallanchery retreat",
+        "category": "food"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-12-16",
+       "hotel": {
+        "lat": 9.95212,
+        "lng": 76.248764,
+        "name": "Hotel Fort Queen",
+        "stars": 3,
+        "rating": 8.2,
+        "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+        "cost_per_night": 5476.88
+       },
+       "flight": null,
+       "evening": {
+        "lat": 9.863480567932129,
+        "lng": 76.3593978881836,
+        "cost": 0.0,
+        "suits": [
+         "Mira"
+        ],
+        "rating": 7.0,
+        "activity": "Kerala backwaters",
+        "category": "nature"
+       },
+       "morning": {
+        "lat": 9.95834732055664,
+        "lng": 76.25933837890625,
+        "cost": 0.0,
+        "suits": [
+         "Asha"
+        ],
+        "rating": 7.0,
+        "activity": "Mattancherry Dutch Palace",
+        "category": "history"
+       },
+       "afternoon": {
+        "lat": 10.091514587402344,
+        "lng": 76.44153594970703,
+        "cost": 0.0,
+        "suits": [
+         "Ravi"
+        ],
+        "rating": 2.0,
+        "activity": "Safayar Hotel Ponjassery",
+        "category": "food"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-12-17",
+       "hotel": {
+        "lat": 9.95212,
+        "lng": 76.248764,
+        "name": "Hotel Fort Queen",
+        "stars": 3,
+        "rating": 8.2,
+        "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+        "cost_per_night": 5476.88
+       },
+       "flight": null,
+       "evening": {
+        "lat": 9.967170715332031,
+        "lng": 76.23998260498047,
+        "cost": 0.0,
+        "suits": [
+         "Mira"
+        ],
+        "rating": 2.0,
+        "activity": "Mahatma Gandhi Beach",
+        "category": "beach"
+       },
+       "morning": {
+        "lat": 10.037985801696777,
+        "lng": 76.31474304199219,
+        "cost": 0.0,
+        "suits": [
+         "Asha"
+        ],
+        "rating": 3.0,
+        "activity": "Kerala Museum",
+        "category": "museum"
+       },
+       "afternoon": {
+        "lat": 9.967679023742676,
+        "lng": 76.24454498291016,
+        "cost": 0.0,
+        "suits": [
+         "Ravi"
+        ],
+        "rating": 1.0,
+        "activity": "Pizza Hut",
+        "category": "food"
+       }
+      },
+      {
+       "day": 4,
+       "date": "2026-12-18",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 10.038472175598145,
+        "lng": 76.31427764892578,
+        "cost": 0.0,
+        "suits": [
+         "Asha"
+        ],
+        "rating": 3.0,
+        "activity": "Kerala Museum Art Gallery",
+        "category": "museum"
+       },
+       "afternoon": null
+      }
+     ],
+     "group": {
+      "members": [
+       {
+        "name": "Asha",
+        "stops": 4,
+        "interests": [
+         "museums"
+        ],
+        "nothing_for": []
+       },
+       {
+        "name": "Ravi",
+        "stops": 3,
+        "interests": [
+         "food"
+        ],
+        "nothing_for": []
+       },
+       {
+        "name": "Mira",
+        "stops": 3,
+        "interests": [
+         "nature"
+        ],
+        "nothing_for": []
+       }
+      ],
+      "balanced": true
+     },
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 63299.28,
+     "per_person_cost": 21099.76,
+     "local_intelligence": {
+      "best_times": {
+       "Willingdon Island": "Early dawn, for peaceful views of the harbor and birdwatching.",
+       "Fort Kochi streets": "Early morning, when the light is soft and streets are quiet for photography.",
+       "Chinese Fishing Nets": "Sunset, to capture the silhouettes against the golden sky.",
+       "Marine Drive promenade": "Evening, for a breezy walk and the illuminated skyline.",
+       "Mattancherry Palace (Dutch Palace)": "Late morning, when the interior murals are illuminated without harsh glare."
+      },
+      "safety_tips": [
+       "December evenings can be damp; keep an umbrella handy to avoid slipping on wet pavements.",
+       "Watch out for stray dogs near market areas; carry a small bottle of hand sanitizer.",
+       "Keep valuables in a zip-locked bag and avoid flashing expensive jewelry in crowded spots."
+      ],
+      "tourist_traps": [
+       "Avoid overpriced ‘seafood platters’ on Marine Drive; head to local eateries in Fort Kochi for authentic fare.",
+       "Skip the souvenir stalls near the ferry jetty that sell low-quality handicrafts; buy directly from the artisans at the Jew Town market.",
+       "Don’t rely on unlicensed boat operators for backwater tours; book through reputable agencies or the state tourism office."
+      ],
+      "cultural_norms": [
+       "Remove shoes before entering temples and some heritage homes.",
+       "Dress modestly when visiting churches and mosques; shoulders and knees covered.",
+       "Tipping 10 % in restaurants is customary but not mandatory."
+      ],
+      "local_transport": "Use app-based cabs or auto-rickshaws for city trips; the local ferry connects Fort Kochi, Mattancherry and the mainland cheaply."
+     },
+     "per_person_breakdown": {
+      "stay": 5476.88,
+      "total": 21099.76,
+      "shares": [
+       {
+        "name": "Asha",
+        "amount": 21100
+       },
+       {
+        "name": "Ravi",
+        "amount": 21100
+       },
+       {
+        "name": "Mira",
+        "amount": 21099
+       }
+      ],
+      "flights": 15622.88,
+      "activities": 0.0,
+      "travellers": 3
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 7496,
+   "turn": 1,
+   "token_count": 5361,
+   "cost_usd": 0.00194715,
+   "created_at": "2026-10-15T12:36:05.147489Z"
+  },
+  {
+   "id": "fd801b86-5ff8-4a3b-8642-bff0c930d8d4",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-18",
+    "trip_start": "2026-12-15",
+    "retry_count": 0,
+    "budget_range": [
+     50639.424,
+     75959.136
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 63299.28
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:36:05.160180Z"
+  },
+  {
+   "id": "c11dea3c-3d0a-4788-b2a5-343662919e06",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 63299.28
+   },
+   "output": {
+    "missing": [],
+    "trip_status": "completed",
+    "itinerary_id": "8282a7af-6049-403c-b169-27bf61955172",
+    "unmapped_activities": []
+   },
+   "duration_ms": 21,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:36:05.185760Z"
+  },
+  {
+   "id": "a5885234-fd72-49ef-8786-47fe369b36f5",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Hotel Fort Queen"
+     ],
+     "nights": 3,
+     "interests": [
+      "museums",
+      "food",
+      "nature"
+     ],
+     "group_size": 3,
+     "destination": "Kochi",
+     "user_message": null,
+     "top_activities": [
+      "Indo-Portuguese Museum",
+      "kallanchery retreat",
+      "Mangalavanam Bird WLS",
+      "Mattancherry Dutch Palace",
+      "Safayar Hotel Ponjassery",
+      "Kerala backwaters",
+      "Kerala Museum",
+      "Pizza Hut"
+     ],
+     "total_cost_inr": 63299.28,
+     "avg_hotel_stars": 3.0,
+     "per_person_per_night_inr": 7033
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "mid-range"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 1363,
+   "turn": 1,
+   "token_count": 758,
+   "cost_usd": 0.00019065,
+   "created_at": "2026-10-15T12:36:06.583179Z"
+  },
+  {
+   "id": "08c055c3-8f01-4d20-a720-565bc5131032",
+   "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 120000.0,
+    "end_date": "2026-12-18",
+    "interests": [
+     "museums",
+     "food",
+     "nature"
+    ],
+    "group_size": 3,
+    "start_date": "2026-12-15",
+    "destination": "Kochi",
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "8282a7af-6049-403c-b169-27bf61955172",
+    "flight_status": "completed",
+    "flights_count": 5,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹46,869; ₹73,131 (61%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 46868.64,
+     "total_budget": 120000.0,
+     "remaining_budget": 73131.36
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 13201,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:36:06.598449Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-1f257faaad@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Kochi",
+    "start_date": "2026-12-15",
+    "end_date": "2026-12-18",
+    "budget": 120000,
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ]
+   },
+   "status": 201,
+   "seconds": 0.03,
+   "answer": {
+    "id": "8bb0420f-c316-4569-97da-e1c8b9e032e4",
+    "user_id": "159f9821-13d6-4d4a-aca1-da2ea1a4f243",
+    "destination": "Kochi",
+    "start_date": "2026-12-15",
+    "end_date": "2026-12-18",
+    "budget": 120000.0,
+    "group_size": 3,
+    "interests": [
+     "museums",
+     "food",
+     "nature"
+    ],
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ],
+    "status": "pending",
+    "created_at": "2026-10-15T12:35:53.365742Z"
+   }
+  },
+  {
+   "request": "POST /trips/8bb0420f-c316-4569-97da-e1c8b9e032e4/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.01,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "8bb0420f-c316-4569-97da-e1c8b9e032e4"
+   }
+  }
+ ],
+ "seconds": 14.2,
+ "asleep_s": 0.0
+}

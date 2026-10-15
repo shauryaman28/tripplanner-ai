@@ -1,0 +1,9 @@
+{
+ "began": "2026-10-15T12:36:26",
+ "seconds": 567.5,
+ "waited_s": 400.4,
+ "asleep_s": 0.0,
+ "commit": "",
+ "against": "this checkout, served at http://127.0.0.1:52943 against its own database",
+ "gap_s": 45.0
+}

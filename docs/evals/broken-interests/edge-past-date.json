@@ -1,0 +1,76 @@
+{
+ "scenario": "edge-past-date",
+ "asked": {
+  "trip": {
+   "destination": "Goa",
+   "start_date": "2026-10-14",
+   "end_date": "2026-10-17",
+   "budget": 50000,
+   "group_size": 2,
+   "interests": [
+    "beach"
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "refused"
+ ],
+ "outcome": "refused",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": "start_date cannot be in the past",
+ "refinement": null,
+ "trip_id": null,
+ "trip": null,
+ "status": null,
+ "itineraries": [],
+ "runs": [],
+ "graded_turn": 1,
+ "built": false,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-d3ece1f6be@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Goa",
+    "start_date": "2026-10-14",
+    "end_date": "2026-10-17",
+    "budget": 50000,
+    "group_size": 2,
+    "interests": [
+     "beach"
+    ]
+   },
+   "status": 422,
+   "seconds": 0.0,
+   "answer": {
+    "detail": [
+     {
+      "type": "value_error",
+      "loc": [
+       "body",
+       "start_date"
+      ],
+      "msg": "Value error, start_date cannot be in the past",
+      "input": "2026-10-14",
+      "ctx": {
+       "error": {}
+      }
+     }
+    ],
+    "error": {
+     "code": "VALIDATION_ERROR",
+     "message": "start_date: Value error, start_date cannot be in the past"
+    }
+   }
+  }
+ ],
+ "seconds": 0.4,
+ "asleep_s": 0.0
+}

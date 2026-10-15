@@ -74,6 +74,13 @@ the statement it failed on — and marks its trip as soon as it can; half a save
 an itinerary is saved together with the row that says its embeddings are owed, so that a backend that dies
 before embedding it finds it again when it starts.
 
+How good the plans are is measured too (Phase 33): `python scripts/run_eval.py` asks the planner for fifteen trips —
+happy paths, budget conflicts, vague requests, groups, edge cases, changes to a plan — over its API, on real models,
+and grades what comes back: whether the right searches were made with the right parameters, whether the total is
+what `estimate_budget` makes of the plan's own parts, whether anything is in the plan that the searches did not
+return, whether every day is filled, and whether a change changed only what was asked. Code measures what it can
+exactly; Claude Haiku 4.5 reads the rest, held to those measurements.
+
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
 Text in the scripts of India is drawn in Noto and shaped by HarfBuzz.
@@ -132,7 +139,7 @@ curl http://localhost:8000/ping
 
 ### 7. Run tests
 ```bash
-# Unit + contract tests (no Docker, no network) — 1,290 tests
+# Unit + contract tests (no Docker, no network) — 1,365 tests
 pytest tests/unit/ tests/contract/ -v
 
 # Integration tests (Docker Postgres + Redis) — 79 tests, incl. the full
@@ -301,11 +308,11 @@ tripplanner-ai/
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
 │       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (1,086 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (1,357 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
 │   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 79 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
-│   ├── fixtures/evals/                  ← Phase 33: six real eval records — what the API served for a scenario
+│   ├── fixtures/evals/                  ← Phase 33: seven real eval records — what the API served for a scenario
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
@@ -424,9 +431,10 @@ tripplanner-ai/
 | 30 | Load testing & performance baseline — k6 visits (create, stream, plan, itinerary) against the deployed image with stand-ins for the models and providers; before: 1.3 req/s at 210 ms p99, the bottleneck database connections held idle inside a transaction by every plan in flight; after: 43 req/s at 206 ms p99 ([docs/load-test-report.md](docs/load-test-report.md), [docs/phase30_build_log.md](docs/phase30_build_log.md)) | ✅ Measured on one laptop that ran both the load and the system — **not on a deployment**: there is none yet | 106 unit + 1 integration |
 | 31 | Chaos engineering — the tool server killed mid-plan, Gemini answering 429, the builder's model never answering, Redis killed under open streams; each written down as a hypothesis first, run on the app as it was, fixed, and run again ([docs/chaos-report.md](docs/chaos-report.md), [docs/phase31_build_log.md](docs/phase31_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment**: there is none, and none of this may be done to one | 55 unit + 9 integration |
 | 32 | Chaos engineering, the data layer — Postgres killed while a plan is made and between the two writes that save one; the backend killed between saving an itinerary and embedding it ([docs/chaos-data-report.md](docs/chaos-data-report.md), [docs/phase32_build_log.md](docs/phase32_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment** | 35 unit + 5 integration |
+| 33 | Eval suite — fifteen trips asked of the planner over its API, on real models and providers; measured where they can be (every name against the searches, the total against `estimate_budget`, the dates and slots, what a change changed) and graded by Claude Haiku 4.5 where they cannot; a table, a history, and `--assert-min-score` for the nightly run. Its first run found "raise the budget" leading back into the same conflict — fixed ([docs/phase33_build_log.md](docs/phase33_build_log.md)) |
 | 33–50 | Production & Polish | ⏳ | |
 
-**Total: 1,290 unit + contract, 79 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,365 unit + contract, 79 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -485,7 +493,7 @@ deploy to the real services.
 
 **CI/CD (Phase 28).** `.github/workflows/ci.yml` runs on every push: the `backend` job (lint, the migrations
 against a real Postgres — `alembic check` fails the build when a model says something no migration does —
-and the 1,290 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
+and the 1,365 unit and contract tests) and the `frontend` job (types, lint, a production build). On `main`
 the `deploy` job follows only when both pass. It needs four things set in the repository — the secret
 `RAILWAY_TOKEN` and the variables `RAILWAY_SERVICE`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` — and until
 they are it says "Nothing was deployed" and passes. The frontend is deployed by Vercel's own GitHub
@@ -536,6 +544,14 @@ at the edges — a traveller shown the SQL a save had failed on, the pooler look
 15 seconds, and an itinerary whose backend died before embedding it never embedded — and each is fixed. One
 fix was tried and taken back out: the driver's own timeout does not bound a query that is waiting in a pooler.
 `HOW_TO_RUN.md`, Step 30.
+
+**Evals (Phase 33).** `python scripts/run_eval.py --assert-min-score 3.5` starts this checkout's backend against a
+database of its own, asks it fifteen trips on real providers, and exits 1 if the average falls below 3.5 — it runs
+every night once its keys are repository secrets. Its first run found a way out of a budget conflict that led
+straight back into it ("raise the budget" by a blind 25% when no fare was known); that is fixed. It also found a
+change ("fewer temples, more food and markets") that changed nothing, left for a decision about the product. A copy
+broken on purpose — the attractions search no longer told what the traveller enjoys — plans every trip as before,
+and the measurements alone already hold it below the threshold. `HOW_TO_RUN.md`, Step 31.
 `HOW_TO_RUN.md`, Step 27.
 
 All tools return `ToolError(code="API_NOT_CONFIGURED")` when keys are missing — the server never crashes.

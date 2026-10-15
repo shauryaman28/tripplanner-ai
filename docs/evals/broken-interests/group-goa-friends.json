@@ -1,0 +1,1490 @@
+{
+ "scenario": "group-goa-friends",
+ "asked": {
+  "trip": {
+   "destination": "Goa",
+   "start_date": "2026-12-13",
+   "end_date": "2026-12-16",
+   "budget": 120000,
+   "group_members": [
+    {
+     "name": "Aman",
+     "interests": [
+      "beach",
+      "nightlife"
+     ]
+    },
+    {
+     "name": "Bela",
+     "interests": [
+      "food"
+     ]
+    },
+    {
+     "name": "Chirag",
+     "interests": [
+      "history"
+     ]
+    },
+    {
+     "name": "Dia",
+     "interests": []
+    }
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+ "trip": {
+  "id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+  "user_id": "1f236777-e053-4522-9839-4186588b57dd",
+  "destination": "Goa",
+  "start_date": "2026-12-13",
+  "end_date": "2026-12-16",
+  "budget": 120000.0,
+  "group_size": 4,
+  "interests": [
+   "beach",
+   "nightlife",
+   "food",
+   "history"
+  ],
+  "group_members": [
+   {
+    "name": "Aman",
+    "interests": [
+     "beach",
+     "nightlife"
+    ]
+   },
+   {
+    "name": "Bela",
+    "interests": [
+     "food"
+    ]
+   },
+   {
+    "name": "Chirag",
+    "interests": [
+     "history"
+    ]
+   },
+   {
+    "name": "Dia",
+    "interests": []
+   }
+  ],
+  "status": "completed",
+  "created_at": "2026-10-15T12:41:15.948526Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "3b47be79-adc9-4f95-bd62-9aff8a4c1bd8",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-13",
+      "hotel": {
+       "lat": 15.573272,
+       "lng": 73.74671,
+       "name": "Sort By Stays, Grand Peddem, Anjuna",
+       "stars": 0,
+       "rating": 8.3,
+       "address": "54/24 Village anjuna Grand Peddem, Goa",
+       "cost_per_night": 4170.85
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "ZZ",
+       "arrival": "2026-12-13T11:52:00",
+       "departure": "2026-12-13T09:17:00",
+       "price_inr": 48517.56,
+       "destination": {
+        "lat": 15.380574,
+        "lng": 73.833197,
+        "code": "GOI",
+        "name": "Goa Airport"
+       },
+       "duration_mins": 155,
+       "flight_number": "ZZ-3744"
+      },
+      "evening": {
+       "lat": 15.308616638183594,
+       "lng": 74.0009994506836,
+       "cost": 0.0,
+       "suits": [
+        "Chirag"
+       ],
+       "rating": 7.0,
+       "activity": "Rachol Fort Gate",
+       "category": "history"
+      },
+      "morning": {
+       "lat": 15.335132598876953,
+       "lng": 73.89291381835938,
+       "cost": 0.0,
+       "suits": [
+        "Aman"
+       ],
+       "rating": 3.0,
+       "activity": "Arossim Beach",
+       "category": "beach"
+      },
+      "afternoon": {
+       "lat": 15.270017623901367,
+       "lng": 74.08495330810547,
+       "cost": 0.0,
+       "suits": [
+        "Bela"
+       ],
+       "rating": 1.0,
+       "activity": "Sugandha",
+       "category": "food"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-12-14",
+      "hotel": {
+       "lat": 15.573272,
+       "lng": 73.74671,
+       "name": "Sort By Stays, Grand Peddem, Anjuna",
+       "stars": 0,
+       "rating": 8.3,
+       "address": "54/24 Village anjuna Grand Peddem, Goa",
+       "cost_per_night": 4170.85
+      },
+      "flight": null,
+      "evening": {
+       "lat": 15.264700889587402,
+       "lng": 73.94161224365234,
+       "cost": 0.0,
+       "suits": [
+        "Chirag"
+       ],
+       "rating": 3.0,
+       "activity": "Goa Chitra museum",
+       "category": "museum"
+      },
+      "morning": {
+       "lat": 15.050905227661133,
+       "lng": 73.98759460449219,
+       "cost": 0.0,
+       "suits": [
+        "Aman"
+       ],
+       "rating": 3.0,
+       "activity": "Agonda",
+       "category": "beach"
+      },
+      "afternoon": {
+       "lat": 15.26340389251709,
+       "lng": 74.10399627685547,
+       "cost": 0.0,
+       "suits": [
+        "Bela"
+       ],
+       "rating": 1.0,
+       "activity": "Bollywood Cafe Bar & Restaurant",
+       "category": "food"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-12-15",
+      "hotel": {
+       "lat": 15.573272,
+       "lng": 73.74671,
+       "name": "Sort By Stays, Grand Peddem, Anjuna",
+       "stars": 0,
+       "rating": 8.3,
+       "address": "54/24 Village anjuna Grand Peddem, Goa",
+       "cost_per_night": 4170.85
+      },
+      "flight": null,
+      "evening": {
+       "lat": 15.121944427490234,
+       "lng": 74.13055419921875,
+       "cost": 0.0,
+       "suits": [
+        "Chirag"
+       ],
+       "rating": 3.0,
+       "activity": "Usgalimal rock engravings",
+       "category": "history"
+      },
+      "morning": {
+       "lat": 15.293191909790039,
+       "lng": 73.90774536132812,
+       "cost": 0.0,
+       "suits": [
+        "Aman"
+       ],
+       "rating": 2.0,
+       "activity": "Betalbatim Beach",
+       "category": "beach"
+      },
+      "afternoon": {
+       "lat": 15.2629976272583,
+       "lng": 74.10855102539062,
+       "cost": 0.0,
+       "suits": [
+        "Bela"
+       ],
+       "rating": 1.0,
+       "activity": "Shilpa Restaurant",
+       "category": "food"
+      }
+     },
+     {
+      "day": 4,
+      "date": "2026-12-16",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 15.17124080657959,
+       "lng": 73.94182586669922,
+       "cost": 0.0,
+       "suits": [
+        "Aman"
+       ],
+       "rating": 2.0,
+       "activity": "Cavelossim Beach",
+       "category": "beach"
+      },
+      "afternoon": null
+     }
+    ],
+    "group": {
+     "members": [
+      {
+       "name": "Aman",
+       "stops": 4,
+       "interests": [
+        "beach",
+        "nightlife"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Bela",
+       "stops": 3,
+       "interests": [
+        "food"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Chirag",
+       "stops": 3,
+       "interests": [
+        "history"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Dia",
+       "stops": 0,
+       "interests": [],
+       "nothing_for": []
+      }
+     ],
+     "balanced": true
+    },
+    "missing": null,
+    "currency": "INR",
+    "total_cost": 61030.11,
+    "per_person_cost": 15257.53,
+    "local_intelligence": {
+     "best_times": {
+      "Fort Aguada": "Visit at sunrise; the mist over the sea creates stunning photos and cooler temperatures.",
+      "Mapusa Market": "Shop early around 8 am; produce is freshest and bargaining is easier.",
+      "Palolem Beach": "Go at sunset; the beachside bars open and the tide is gentle for a stroll.",
+      "Basilica of Bom Jesus": "Enter mid-morning; crowds are thin and the light highlights the baroque interiors."
+     },
+     "safety_tips": [
+      "Watch out for sudden monsoon-like showers in early December; carry a light raincoat.",
+      "Keep valuables locked in your hotel safe; pickpocketing spikes near crowded nightlife spots.",
+      "Beware of stray dogs on remote beaches; carry insect repellent and avoid feeding them."
+     ],
+     "tourist_traps": [
+      "Skip overpriced water sports at Baga; hire local operators at Calangute for better rates.",
+      "Don’t rely on street vendors for seafood after dark; go to established shacks like Martin’s for fresh catch.",
+      "Avoid the crowded Anjuna flea market on Sundays; shop early on weekdays for authentic crafts."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting churches and temples, especially after sunset.",
+      "Tipping 10% in restaurants is customary, even at beach shacks.",
+      "Avoid loud music after 10 pm in residential areas like Panjim."
+     ],
+     "local_transport": "Rent a scooter for flexibility; traffic is light in December and parking is easy near beaches and markets."
+    },
+    "per_person_breakdown": {
+     "stay": 3128.14,
+     "total": 15257.53,
+     "shares": [
+      {
+       "name": "Aman",
+       "amount": 15258
+      },
+      {
+       "name": "Bela",
+       "amount": 15258
+      },
+      {
+       "name": "Chirag",
+       "amount": 15257
+      },
+      {
+       "name": "Dia",
+       "amount": 15257
+      }
+     ],
+     "flights": 12129.39,
+     "activities": 0.0,
+     "travellers": 4
+    }
+   },
+   "total_cost": 61030.11,
+   "created_at": "2026-10-15T12:41:55.516689Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "7ec63ca0-94d7-4d3c-84cf-e1f42cccfb42",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:46.826183Z"
+  },
+  {
+   "id": "cdcd42f7-e33e-4dde-84e5-dde7343eb6e8",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "1f236777-e053-4522-9839-4186588b57dd"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:46.873168Z"
+  },
+  {
+   "id": "463c9b8a-471c-49d5-b7f4-d6f28e9f7db0",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-13",
+    "budget": 120000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 4,
+    "destination": "Goa",
+    "return_date": "2026-12-16",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-13T11:52:00",
+      "departure": "2026-12-13T09:17:00",
+      "price_inr": 48517.56,
+      "destination": {
+       "lat": 15.380574,
+       "lng": 73.833197,
+       "code": "GOI",
+       "name": "Goa Airport"
+      },
+      "duration_mins": 155,
+      "flight_number": "ZZ-3744"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "BA",
+      "arrival": "2026-12-13T11:52:00",
+      "departure": "2026-12-13T09:17:00",
+      "price_inr": 48725.04,
+      "destination": {
+       "lat": 15.380574,
+       "lng": 73.833197,
+       "code": "GOI",
+       "name": "Goa Airport"
+      },
+      "duration_mins": 155,
+      "flight_number": "BA-0109"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-13T11:52:00",
+      "departure": "2026-12-13T09:17:00",
+      "price_inr": 49052.64,
+      "destination": {
+       "lat": 15.380574,
+       "lng": 73.833197,
+       "code": "GOI",
+       "name": "Goa Airport"
+      },
+      "duration_mins": 155,
+      "flight_number": "AA-1274"
+     }
+    ]
+   },
+   "duration_ms": 11,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:46.888155Z"
+  },
+  {
+   "id": "82a39f83-ccfd-4713-9727-201dde70f361",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 120000.0,
+    "cheapest_flight": 48517.56,
+    "replan_attempts": 0,
+    "flights_evaluated": 3
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹48,518; ₹71,482 (60%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 48517.56,
+    "total_budget": 120000.0,
+    "remaining_budget": 71482.44
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:46.894047Z"
+  },
+  {
+   "id": "fe58ffa3-cd4d-4657-94dd-edcb80c9b9b4",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 4,
+    "check_in": "2026-12-13",
+    "check_out": "2026-12-16",
+    "destination": "Goa",
+    "budget_per_night": 23827.48
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 15.573272,
+      "lng": 73.74671,
+      "name": "Sort By Stays, Grand Peddem, Anjuna",
+      "stars": 0,
+      "rating": 8.3,
+      "address": "54/24 Village anjuna Grand Peddem, Goa",
+      "price_per_night_inr": 4170.85
+     },
+     {
+      "lat": 15.560339,
+      "lng": 73.765104,
+      "name": "Asta by Avim",
+      "stars": 4,
+      "rating": 8.8,
+      "address": "B Block, Areia De, opp. Riviera Palms 1, near Arpora, Arpora, Goa 403516, Goa",
+      "price_per_night_inr": 14766.51
+     },
+     {
+      "lat": 15.381273,
+      "lng": 73.926536,
+      "name": "Kesarval The Fern Goa, Verna, Series by Marriott",
+      "stars": 4,
+      "rating": 7.6,
+      "address": "Kesarval Gardens, Bus Stand, Edapally, Panvel Hwy, Cortalim, Quelossim, Goa",
+      "price_per_night_inr": 22560.54
+     }
+    ]
+   },
+   "duration_ms": 35,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:46.935148Z"
+  },
+  {
+   "id": "3a2f5a87-2a1d-4ff4-a013-aa28171a792a",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "limit": 10,
+    "interests": [
+     "sightseeing"
+    ],
+    "destination": "Goa",
+    "group_members": [
+     {
+      "name": "Aman",
+      "interests": [
+       "beach",
+       "nightlife"
+      ]
+     },
+     {
+      "name": "Bela",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Chirag",
+      "interests": [
+       "history"
+      ]
+     },
+     {
+      "name": "Dia",
+      "interests": []
+     }
+    ]
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 15.335132598876953,
+      "lng": 73.89291381835938,
+      "name": "Arossim Beach",
+      "suits": [
+       "Aman"
+      ],
+      "rating": 3.0,
+      "category": "beach",
+      "interests": [
+       "beach"
+      ],
+      "description": "A popular beach attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.270017623901367,
+      "lng": 74.08495330810547,
+      "name": "Sugandha",
+      "suits": [
+       "Bela"
+      ],
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.308616638183594,
+      "lng": 74.0009994506836,
+      "name": "Rachol Fort Gate",
+      "suits": [
+       "Chirag"
+      ],
+      "rating": 7.0,
+      "category": "history",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular history attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.050905227661133,
+      "lng": 73.98759460449219,
+      "name": "Agonda",
+      "suits": [
+       "Aman"
+      ],
+      "rating": 3.0,
+      "category": "beach",
+      "interests": [
+       "beach"
+      ],
+      "description": "A popular beach attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.26340389251709,
+      "lng": 74.10399627685547,
+      "name": "Bollywood Cafe Bar & Restaurant",
+      "suits": [
+       "Bela"
+      ],
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.264700889587402,
+      "lng": 73.94161224365234,
+      "name": "Goa Chitra museum",
+      "suits": [
+       "Chirag"
+      ],
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular museum attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.293191909790039,
+      "lng": 73.90774536132812,
+      "name": "Betalbatim Beach",
+      "suits": [
+       "Aman"
+      ],
+      "rating": 2.0,
+      "category": "beach",
+      "interests": [
+       "beach"
+      ],
+      "description": "A popular beach attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.2629976272583,
+      "lng": 74.10855102539062,
+      "name": "Shilpa Restaurant",
+      "suits": [
+       "Bela"
+      ],
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.121944427490234,
+      "lng": 74.13055419921875,
+      "name": "Usgalimal rock engravings",
+      "suits": [
+       "Chirag"
+      ],
+      "rating": 3.0,
+      "category": "history",
+      "interests": [
+       "history"
+      ],
+      "description": "A popular history attraction in Goa.",
+      "group_score": 0.25
+     },
+     {
+      "lat": 15.17124080657959,
+      "lng": 73.94182586669922,
+      "name": "Cavelossim Beach",
+      "suits": [
+       "Aman"
+      ],
+      "rating": 2.0,
+      "category": "beach",
+      "interests": [
+       "beach"
+      ],
+      "description": "A popular beach attraction in Goa.",
+      "group_score": 0.25
+     }
+    ],
+    "group_searches": [
+     {
+      "name": "Aman",
+      "found": 9,
+      "interests": [
+       "beach",
+       "nightlife"
+      ],
+      "nothing_for": []
+     },
+     {
+      "name": "Bela",
+      "found": 10,
+      "interests": [
+       "food"
+      ],
+      "nothing_for": []
+     },
+     {
+      "name": "Chirag",
+      "found": 10,
+      "interests": [
+       "history"
+      ],
+      "nothing_for": []
+     }
+    ]
+   },
+   "duration_ms": 41,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:46.942906Z"
+  },
+  {
+   "id": "d98e335d-8a9e-49c9-88bc-ae09bc8af373",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "beach",
+     "nightlife",
+     "food",
+     "history"
+    ],
+    "travellers": 4,
+    "destination": "Goa"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Fort Aguada": "Visit at sunrise; the mist over the sea creates stunning photos and cooler temperatures.",
+      "Mapusa Market": "Shop early around 8 am; produce is freshest and bargaining is easier.",
+      "Palolem Beach": "Go at sunset; the beachside bars open and the tide is gentle for a stroll.",
+      "Basilica of Bom Jesus": "Enter mid-morning; crowds are thin and the light highlights the baroque interiors."
+     },
+     "safety_tips": [
+      "Watch out for sudden monsoon-like showers in early December; carry a light raincoat.",
+      "Keep valuables locked in your hotel safe; pickpocketing spikes near crowded nightlife spots.",
+      "Beware of stray dogs on remote beaches; carry insect repellent and avoid feeding them."
+     ],
+     "tourist_traps": [
+      "Skip overpriced water sports at Baga; hire local operators at Calangute for better rates.",
+      "Don’t rely on street vendors for seafood after dark; go to established shacks like Martin’s for fresh catch.",
+      "Avoid the crowded Anjuna flea market on Sundays; shop early on weekdays for authentic crafts."
+     ],
+     "cultural_norms": [
+      "Dress modestly when visiting churches and temples, especially after sunset.",
+      "Tipping 10% in restaurants is customary, even at beach shacks.",
+      "Avoid loud music after 10 pm in residential areas like Panjim."
+     ],
+     "local_transport": "Rent a scooter for flexibility; traffic is light in December and parking is easy near beaches and markets."
+    }
+   },
+   "duration_ms": 1500,
+   "turn": 1,
+   "token_count": 867,
+   "cost_usd": 0.00031635,
+   "created_at": "2026-10-15T12:41:48.402290Z"
+  },
+  {
+   "id": "3b310013-2503-4427-b523-95b9d175b0f3",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-16",
+     "group_size": 4,
+     "start_date": "2026-12-13",
+     "destination": "Goa",
+     "group_members": [
+      {
+       "name": "Aman",
+       "interests": [
+        "beach",
+        "nightlife"
+       ]
+      },
+      {
+       "name": "Bela",
+       "interests": [
+        "food"
+       ]
+      },
+      {
+       "name": "Chirag",
+       "interests": [
+        "history"
+       ]
+      },
+      {
+       "name": "Dia",
+       "interests": []
+      }
+     ],
+     "group_searches": [
+      {
+       "name": "Aman",
+       "found": 9,
+       "interests": [
+        "beach",
+        "nightlife"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Bela",
+       "found": 10,
+       "interests": [
+        "food"
+       ],
+       "nothing_for": []
+      },
+      {
+       "name": "Chirag",
+       "found": 10,
+       "interests": [
+        "history"
+       ],
+       "nothing_for": []
+      }
+     ]
+    },
+    "hotels_count": 3,
+    "flights_count": 3,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-13",
+       "hotel": {
+        "lat": 15.573272,
+        "lng": 73.74671,
+        "name": "Sort By Stays, Grand Peddem, Anjuna",
+        "stars": 0,
+        "rating": 8.3,
+        "address": "54/24 Village anjuna Grand Peddem, Goa",
+        "cost_per_night": 4170.85
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "ZZ",
+        "arrival": "2026-12-13T11:52:00",
+        "departure": "2026-12-13T09:17:00",
+        "price_inr": 48517.56,
+        "destination": {
+         "lat": 15.380574,
+         "lng": 73.833197,
+         "code": "GOI",
+         "name": "Goa Airport"
+        },
+        "duration_mins": 155,
+        "flight_number": "ZZ-3744"
+       },
+       "evening": {
+        "lat": 15.308616638183594,
+        "lng": 74.0009994506836,
+        "cost": 0.0,
+        "suits": [
+         "Chirag"
+        ],
+        "rating": 7.0,
+        "activity": "Rachol Fort Gate",
+        "category": "history"
+       },
+       "morning": {
+        "lat": 15.335132598876953,
+        "lng": 73.89291381835938,
+        "cost": 0.0,
+        "suits": [
+         "Aman"
+        ],
+        "rating": 3.0,
+        "activity": "Arossim Beach",
+        "category": "beach"
+       },
+       "afternoon": {
+        "lat": 15.270017623901367,
+        "lng": 74.08495330810547,
+        "cost": 0.0,
+        "suits": [
+         "Bela"
+        ],
+        "rating": 1.0,
+        "activity": "Sugandha",
+        "category": "food"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-12-14",
+       "hotel": {
+        "lat": 15.573272,
+        "lng": 73.74671,
+        "name": "Sort By Stays, Grand Peddem, Anjuna",
+        "stars": 0,
+        "rating": 8.3,
+        "address": "54/24 Village anjuna Grand Peddem, Goa",
+        "cost_per_night": 4170.85
+       },
+       "flight": null,
+       "evening": {
+        "lat": 15.264700889587402,
+        "lng": 73.94161224365234,
+        "cost": 0.0,
+        "suits": [
+         "Chirag"
+        ],
+        "rating": 3.0,
+        "activity": "Goa Chitra museum",
+        "category": "museum"
+       },
+       "morning": {
+        "lat": 15.050905227661133,
+        "lng": 73.98759460449219,
+        "cost": 0.0,
+        "suits": [
+         "Aman"
+        ],
+        "rating": 3.0,
+        "activity": "Agonda",
+        "category": "beach"
+       },
+       "afternoon": {
+        "lat": 15.26340389251709,
+        "lng": 74.10399627685547,
+        "cost": 0.0,
+        "suits": [
+         "Bela"
+        ],
+        "rating": 1.0,
+        "activity": "Bollywood Cafe Bar & Restaurant",
+        "category": "food"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-12-15",
+       "hotel": {
+        "lat": 15.573272,
+        "lng": 73.74671,
+        "name": "Sort By Stays, Grand Peddem, Anjuna",
+        "stars": 0,
+        "rating": 8.3,
+        "address": "54/24 Village anjuna Grand Peddem, Goa",
+        "cost_per_night": 4170.85
+       },
+       "flight": null,
+       "evening": {
+        "lat": 15.121944427490234,
+        "lng": 74.13055419921875,
+        "cost": 0.0,
+        "suits": [
+         "Chirag"
+        ],
+        "rating": 3.0,
+        "activity": "Usgalimal rock engravings",
+        "category": "history"
+       },
+       "morning": {
+        "lat": 15.293191909790039,
+        "lng": 73.90774536132812,
+        "cost": 0.0,
+        "suits": [
+         "Aman"
+        ],
+        "rating": 2.0,
+        "activity": "Betalbatim Beach",
+        "category": "beach"
+       },
+       "afternoon": {
+        "lat": 15.2629976272583,
+        "lng": 74.10855102539062,
+        "cost": 0.0,
+        "suits": [
+         "Bela"
+        ],
+        "rating": 1.0,
+        "activity": "Shilpa Restaurant",
+        "category": "food"
+       }
+      },
+      {
+       "day": 4,
+       "date": "2026-12-16",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 15.17124080657959,
+        "lng": 73.94182586669922,
+        "cost": 0.0,
+        "suits": [
+         "Aman"
+        ],
+        "rating": 2.0,
+        "activity": "Cavelossim Beach",
+        "category": "beach"
+       },
+       "afternoon": null
+      }
+     ],
+     "group": {
+      "members": [
+       {
+        "name": "Aman",
+        "stops": 4,
+        "interests": [
+         "beach",
+         "nightlife"
+        ],
+        "nothing_for": []
+       },
+       {
+        "name": "Bela",
+        "stops": 3,
+        "interests": [
+         "food"
+        ],
+        "nothing_for": []
+       },
+       {
+        "name": "Chirag",
+        "stops": 3,
+        "interests": [
+         "history"
+        ],
+        "nothing_for": []
+       },
+       {
+        "name": "Dia",
+        "stops": 0,
+        "interests": [],
+        "nothing_for": []
+       }
+      ],
+      "balanced": true
+     },
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 61030.11,
+     "per_person_cost": 15257.53,
+     "local_intelligence": {
+      "best_times": {
+       "Fort Aguada": "Visit at sunrise; the mist over the sea creates stunning photos and cooler temperatures.",
+       "Mapusa Market": "Shop early around 8 am; produce is freshest and bargaining is easier.",
+       "Palolem Beach": "Go at sunset; the beachside bars open and the tide is gentle for a stroll.",
+       "Basilica of Bom Jesus": "Enter mid-morning; crowds are thin and the light highlights the baroque interiors."
+      },
+      "safety_tips": [
+       "Watch out for sudden monsoon-like showers in early December; carry a light raincoat.",
+       "Keep valuables locked in your hotel safe; pickpocketing spikes near crowded nightlife spots.",
+       "Beware of stray dogs on remote beaches; carry insect repellent and avoid feeding them."
+      ],
+      "tourist_traps": [
+       "Skip overpriced water sports at Baga; hire local operators at Calangute for better rates.",
+       "Don’t rely on street vendors for seafood after dark; go to established shacks like Martin’s for fresh catch.",
+       "Avoid the crowded Anjuna flea market on Sundays; shop early on weekdays for authentic crafts."
+      ],
+      "cultural_norms": [
+       "Dress modestly when visiting churches and temples, especially after sunset.",
+       "Tipping 10% in restaurants is customary, even at beach shacks.",
+       "Avoid loud music after 10 pm in residential areas like Panjim."
+      ],
+      "local_transport": "Rent a scooter for flexibility; traffic is light in December and parking is easy near beaches and markets."
+     },
+     "per_person_breakdown": {
+      "stay": 3128.14,
+      "total": 15257.53,
+      "shares": [
+       {
+        "name": "Aman",
+        "amount": 15258
+       },
+       {
+        "name": "Bela",
+        "amount": 15258
+       },
+       {
+        "name": "Chirag",
+        "amount": 15257
+       },
+       {
+        "name": "Dia",
+        "amount": 15257
+       }
+      ],
+      "flights": 12129.39,
+      "activities": 0.0,
+      "travellers": 4
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 7083,
+   "turn": 1,
+   "token_count": 5464,
+   "cost_usd": 0.00222495,
+   "created_at": "2026-10-15T12:41:55.497228Z"
+  },
+  {
+   "id": "5ad07678-c1df-4dab-a6fc-c2275f7f9579",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-16",
+    "trip_start": "2026-12-13",
+    "retry_count": 0,
+    "budget_range": [
+     48824.088,
+     73236.132
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 61030.11
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:55.512527Z"
+  },
+  {
+   "id": "67531b00-55f4-4002-806e-664b4509fac9",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 61030.11
+   },
+   "output": {
+    "missing": [],
+    "trip_status": "completed",
+    "itinerary_id": "3b47be79-adc9-4f95-bd62-9aff8a4c1bd8",
+    "unmapped_activities": []
+   },
+   "duration_ms": 21,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:55.538319Z"
+  },
+  {
+   "id": "354104ba-bf89-4139-a776-26dce2d34159",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Sort By Stays, Grand Peddem, Anjuna"
+     ],
+     "nights": 3,
+     "interests": [
+      "beach",
+      "nightlife",
+      "food",
+      "history"
+     ],
+     "group_size": 4,
+     "destination": "Goa",
+     "user_message": null,
+     "top_activities": [
+      "Arossim Beach",
+      "Sugandha",
+      "Rachol Fort Gate",
+      "Agonda",
+      "Bollywood Cafe Bar & Restaurant",
+      "Goa Chitra museum",
+      "Betalbatim Beach",
+      "Shilpa Restaurant"
+     ],
+     "total_cost_inr": 61030.11,
+     "avg_hotel_stars": 0.0,
+     "per_person_per_night_inr": 5086
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "mid-range"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 1001,
+   "turn": 1,
+   "token_count": 790,
+   "cost_usd": 0.0002076,
+   "created_at": "2026-10-15T12:41:56.558379Z"
+  },
+  {
+   "id": "acb6a9bf-0a7c-49ee-93bc-edbfef886149",
+   "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 120000.0,
+    "end_date": "2026-12-16",
+    "interests": [
+     "beach",
+     "nightlife",
+     "food",
+     "history"
+    ],
+    "group_size": 4,
+    "start_date": "2026-12-13",
+    "destination": "Goa",
+    "group_members": [
+     {
+      "name": "Aman",
+      "interests": [
+       "beach",
+       "nightlife"
+      ]
+     },
+     {
+      "name": "Bela",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Chirag",
+      "interests": [
+       "history"
+      ]
+     },
+     {
+      "name": "Dia",
+      "interests": []
+     }
+    ]
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 3,
+    "itinerary_id": "3b47be79-adc9-4f95-bd62-9aff8a4c1bd8",
+    "flight_status": "completed",
+    "flights_count": 3,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹48,518; ₹71,482 (60%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 48517.56,
+     "total_budget": 120000.0,
+     "remaining_budget": 71482.44
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 9746,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:41:56.571434Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-77cb534bea@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Goa",
+    "start_date": "2026-12-13",
+    "end_date": "2026-12-16",
+    "budget": 120000,
+    "group_members": [
+     {
+      "name": "Aman",
+      "interests": [
+       "beach",
+       "nightlife"
+      ]
+     },
+     {
+      "name": "Bela",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Chirag",
+      "interests": [
+       "history"
+      ]
+     },
+     {
+      "name": "Dia",
+      "interests": []
+     }
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "299bf7b8-be47-4439-b81f-34d81085a64c",
+    "user_id": "1f236777-e053-4522-9839-4186588b57dd",
+    "destination": "Goa",
+    "start_date": "2026-12-13",
+    "end_date": "2026-12-16",
+    "budget": 120000.0,
+    "group_size": 4,
+    "interests": [
+     "beach",
+     "nightlife",
+     "food",
+     "history"
+    ],
+    "group_members": [
+     {
+      "name": "Aman",
+      "interests": [
+       "beach",
+       "nightlife"
+      ]
+     },
+     {
+      "name": "Bela",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Chirag",
+      "interests": [
+       "history"
+      ]
+     },
+     {
+      "name": "Dia",
+      "interests": []
+     }
+    ],
+    "status": "pending",
+    "created_at": "2026-10-15T12:41:15.948526Z"
+   }
+  },
+  {
+   "request": "POST /trips/299bf7b8-be47-4439-b81f-34d81085a64c/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.06,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "299bf7b8-be47-4439-b81f-34d81085a64c"
+   }
+  }
+ ],
+ "seconds": 42.0,
+ "asleep_s": 0.0
+}
