@@ -1801,6 +1801,66 @@ connection the pool holds ended at the server, and a save that loses its connect
 
 ---
 
+## Step 31 — Verify Phase 33: the eval suite
+
+Fifteen trips asked of the planner — on real models and real providers — and graded by Claude Haiku 4.5.
+It needs Postgres and Redis (the dev containers), the provider keys in `.env` as for any live plan, and
+**`ANTHROPIC_API_KEY` in `.env`** for the grader (console.anthropic.com; a full run costs a few cents).
+Nothing else is started by hand: the script starts this checkout's backend itself, on a spare port,
+against a database of its own (`tripplanner_db_eval`, emptied first), and stops it afterwards.
+
+```bash
+python scripts/run_eval.py --assert-min-score 3.5     # all fifteen; ~11 minutes on Groq's free tier
+```
+
+RUN-OUTPUT-PENDING
+
+It writes the table to `docs/eval-results-<date>.md`, a line to `docs/eval-history.csv`, and every
+scenario's record — what was asked, and everything the API served back — to `.evals/<run>/`.
+The exit code is the verdict: **0** the average is at least 3.5, **1** it is below, **2** something
+could not be run or graded (the reason is printed; the average does not vouch for the build).
+
+What each part is:
+
+- **The scenarios** (`evals/scenarios.py`): three happy paths, two budget conflicts, two ambiguous
+  requests, two groups, four edge cases (₹3,000 for two to Goa; Ziro, which has no airport; nine
+  travellers; yesterday's date) and two changes to a plan. Each says how it should end.
+- **The score** of a scenario is its weakest criterion: tool correctness, budget consistency,
+  hallucination, completeness and — for a change — refinement accuracy. Code measures what it can
+  exactly (every name against the search results, the total against `estimate_budget`, the dates and
+  slots); the grader reads the rest and can score no higher than those measurements allow. `↓` in the
+  table marks where they held it down.
+
+Other ways to run it:
+
+```bash
+python scripts/run_eval.py --only happy-jaipur edge-past-date          # some of them (a change brings its plan)
+python scripts/run_eval.py --plan-only --evidence .evals/mine          # ask and keep, grade later…
+python scripts/run_eval.py --regrade .evals/mine --label mine          # …without asking the planner again
+python scripts/run_eval.py --api http://localhost:8200                 # a backend already running (Step 25's stack)
+python scripts/run_eval.py --gap 0                                     # a paid Groq tier: no waiting between plans
+```
+
+**Two runs a day at most on the free tiers.** Groq gives the builder's model 200,000 tokens a day and a
+full run takes about 78,000. A scenario a provider refuses for quota is asked again once, a minute
+later; if it still cannot be run the run exits 2 — it is not scored against the build.
+
+**By hand, the regression it is for:** in a copy of the repository, make the attractions search forget
+what the traveller enjoys — in `src/ai/orchestrator/orchestrator.py`, `activities_search_input`, replace
+`state.get("interests") or DEFAULT_INTERESTS` with `DEFAULT_INTERESTS` — and run the suite there:
+
+BROKEN-OUTPUT-PENDING
+
+**What a deployment gets from this:** nothing deployed. The nightly job (Phase 28) runs the suite with
+`--assert-min-score 3.5` once these are repository secrets (Settings → Secrets and variables → Actions):
+`ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GOOGLE_API_KEY`, `DUFFEL_ACCESS_TOKEN`, `LITEAPI_API_KEY`,
+`OPENTRIPMAP_API_KEY`, `OPENWEATHER_API_KEY`. Until then its report says "not run" and the night's
+summary shows it skipped, not failed.
+
+**The tests:** `pytest tests/unit/test_phase33_eval.py -v` (UNIT-COUNT-PENDING) — the scenarios, the driver against a fake of
+the API, every measurement on real records (`tests/fixtures/evals/`) broken on purpose, the grader with a
+fake of Claude, the score, the table, the history, the nightly report and the exit codes.
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:

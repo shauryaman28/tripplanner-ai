@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 32 / 50 — Chaos Engineering: Data Layer**
+**Status: Phase 33 / 50 — Eval Suite**
 
 ---
 
@@ -305,6 +305,7 @@ tripplanner-ai/
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
 │   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 79 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
+│   ├── fixtures/evals/                  ← Phase 33: six real eval records — what the API served for a scenario
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
@@ -317,7 +318,8 @@ tripplanner-ai/
 │   │                                      side; on main, the deploy after both
 │   ├── workflows/deploy.yml             ← Phase 28: the backend to Railway, then a wait until the merged commit
 │   │                                      is what answers; says "Nothing was deployed" until there is a target
-│   ├── workflows/nightly.yml            ← Phase 28: 02:00 UTC — the integration tests, and one comment about them
+│   ├── workflows/nightly.yml            ← Phase 28: 02:00 UTC — the integration tests, and one comment about them;
+│   │                                      Phase 33: the eval suite (skipped until its keys are repository secrets)
 │   └── nightly-issue.md                 ← what the nightly issue is opened with
 ├── docker/
 │   ├── init.sql                         ← enables pgvector extension (local development only: migration 001 does
@@ -330,6 +332,10 @@ tripplanner-ai/
 │   │                                      stand-ins added — and the stack it is laid over
 │   └── chaos/                           ← Phase 31: one more container on that stack — the far end of a model
 │                                          call that goes wrong (it says 429, or 500, or never answers)
+├── evals/                               ← Phase 33: the eval suite — fifteen trips (scenarios.py), asked of a backend
+│                                          over its API (driver.py), measured where they can be (measure.py), graded by
+│                                          Claude Haiku 4.5 where they cannot (grader.py), scored and kept (report.py).
+│                                          No part of the app: not imported by src/, not in the image
 ├── loadtest/                            ← Phase 30: what loads the app, and what stands in for the world outside it
 │   ├── k6/traveller.js                  ← one traveller's visit, as the trip page makes its requests; visits start
 │   │                                      at a fixed rate; a plan's duration is measured to its event on the stream
@@ -357,13 +363,16 @@ tripplanner-ai/
 │                                          loadtest.py (Phase 30: the load test's stack, the load, and what the stack
 │                                          did under it — every run kept as a file in docs/loadtest/),
 │                                          chaos.py (Phase 31: the tool server killed, Gemini answering 429, the
-│                                          builder's model silent, Redis killed — and what the app then does)
+│                                          builder's model silent, Redis killed — and what the app then does),
+│                                          run_eval.py (Phase 33: the eval suite — fifteen real plans, graded)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–32) + phase1-17_audit.md + load-test-report.md
+├── docs/                                ← phase build logs (1–33) + phase1-17_audit.md + load-test-report.md
 │                                          (Phase 30: before, the bottleneck, after) + loadtest/ (every run it is made of)
 │                                          + chaos-report.md (Phase 31: expected, what happened, what was changed)
 │                                          + chaos-data-report.md (Phase 32: the same for Postgres and the backend)
 │                                          + chaos/ (every exercise's record, before and after)
+│                                          + eval-results-<date>.md and eval-history.csv (Phase 33: each graded
+│                                          run's table, and one line per run) + evals/ (the runs worth keeping)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml

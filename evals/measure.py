@@ -242,7 +242,10 @@ def tools(scenario: Scenario, evidence: dict) -> Measure:
         _expect_place(m, "attractions search", sent.get("destination"), trip.get("destination"))
         wanted = {interest.casefold() for interest in trip.get("interests") or []}
         searched = {interest.casefold() for interest in sent.get("interests") or []}
-        if wanted - searched:
+        if scenario.refines and scenario.changes == "activities":
+            # a change to what they do may replace what they said they enjoy ("fewer temples"): read, not counted
+            m.facts.append(f"The change searched for {sorted(searched)}; the trip had asked for {sorted(wanted)}.")
+        elif wanted - searched:
             m.found(2, f"the attractions search left out what the traveller enjoys: {sorted(wanted - searched)}")
         members = [member["name"] for member in trip.get("group_members") or []]
         sent_members = [member.get("name") for member in sent.get("group_members") or []]
@@ -569,7 +572,8 @@ def refinement(scenario: Scenario, evidence: dict) -> Measure:
 
     wanted = scenario.changes
     if wanted and not changed.get(wanted):
-        m.found(1, f"the {wanted} is as it was: the change asked for was not made")
+        was = "are as they were" if wanted == "activities" else "is as it was"
+        m.found(1, f"the {wanted} {was}: the change asked for was not made")
     if changed["dates"]:
         m.found(1, "the trip's dates changed")
     for part in ("flight", "hotel"):

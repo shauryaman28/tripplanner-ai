@@ -52,6 +52,22 @@ def script(name: str):
 run_eval = script("run_eval")
 
 
+@pytest.fixture(autouse=True)
+def no_backend_and_no_database(monkeypatch):
+    """A test never starts a backend or empties a database — whatever it is broken into doing.
+
+    Learned the hard way: a break-on-purpose check that skipped the command's key check sent a test
+    into serve(), which emptied the eval database under a real run going on beside it, and started a
+    backend that asked real models for plans.
+    """
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a unit test must never start a backend or empty a database")
+
+    monkeypatch.setattr(driver, "serve", refuse)
+    monkeypatch.setattr(driver, "_fresh_database", refuse)
+
+
 def record(name: str) -> dict:
     return json.loads((FIXTURES / f"{name}.json").read_text())
 
@@ -121,6 +137,8 @@ class FakePlanner:
         self.plans: dict[str, list[dict]] = {}
         self.seen: list[str] = []
         self.offered = ["cheaper_flights", "increase_budget"]
+        self.lag = False  # a run that ends one status poll after it was asked for: the trip shows the run before
+        self._later: list[list] = []  # [trip, turn, polls still to answer as before]
 
     def client(self) -> httpx.Client:
         return httpx.Client(transport=httpx.MockTransport(self.answer), base_url="http://planner")
@@ -158,11 +176,19 @@ class FakePlanner:
             return httpx.Response(200, json={"status": "started"})
         if rest == "/refine":
             turn = max(row["turn"] for row in self.rows[trip_id]) + 1
-            self._run(trip_id, turn, refinement=True)
+            if self.lag:
+                self._later.append([trip_id, turn, 1])
+            else:
+                self._run(trip_id, turn, refinement=True)
             return httpx.Response(
                 200, json={"status": "refinement_started", "turn": turn, "refinement_type": "targeted_hotel"}
             )
         if rest == "/status":
+            if self._later and self._later[0][2] > 0:  # asked first: still as it was, the run not yet begun
+                self._later[0][2] -= 1
+            elif self._later:  # asked again: by now the run has been made
+                trip_id_later, turn, _ = self._later.pop(0)
+                self._run(trip_id_later, turn, refinement=True)
             return httpx.Response(200, json=trip["_status"])
         if rest == "/runs":
             return httpx.Response(200, json=self.rows[trip_id])
@@ -193,6 +219,13 @@ class FakePlanner:
                 "reason": "No flights within the budget",
                 "options": [{"choice": c} for c in self.offered],
             }
+        elif ending == "timeout":
+            row("itinerary_builder", "failed")
+            row(
+                "builder_failed",
+                output={"builder_error": {"error": "The model did not answer within 30 s.", "code": "LLM_TIMEOUT"}},
+            )
+            status["failure_reason"] = "The planner could not finish the plan."
         elif ending == "quota":
             row("itinerary_builder", "failed")
             row(
@@ -239,7 +272,7 @@ def test_a_question_is_answered_and_the_answer_planned():
 
 def test_a_budget_conflict_takes_the_way_out_the_scenario_prefers_among_those_offered():
     planner = FakePlanner("conflict", "plan")
-    planner.offered = ["cheaper_flights", "cheaper_hotel", "increase_budget"]
+    planner.offered = ["increase_budget", "cheaper_hotel", "cheaper_flights"]  # the preferred one is not first
     evidence = drive(planner, "conflict-udaipur")  # would take reduce_days, then cheaper_hotel
     assert evidence["choice_taken"] == "cheaper_hotel" and evidence["outcome"] == "plan"
     assert evidence["events"] == ["created", "conflict", "chose cheaper_hotel", "planned"]
@@ -282,6 +315,48 @@ def test_a_provider_refusal_for_quota_is_not_the_builds_fault():
     assert evidence["outcome"] == "failed" and evidence["provider_refused"]
     right, said = measure.outcome(BY_ID["happy-jaipur"], evidence)
     assert right is None and "quota" in said
+
+
+def test_a_model_that_timed_out_is_not_taken_for_a_quota_refusal():
+    evidence = drive(FakePlanner("timeout"), "happy-jaipur")
+    assert evidence["outcome"] == "failed" and not evidence["provider_refused"]
+    assert measure.outcome(BY_ID["happy-jaipur"], evidence)[0] is False
+
+
+def test_a_run_is_waited_for_until_it_has_ended_not_until_the_trip_stops_planning(monkeypatch):
+    monkeypatch.setattr(driver, "POLL_S", 0)
+    planner = FakePlanner("plan", "plan")
+    base = drive(planner, "happy-jaipur")
+    planner.lag = True  # the trip still says "completed" — the plan before — when first asked
+    evidence = drive(planner, "refine-nicer-hotel", base)
+    assert evidence["outcome"] == "plan" and len(evidence["itineraries"]) == 2
+    assert evidence["runs"][-1]["turn"] == 2
+
+
+def test_a_scenario_a_provider_refused_for_quota_is_asked_again_once(monkeypatch, tmp_path):
+    asked: list[str] = []
+
+    def run(api, scenario, pacer, base=None):
+        asked.append(scenario.id)
+        refused = len(asked) == 1
+        return {
+            "scenario": scenario.id,
+            "outcome": "failed" if refused else "plan",
+            "provider_refused": refused,
+            "seconds": 1.0,
+            "failure_reason": "x",
+            "itineraries": [],
+            "runs": [],
+            "trip": {},
+        }
+
+    monkeypatch.setattr(driver, "run", run)
+    monkeypatch.setattr(run_eval, "RETRY_AFTER_REFUSAL_S", 0)
+    monkeypatch.setattr(run_eval.time, "sleep", lambda s: None)
+    evidences, _ = run_eval._ask_all("http://planner", [BY_ID["happy-jaipur"]], 0, tmp_path)
+    assert asked == ["happy-jaipur", "happy-jaipur"]
+    assert evidences[0]["outcome"] == "plan" and evidences[0]["asked_again_after_refusal"]
+    assert json.loads((tmp_path / "happy-jaipur.json").read_text())["asked_again_after_refusal"]
 
 
 def test_an_ordinary_failure_is_the_builds():
@@ -556,6 +631,16 @@ def test_a_change_that_did_not_change_what_was_asked_or_changed_more_is_found():
     assert after["days"][0]["flight"]["flight_number"] == "AA-10"  # the record itself is untouched
 
 
+def test_a_change_to_the_activities_that_changed_nothing_is_found():
+    # Real (docs/evals/baseline): "fewer temples, more food and markets" — the plan had no temples; "markets" is not an
+    # interest the provider knows, so the search brought places of worship; the builder kept the plan as it was.
+    m = measured("refine-more-food")
+    assert m[TOOLS].ceiling == 5  # its search asked for food and markets, not the trip's culture: that was the point
+    assert "The change searched for ['food', 'markets']; the trip had asked for ['culture', 'food']." in m[TOOLS].facts
+    assert m[REFINEMENT].problems == [(1, "the activities are as they were: the change asked for was not made")]
+    assert "0 of 9 activity slots changed: " in m[REFINEMENT].facts
+
+
 def test_a_change_read_as_the_wrong_kind_is_found():
     evidence = record("refine-nicer-hotel")
     classifier = next(r for r in evidence["runs"] if r["agent_name"] == "refinement_classifier")
@@ -754,6 +839,34 @@ def test_an_answer_not_in_the_form_asked_is_asked_for_once_more_then_refused():
         grade("happy-jaipur", NeverRight())
 
 
+@pytest.mark.parametrize(
+    ("answer", "why"),
+    [
+        (lambda asked: [{"criterion": c, "score": 7, "reasons": []} for c in asked], "not a whole number from 0 to 5"),
+        (
+            lambda asked: [{"criterion": c, "score": True, "reasons": []} for c in asked],
+            "not a whole number from 0 to 5",
+        ),
+        (lambda asked: [{"criterion": asked[0], "score": 5, "reasons": []}], "no grade for"),
+        (lambda asked: [{"criterion": c, "score": 5, "reasons": []} for c in (*asked, asked[0])], "graded twice"),
+    ],
+)
+def test_an_answer_out_of_range_or_incomplete_is_never_taken(answer, why):
+    class Wrong(FakeClaude):
+        def create(self, **kwargs):
+            self.sent.append(kwargs)
+            asked = kwargs["tools"][0]["input_schema"]["properties"]["grades"]["items"]["properties"]["criterion"][
+                "enum"
+            ]
+            grades = {"grades": answer(asked), "summary": ""}
+            return SimpleNamespace(content=[SimpleNamespace(type="tool_use", input=grades)], usage=None)
+
+    client = Wrong()
+    with pytest.raises(grader.GraderError, match=why):
+        grade("happy-jaipur", client)
+    assert len(client.sent) == 2  # asked once more, with what was wrong
+
+
 def test_without_a_key_there_is_no_grader(monkeypatch, tmp_path):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(driver, "ROOT", tmp_path)  # a checkout whose .env has no key
@@ -762,6 +875,8 @@ def test_without_a_key_there_is_no_grader(monkeypatch, tmp_path):
         grader.client_from_env()
     (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-ant-test\n")
     assert grader.anthropic_key() == "sk-ant-test"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-from-the-environment")  # as the nightly job passes it
+    assert grader.anthropic_key() == "sk-ant-from-the-environment"
 
 
 # ── The report ──────────────────────────────────────────────────────────────
@@ -901,13 +1016,71 @@ def regrading(tmp_path, monkeypatch):
 def test_a_healthy_build_exits_0_and_a_broken_one_exits_1(regrading, tmp_path):
     assert regrading("--assert-min-score", "3.5", claude=FakeClaude(5)) == report.PASSED
     results = list(tmp_path.glob("eval-results-*-regrade.md"))
-    assert len(results) == 1 and "**average 4.17 ≥ 3.5 — passed**" in results[0].read_text()  # 5 of 6 at 5; kochi 0
+    # five of the seven records at 5; conflict-kochi 0 (the dead end); refine-more-food 1 (its change changed nothing)
+    assert len(results) == 1 and "**average 3.71 ≥ 3.5 — passed**" in results[0].read_text()
     assert regrading("--assert-min-score", "3.5", "--label", "broken", claude=FakeClaude(2)) == report.BELOW
     rows = list(csv.DictReader((tmp_path / "eval-history.csv").open()))
     assert [(r["label"], r["verdict"], r["scored"]) for r in rows] == [
-        ("regrade", "passed", "6"),
-        ("broken", "below", "6"),
+        ("regrade", "passed", "7"),
+        ("broken", "below", "7"),
     ]
+
+
+def test_a_regrade_reports_how_long_the_asking_took(regrading, tmp_path, monkeypatch):
+    kept = tmp_path / "kept"
+    kept.mkdir()
+    for path in FIXTURES.glob("*.json"):
+        (kept / path.name).write_text(path.read_text())
+    (kept / "run.json").write_text(
+        json.dumps(
+            {
+                "began": "2026-10-15T12:00:00",
+                "seconds": 612.0,
+                "waited_s": 380.0,
+                "asleep_s": 0.0,
+                "commit": "abcdef123456",
+                "against": "this checkout",
+                "gap_s": 45.0,
+            }
+        )
+    )
+    monkeypatch.setattr(grader, "client_from_env", lambda: FakeClaude(5))
+    assert run_eval.main(["--regrade", str(kept), "--results", str(tmp_path), "--label", "timed"]) == report.PASSED
+    text = next(tmp_path.glob("eval-results-*-timed.md")).read_text()
+    assert "Took 10 min 1" in text and "of which 6 min 20 s waiting" in text
+    assert "asked of this checkout at 2026-10-15T12:00:00 UTC (commit `abcdef1`)" in text
+    record_ = json.loads((kept / "run.json").read_text())
+    record_["asked_again"] = [{"began": "2026-10-15T13:00:00", "scenarios": ["happy-jaipur"]}]
+    (kept / "run.json").write_text(json.dumps(record_))
+    assert (
+        run_eval.main(["--regrade", str(kept), "--results", str(tmp_path), "--label", "again", "--no-history"])
+        == report.PASSED
+    )
+    assert (
+        "(happy-jaipur asked again at 2026-10-15T13:00:00 UTC)"
+        in next(tmp_path.glob("eval-results-*-again.md")).read_text()
+    )
+
+
+def test_a_scenario_asked_again_into_a_kept_run_keeps_the_runs_own_record(monkeypatch, tmp_path):
+    kept = tmp_path / "kept"
+    kept.mkdir()
+    (kept / "run.json").write_text(json.dumps({"began": "2026-10-15T12:22:44", "seconds": 522.5, "waited_s": 379.9}))
+    monkeypatch.setattr(driver, "answers", lambda url: True)
+    monkeypatch.setattr(run_eval, "ask_all", lambda url, scenarios, gap, folder: ([record("happy-jaipur")], 0.0))
+    code = run_eval.main(["--api", "http://planner", "--plan-only", "--only", "happy-jaipur", "--evidence", str(kept)])
+    assert code == report.PASSED
+    saved = json.loads((kept / "run.json").read_text())
+    assert (saved["began"], saved["seconds"]) == ("2026-10-15T12:22:44", 522.5)  # the full run's, as it was
+    assert (
+        saved["asked_again"][0]["scenarios"] == ["happy-jaipur"]
+        and saved["asked_again"][0]["against"] == "http://planner"
+    )
+
+
+def test_no_history_writes_no_line(regrading, tmp_path):
+    assert regrading("--no-history", claude=FakeClaude(5)) == report.PASSED
+    assert not (tmp_path / "eval-history.csv").exists() and list(tmp_path.glob("eval-results-*.md"))
 
 
 def test_no_grader_no_verdict(regrading, tmp_path):
@@ -937,6 +1110,12 @@ def test_without_the_provider_keys_the_suite_is_not_configured(monkeypatch, tmp_
     junit = tmp_path / "evals.xml"
     assert run_eval.main(["--junit", str(junit)]) == report.INCOMPLETE
     assert "GROQ_API_KEY, DUFFEL_ACCESS_TOKEN, LITEAPI_API_KEY, OPENTRIPMAP_API_KEY" in junit.read_text()
+
+
+def test_stopped_from_outside_it_unwinds_so_that_its_backend_is_stopped():
+    with pytest.raises(SystemExit) as stopped:
+        run_eval._stopped(15, None)
+    assert stopped.value.code == 143
 
 
 def test_the_eval_is_no_part_of_the_app():

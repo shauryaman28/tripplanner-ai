@@ -217,11 +217,14 @@ SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         id="group-kochi-family",
         kind="group trip",
-        asks="Kochi, 3 nights, a family of three, ₹90,000",
+        asks="Kochi, 3 nights, a family of three, ₹1,20,000",
         expect="plan",
         destination="Kochi",
         nights=3,
-        budget=90_000,
+        # ₹90,000 at first: in December's peak the flights for three were ₹46,443 and the planner priced the trip
+        # as asked at ₹94,100 — it stopped and offered three ways out that fit, which was right. This scenario is
+        # about a group's plan, not a conflict (docs/evals/baseline/group-kochi-family-at-90000.json).
+        budget=120_000,
         members=(("Asha", ("museums",)), ("Ravi", ("food",)), ("Mira", ("nature",))),
         offset=16,
     ),

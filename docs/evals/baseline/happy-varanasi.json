@@ -1,0 +1,1029 @@
+{
+ "scenario": "happy-varanasi",
+ "asked": {
+  "trip": {
+   "destination": "Varanasi",
+   "start_date": "2026-12-03",
+   "end_date": "2026-12-05",
+   "budget": 50000,
+   "group_size": 2,
+   "interests": [
+    "culture",
+    "food"
+   ]
+  },
+  "message": "The ghats, the evening aarti and the food",
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+ "trip": {
+  "id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+  "user_id": "5f91abad-b376-4f60-9583-0bae281125c5",
+  "destination": "Varanasi",
+  "start_date": "2026-12-03",
+  "end_date": "2026-12-05",
+  "budget": 50000.0,
+  "group_size": 2,
+  "interests": [
+   "culture",
+   "food"
+  ],
+  "group_members": null,
+  "status": "completed",
+  "created_at": "2026-10-15T12:23:42.414365Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "38b84ffe-1733-4b02-acd2-3b7910f7c2f4",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-03",
+      "hotel": {
+       "lat": 25.286868,
+       "lng": 82.996817,
+       "name": "Inka Kashi Hostel Varanasi",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "Asthbhuja Bhawan B36/54-22, Upendra Nagar, Durga Kund, Varanasi, Uttar Pradesh, Varanasi",
+       "cost_per_night": 2401.07
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "ZZ",
+       "arrival": "2026-12-03T03:00:00",
+       "departure": "2026-12-03T01:32:00",
+       "price_inr": 14186.9,
+       "destination": {
+        "lat": 25.451415,
+        "lng": 82.859106,
+        "code": "VNS",
+        "name": "Lal Bahadur Shastri Airport"
+       },
+       "duration_mins": 88,
+       "flight_number": "ZZ-3744"
+      },
+      "evening": {
+       "lat": 25.271732330322266,
+       "lng": 82.99583435058594,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Bharat Kala Bhavan",
+       "category": "museum"
+      },
+      "morning": {
+       "lat": 25.37948226928711,
+       "lng": 83.02354431152344,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Sarnath Archaeological Museum",
+       "category": "museum"
+      },
+      "afternoon": {
+       "lat": 25.306962966918945,
+       "lng": 83.00985717773438,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "SHRI Guest House",
+       "category": "food"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-12-04",
+      "hotel": {
+       "lat": 25.286868,
+       "lng": 82.996817,
+       "name": "Inka Kashi Hostel Varanasi",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "Asthbhuja Bhawan B36/54-22, Upendra Nagar, Durga Kund, Varanasi, Uttar Pradesh, Varanasi",
+       "cost_per_night": 2401.07
+      },
+      "flight": null,
+      "evening": {
+       "lat": 25.34092140197754,
+       "lng": 82.9966812133789,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Momo Time",
+       "category": "food"
+      },
+      "morning": {
+       "lat": 25.337528228759766,
+       "lng": 82.99618530273438,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Mukhtar Chicken shop",
+       "category": "food"
+      },
+      "afternoon": {
+       "lat": 25.270584106445312,
+       "lng": 83.0248794555664,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Ramnagar Fort",
+       "category": "history"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-12-05",
+      "hotel": null,
+      "flight": null,
+      "evening": {
+       "lat": 25.316547393798828,
+       "lng": 82.9901123046875,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "IP Cinemas",
+       "category": "culture"
+      },
+      "morning": {
+       "lat": 25.125110626220703,
+       "lng": 82.8749008178711,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Chunar Fort",
+       "category": "history"
+      },
+      "afternoon": {
+       "lat": 25.343570709228516,
+       "lng": 82.99615478515625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Fulki, Golgapaa to eat",
+       "category": "food"
+      }
+     }
+    ],
+    "group": null,
+    "missing": null,
+    "currency": "INR",
+    "total_cost": 18989.04,
+    "per_person_cost": 9494.52,
+    "local_intelligence": {
+     "best_times": {
+      "Assi Ghat": "Evening (7:30-9:00 pm) for vibrant aarti and street food stalls opening.",
+      "Bharat Kala Bhavan": "Morning (9:30-11:30 am) for quiet galleries and guided tours.",
+      "Dashashwamedh Ghat": "Early morning (5:30-7:00 am) for serene sunrise rituals and cooler air.",
+      "Kashi Vishwanath Temple": "Late afternoon (4:00-5:30 pm) before the evening crowd and to hear the evening aarti.",
+      "Sarnath Archaeological Museum": "Mid-day (11:00 am-1:00 pm) when the museum is less crowded and lighting is optimal for photos."
+     },
+     "safety_tips": [
+      "Watch your belongings on crowded ghats; keep wallets in front pockets.",
+      "December evenings can be chilly near the river; carry a light jacket.",
+      "Avoid walking alone on poorly lit side streets after dark; stick to main thoroughfares."
+     ],
+     "tourist_traps": [
+      "Don’t buy “hand-crafted” silk at the main market; most are mass-produced – head to the narrow lanes near Kashi Vishwanath for authentic work.",
+      "Skip the overpriced boat rides that linger at the dock; hire a local rower for a quick 15-minute sunrise glide.",
+      "Avoid street food stalls that look unhygienic – choose vendors with high turnover and fresh cooking fire."
+     ],
+     "cultural_norms": [
+      "Dress modestly, especially near ghats and temples; shoulders and knees should be covered.",
+      "Remove shoes before entering any shrine or private home.",
+      "Avoid public displays of affection near religious sites, as locals consider it disrespectful."
+     ],
+     "local_transport": "Use cycle rickshaws for short hops and shared auto-rickshaws for longer stretches; they’re cheap and navigate narrow lanes easily."
+    },
+    "per_person_breakdown": {
+     "stay": 2401.07,
+     "total": 9494.52,
+     "shares": [
+      {
+       "name": "Traveller 1",
+       "amount": 9495
+      },
+      {
+       "name": "Traveller 2",
+       "amount": 9494
+      }
+     ],
+     "flights": 7093.45,
+     "activities": 0.0,
+     "travellers": 2
+    }
+   },
+   "total_cost": 18989.04,
+   "created_at": "2026-10-15T12:24:24.678703Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "1814f0d4-9fe8-4cb0-a9b7-44eb91192f9d",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": "The ghats, the evening aarti and the food",
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": false,
+    "extracted_fields": {}
+   },
+   "duration_ms": 2206,
+   "turn": 1,
+   "token_count": 439,
+   "cost_usd": 0.0003231,
+   "created_at": "2026-10-15T12:24:18.535947Z"
+  },
+  {
+   "id": "59510728-b32c-4e60-ba61-c83e2dde9733",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "5f91abad-b376-4f60-9583-0bae281125c5"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:18.554740Z"
+  },
+  {
+   "id": "1e2909cc-24f0-4ec7-a001-237ff7005bb4",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-03",
+    "budget": 50000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Varanasi",
+    "return_date": "2026-12-05",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-03T03:00:00",
+      "departure": "2026-12-03T01:32:00",
+      "price_inr": 14186.9,
+      "destination": {
+       "lat": 25.451415,
+       "lng": 82.859106,
+       "code": "VNS",
+       "name": "Lal Bahadur Shastri Airport"
+      },
+      "duration_mins": 88,
+      "flight_number": "ZZ-3744"
+     }
+    ]
+   },
+   "duration_ms": 24,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:18.584987Z"
+  },
+  {
+   "id": "d40ab5aa-cb9d-4898-8b21-0727e718aa4d",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 50000.0,
+    "cheapest_flight": 14186.9,
+    "replan_attempts": 0,
+    "flights_evaluated": 1
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹14,187; ₹35,813 (72%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 14186.9,
+    "total_budget": 50000.0,
+    "remaining_budget": 35813.1
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:18.591680Z"
+  },
+  {
+   "id": "a7f729ff-0522-41bd-8704-d625ebcc32c9",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 2,
+    "check_in": "2026-12-03",
+    "check_out": "2026-12-05",
+    "destination": "Varanasi",
+    "budget_per_night": 17906.55
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 25.286868,
+      "lng": 82.996817,
+      "name": "Inka Kashi Hostel Varanasi",
+      "stars": 0,
+      "rating": 9.0,
+      "address": "Asthbhuja Bhawan B36/54-22, Upendra Nagar, Durga Kund, Varanasi, Uttar Pradesh, Varanasi",
+      "price_per_night_inr": 2401.07
+     },
+     {
+      "lat": 25.306744,
+      "lng": 83.009914,
+      "name": "Hotel Mrk",
+      "stars": 3,
+      "rating": 10.0,
+      "address": "D17/136,137A,Dashashwamedh Ghat Rd, Near Dashaswmedh Ghat,Bangali Tola, Varanasi, Uttar Pradesh, 221001, Varanasi",
+      "price_per_night_inr": 2667.59
+     },
+     {
+      "lat": 25.305948,
+      "lng": 83.008854,
+      "name": "Hotel Bachchan Palace",
+      "stars": 0,
+      "rating": 9.6,
+      "address": "d.19/30-K, 19/24 KEWALGALI, DASHASHWAMEDH, Varanasi",
+      "price_per_night_inr": 3112.22
+     },
+     {
+      "lat": 25.323832,
+      "lng": 83.001623,
+      "name": "Hotel Buddha Castle",
+      "stars": 3,
+      "rating": 8.4,
+      "address": "C-26/35, Ramkatora, Lahurabir, Varanasi",
+      "price_per_night_inr": 3234.6
+     },
+     {
+      "lat": 25.316288,
+      "lng": 83.01464,
+      "name": "Hotel Sri Balaji",
+      "stars": 3,
+      "rating": 7.8,
+      "address": "K 38/12 Golghar Varanasi, Varanasi",
+      "price_per_night_inr": 4475.04
+     }
+    ]
+   },
+   "duration_ms": 37,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:18.636634Z"
+  },
+  {
+   "id": "216865be-6362-4224-8f73-500d4d2d95e8",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "limit": 10,
+    "interests": [
+     "culture",
+     "food"
+    ],
+    "destination": "Varanasi"
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 25.37948226928711,
+      "lng": 83.02354431152344,
+      "name": "Sarnath Archaeological Museum",
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "culture"
+      ],
+      "description": "A popular museum attraction in Varanasi."
+     },
+     {
+      "lat": 25.306962966918945,
+      "lng": 83.00985717773438,
+      "name": "SHRI Guest House",
+      "rating": 2.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A popular food attraction in Varanasi."
+     },
+     {
+      "lat": 25.271732330322266,
+      "lng": 82.99583435058594,
+      "name": "Bharat Kala Bhavan",
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "culture"
+      ],
+      "description": "A popular museum attraction in Varanasi."
+     },
+     {
+      "lat": 25.337528228759766,
+      "lng": 82.99618530273438,
+      "name": "Mukhtar Chicken shop",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Varanasi."
+     },
+     {
+      "lat": 25.270584106445312,
+      "lng": 83.0248794555664,
+      "name": "Ramnagar Fort",
+      "rating": 3.0,
+      "category": "history",
+      "interests": [
+       "culture"
+      ],
+      "description": "A popular history attraction in Varanasi."
+     },
+     {
+      "lat": 25.34092140197754,
+      "lng": 82.9966812133789,
+      "name": "Momo Time",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Varanasi."
+     },
+     {
+      "lat": 25.125110626220703,
+      "lng": 82.8749008178711,
+      "name": "Chunar Fort",
+      "rating": 3.0,
+      "category": "history",
+      "interests": [
+       "culture"
+      ],
+      "description": "A popular history attraction in Varanasi."
+     },
+     {
+      "lat": 25.343570709228516,
+      "lng": 82.99615478515625,
+      "name": "Fulki, Golgapaa to eat",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Varanasi."
+     },
+     {
+      "lat": 25.316547393798828,
+      "lng": 82.9901123046875,
+      "name": "IP Cinemas",
+      "rating": 1.0,
+      "category": "culture",
+      "interests": [
+       "culture"
+      ],
+      "description": "A lesser-known culture attraction in Varanasi."
+     },
+     {
+      "lat": 25.332660675048828,
+      "lng": 82.98861694335938,
+      "name": "Bar",
+      "rating": 1.0,
+      "category": "food",
+      "interests": [
+       "food"
+      ],
+      "description": "A lesser-known food attraction in Varanasi."
+     }
+    ]
+   },
+   "duration_ms": 38,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:18.639909Z"
+  },
+  {
+   "id": "181afa57-2156-4b99-b6eb-e3e3fed6cf2f",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 3,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "culture",
+     "food"
+    ],
+    "travellers": 2,
+    "destination": "Varanasi"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Assi Ghat": "Evening (7:30-9:00 pm) for vibrant aarti and street food stalls opening.",
+      "Bharat Kala Bhavan": "Morning (9:30-11:30 am) for quiet galleries and guided tours.",
+      "Dashashwamedh Ghat": "Early morning (5:30-7:00 am) for serene sunrise rituals and cooler air.",
+      "Kashi Vishwanath Temple": "Late afternoon (4:00-5:30 pm) before the evening crowd and to hear the evening aarti.",
+      "Sarnath Archaeological Museum": "Mid-day (11:00 am-1:00 pm) when the museum is less crowded and lighting is optimal for photos."
+     },
+     "safety_tips": [
+      "Watch your belongings on crowded ghats; keep wallets in front pockets.",
+      "December evenings can be chilly near the river; carry a light jacket.",
+      "Avoid walking alone on poorly lit side streets after dark; stick to main thoroughfares."
+     ],
+     "tourist_traps": [
+      "Don’t buy “hand-crafted” silk at the main market; most are mass-produced – head to the narrow lanes near Kashi Vishwanath for authentic work.",
+      "Skip the overpriced boat rides that linger at the dock; hire a local rower for a quick 15-minute sunrise glide.",
+      "Avoid street food stalls that look unhygienic – choose vendors with high turnover and fresh cooking fire."
+     ],
+     "cultural_norms": [
+      "Dress modestly, especially near ghats and temples; shoulders and knees should be covered.",
+      "Remove shoes before entering any shrine or private home.",
+      "Avoid public displays of affection near religious sites, as locals consider it disrespectful."
+     ],
+     "local_transport": "Use cycle rickshaws for short hops and shared auto-rickshaws for longer stretches; they’re cheap and navigate narrow lanes easily."
+    }
+   },
+   "duration_ms": 1609,
+   "turn": 1,
+   "token_count": 942,
+   "cost_usd": 0.0003645,
+   "created_at": "2026-10-15T12:24:20.211439Z"
+  },
+  {
+   "id": "9f1c0d8c-c6da-470c-855b-da6f9660047f",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-05",
+     "group_size": 2,
+     "start_date": "2026-12-03",
+     "destination": "Varanasi"
+    },
+    "hotels_count": 5,
+    "flights_count": 1,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-03",
+       "hotel": {
+        "lat": 25.286868,
+        "lng": 82.996817,
+        "name": "Inka Kashi Hostel Varanasi",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "Asthbhuja Bhawan B36/54-22, Upendra Nagar, Durga Kund, Varanasi, Uttar Pradesh, Varanasi",
+        "cost_per_night": 2401.07
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "ZZ",
+        "arrival": "2026-12-03T03:00:00",
+        "departure": "2026-12-03T01:32:00",
+        "price_inr": 14186.9,
+        "destination": {
+         "lat": 25.451415,
+         "lng": 82.859106,
+         "code": "VNS",
+         "name": "Lal Bahadur Shastri Airport"
+        },
+        "duration_mins": 88,
+        "flight_number": "ZZ-3744"
+       },
+       "evening": {
+        "lat": 25.271732330322266,
+        "lng": 82.99583435058594,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Bharat Kala Bhavan",
+        "category": "museum"
+       },
+       "morning": {
+        "lat": 25.37948226928711,
+        "lng": 83.02354431152344,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Sarnath Archaeological Museum",
+        "category": "museum"
+       },
+       "afternoon": {
+        "lat": 25.306962966918945,
+        "lng": 83.00985717773438,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "SHRI Guest House",
+        "category": "food"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-12-04",
+       "hotel": {
+        "lat": 25.286868,
+        "lng": 82.996817,
+        "name": "Inka Kashi Hostel Varanasi",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "Asthbhuja Bhawan B36/54-22, Upendra Nagar, Durga Kund, Varanasi, Uttar Pradesh, Varanasi",
+        "cost_per_night": 2401.07
+       },
+       "flight": null,
+       "evening": {
+        "lat": 25.34092140197754,
+        "lng": 82.9966812133789,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Momo Time",
+        "category": "food"
+       },
+       "morning": {
+        "lat": 25.337528228759766,
+        "lng": 82.99618530273438,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Mukhtar Chicken shop",
+        "category": "food"
+       },
+       "afternoon": {
+        "lat": 25.270584106445312,
+        "lng": 83.0248794555664,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Ramnagar Fort",
+        "category": "history"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-12-05",
+       "hotel": null,
+       "flight": null,
+       "evening": {
+        "lat": 25.316547393798828,
+        "lng": 82.9901123046875,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "IP Cinemas",
+        "category": "culture"
+       },
+       "morning": {
+        "lat": 25.125110626220703,
+        "lng": 82.8749008178711,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Chunar Fort",
+        "category": "history"
+       },
+       "afternoon": {
+        "lat": 25.343570709228516,
+        "lng": 82.99615478515625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Fulki, Golgapaa to eat",
+        "category": "food"
+       }
+      }
+     ],
+     "group": null,
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 18989.04,
+     "per_person_cost": 9494.52,
+     "local_intelligence": {
+      "best_times": {
+       "Assi Ghat": "Evening (7:30-9:00 pm) for vibrant aarti and street food stalls opening.",
+       "Bharat Kala Bhavan": "Morning (9:30-11:30 am) for quiet galleries and guided tours.",
+       "Dashashwamedh Ghat": "Early morning (5:30-7:00 am) for serene sunrise rituals and cooler air.",
+       "Kashi Vishwanath Temple": "Late afternoon (4:00-5:30 pm) before the evening crowd and to hear the evening aarti.",
+       "Sarnath Archaeological Museum": "Mid-day (11:00 am-1:00 pm) when the museum is less crowded and lighting is optimal for photos."
+      },
+      "safety_tips": [
+       "Watch your belongings on crowded ghats; keep wallets in front pockets.",
+       "December evenings can be chilly near the river; carry a light jacket.",
+       "Avoid walking alone on poorly lit side streets after dark; stick to main thoroughfares."
+      ],
+      "tourist_traps": [
+       "Don’t buy “hand-crafted” silk at the main market; most are mass-produced – head to the narrow lanes near Kashi Vishwanath for authentic work.",
+       "Skip the overpriced boat rides that linger at the dock; hire a local rower for a quick 15-minute sunrise glide.",
+       "Avoid street food stalls that look unhygienic – choose vendors with high turnover and fresh cooking fire."
+      ],
+      "cultural_norms": [
+       "Dress modestly, especially near ghats and temples; shoulders and knees should be covered.",
+       "Remove shoes before entering any shrine or private home.",
+       "Avoid public displays of affection near religious sites, as locals consider it disrespectful."
+      ],
+      "local_transport": "Use cycle rickshaws for short hops and shared auto-rickshaws for longer stretches; they’re cheap and navigate narrow lanes easily."
+     },
+     "per_person_breakdown": {
+      "stay": 2401.07,
+      "total": 9494.52,
+      "shares": [
+       {
+        "name": "Traveller 1",
+        "amount": 9495
+       },
+       {
+        "name": "Traveller 2",
+        "amount": 9494
+       }
+      ],
+      "flights": 7093.45,
+      "activities": 0.0,
+      "travellers": 2
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 4433,
+   "turn": 1,
+   "token_count": 3743,
+   "cost_usd": 0.00134265,
+   "created_at": "2026-10-15T12:24:24.658990Z"
+  },
+  {
+   "id": "d48f6f76-77f9-419d-8e72-7e8f3dad56c8",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-05",
+    "trip_start": "2026-12-03",
+    "retry_count": 0,
+    "budget_range": [
+     15191.232000000002,
+     22786.848
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 18989.04
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:24.673235Z"
+  },
+  {
+   "id": "dafd7c5e-0fb4-4e98-bb40-1afc79cac3b6",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 3,
+    "total_cost": 18989.04
+   },
+   "output": {
+    "missing": [],
+    "trip_status": "completed",
+    "itinerary_id": "38b84ffe-1733-4b02-acd2-3b7910f7c2f4",
+    "unmapped_activities": []
+   },
+   "duration_ms": 12,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:24.691162Z"
+  },
+  {
+   "id": "70da637b-6d72-49e5-8f52-28247bae266b",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Inka Kashi Hostel Varanasi"
+     ],
+     "nights": 2,
+     "interests": [
+      "culture",
+      "food"
+     ],
+     "group_size": 2,
+     "destination": "Varanasi",
+     "user_message": "The ghats, the evening aarti and the food",
+     "top_activities": [
+      "Sarnath Archaeological Museum",
+      "SHRI Guest House",
+      "Bharat Kala Bhavan",
+      "Mukhtar Chicken shop",
+      "Ramnagar Fort",
+      "Momo Time",
+      "Chunar Fort",
+      "Fulki, Golgapaa to eat"
+     ],
+     "total_cost_inr": 18989.04,
+     "avg_hotel_stars": 0.0,
+     "per_person_per_night_inr": 4747
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "mid-range"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 871,
+   "turn": 1,
+   "token_count": 813,
+   "cost_usd": 0.00021915,
+   "created_at": "2026-10-15T12:24:25.584623Z"
+  },
+  {
+   "id": "6b35d471-b492-4344-8a06-9deafb165728",
+   "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 50000.0,
+    "end_date": "2026-12-05",
+    "interests": [
+     "culture",
+     "food"
+    ],
+    "raw_input": "The ghats, the evening aarti and the food",
+    "group_size": 2,
+    "start_date": "2026-12-03",
+    "destination": "Varanasi"
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "38b84ffe-1733-4b02-acd2-3b7910f7c2f4",
+    "flight_status": "completed",
+    "flights_count": 1,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹14,187; ₹35,813 (72%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 14186.9,
+     "total_budget": 50000.0,
+     "remaining_budget": 35813.1
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 9272,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:24:25.600210Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-3e4f156c17@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Varanasi",
+    "start_date": "2026-12-03",
+    "end_date": "2026-12-05",
+    "budget": 50000,
+    "group_size": 2,
+    "interests": [
+     "culture",
+     "food"
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790",
+    "user_id": "5f91abad-b376-4f60-9583-0bae281125c5",
+    "destination": "Varanasi",
+    "start_date": "2026-12-03",
+    "end_date": "2026-12-05",
+    "budget": 50000.0,
+    "group_size": 2,
+    "interests": [
+     "culture",
+     "food"
+    ],
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-15T12:23:42.414365Z"
+   }
+  },
+  {
+   "request": "POST /trips/5edc5d8d-5689-43a4-889d-a0b3f78eb790/plan",
+   "sent": {
+    "raw_input": "The ghats, the evening aarti and the food"
+   },
+   "status": 202,
+   "seconds": 0.02,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "5edc5d8d-5689-43a4-889d-a0b3f78eb790"
+   }
+  }
+ ],
+ "seconds": 45.0,
+ "asleep_s": 0.0
+}

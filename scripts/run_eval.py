@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -35,7 +36,7 @@ for path in (ROOT, ROOT / "src" / "backend"):
         sys.path.insert(0, str(path))
 
 from evals import driver, grader, measure, report  # noqa: E402
-from evals.scenarios import BY_ID, Scenario, pick  # noqa: E402
+from evals.scenarios import BY_ID, SCENARIOS, Scenario, pick  # noqa: E402
 
 DOCS = ROOT / "docs"
 HISTORY = DOCS / "eval-history.csv"
@@ -45,6 +46,7 @@ EVIDENCE = ROOT / ".evals"
 NEEDED_FOR_PLANS = ("GROQ_API_KEY", "DUFFEL_ACCESS_TOKEN", "LITEAPI_API_KEY", "OPENTRIPMAP_API_KEY")
 RETRY_AFTER_REFUSAL_S = 60.0  # a provider that refused for its per-minute quota has forgotten it a minute later
 GRADERS_AT_ONCE = 4
+RUN_RECORD = "run.json"  # beside the scenarios' records: when and against what they were asked, and how long it took
 
 
 def missing_keys(names: tuple[str, ...]) -> list[str]:
@@ -83,7 +85,9 @@ def load(folder: Path) -> list[dict]:
     found = {p.stem: json.loads(p.read_text()) for p in folder.glob("*.json") if p.stem in BY_ID}
     if not found:
         raise SystemExit(f"no scenario records in {folder}")
-    return [found[s.id] for s in pick(list(found))]
+    return [
+        found[s.id] for s in SCENARIOS if s.id in found
+    ]  # a refinement's record holds both its turns: no base needed
 
 
 # ── Asking ──────────────────────────────────────────────────────────────────
@@ -156,7 +160,13 @@ def grade_all(evidences: list[dict], client, model: str) -> list[report.Scenario
         return list(pool.map(one, evidences))
 
 
+def _stopped(signum, frame) -> None:
+    """Stopped from outside (kill, a CI step's timeout): unwind, so that the backend this started is stopped too."""
+    raise SystemExit(128 + signum)
+
+
 def main(argv: list[str] | None = None) -> int:
+    signal.signal(signal.SIGTERM, _stopped)
     parser = argparse.ArgumentParser(
         description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -197,8 +207,22 @@ def main(argv: list[str] | None = None) -> int:
         evidences = load(args.regrade)
         if args.only:
             evidences = [e for e in evidences if e["scenario"] in args.only]
-        suite.against, waited = f"the evidence in {args.regrade}", 0.0
-        planning_s = sum(e.get("seconds") or 0.0 for e in evidences)
+        asked = json.loads((args.regrade / RUN_RECORD).read_text()) if (args.regrade / RUN_RECORD).exists() else {}
+        again = "; ".join(
+            f"{', '.join(a['scenarios'])} asked again at {a['began']} UTC" for a in asked.get("asked_again", [])
+        )
+        suite.against = (
+            f"the evidence in {args.regrade}"
+            + (f" ({again})" if again else "")
+            + (
+                f", asked of {asked['against']} at {asked['began']} UTC (commit `{asked['commit'][:7]}`)"
+                if asked
+                else ""
+            )
+        )
+        # how long asking took is the run's own record, when there is one — the scenarios' times leave out the start-up
+        planning_s = asked.get("seconds") or sum(e.get("seconds") or 0.0 for e in evidences)
+        waited = asked.get("waited_s") or 0.0
     else:
         scenarios = pick(args.only)
         folder = args.evidence or EVIDENCE / (run_at.strftime("%Y-%m-%dT%H%M%S") + (f"-{label}" if label else ""))
@@ -220,6 +244,22 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Could not run the scenarios: {exc}", file=sys.stderr)
             return report.INCOMPLETE
         planning_s = time.monotonic() - began
+        asleep = sum(e.get("asleep_s") or 0.0 for e in evidences)
+        record = {
+            "began": suite.run_at,
+            "seconds": round(planning_s, 1),  # from the start, the backend's start-up included
+            "waited_s": round(waited, 1),
+            "asleep_s": round(asleep, 1),
+            "commit": suite.commit,
+            "against": suite.against,
+            "gap_s": args.gap,
+        }
+        kept = folder / RUN_RECORD
+        if args.only and kept.exists():  # some scenarios asked again into a kept run: its own record stays
+            earlier = json.loads(kept.read_text())
+            earlier.setdefault("asked_again", []).append({**record, "scenarios": [s.id for s in scenarios]})
+            record = earlier
+        kept.write_text(json.dumps(record, indent=1))
         if args.plan_only:
             print(f"Kept in {folder}; grade it with: python scripts/run_eval.py --regrade {folder}")
             return report.PASSED

@@ -1,0 +1,835 @@
+{
+ "scenario": "edge-unusual-place",
+ "asked": {
+  "trip": {
+   "destination": "Ziro",
+   "start_date": "2026-12-19",
+   "end_date": "2026-12-22",
+   "budget": 60000,
+   "group_size": 2,
+   "interests": [
+    "nature",
+    "culture"
+   ]
+  },
+  "message": "The Ziro valley — rice fields and the Apatani villages",
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+ "trip": {
+  "id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+  "user_id": "269144d2-9c29-45ed-a82c-44ac7c65b49a",
+  "destination": "Ziro",
+  "start_date": "2026-12-19",
+  "end_date": "2026-12-22",
+  "budget": 60000.0,
+  "group_size": 2,
+  "interests": [
+   "nature",
+   "culture"
+  ],
+  "group_members": null,
+  "status": "completed",
+  "created_at": "2026-10-15T12:28:59.821153Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+  "progress": {
+   "agents_done": 2,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "failed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {
+    "flight_agent": "No airport is known by this name. Write the destination in English, or as its airport code, to include flights."
+   },
+   "retryable": {
+    "flight_agent": false
+   }
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "25d554ca-65e9-457e-acf1-978fe41aeb52",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-19",
+      "hotel": {
+       "lat": 27.544793,
+       "lng": 93.819688,
+       "name": "Ziro Palace Inn",
+       "stars": 3,
+       "rating": 6.0,
+       "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+       "cost_per_night": 2481.83
+      },
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": null,
+       "lng": null,
+       "cost": 0.0,
+       "suits": null,
+       "rating": null,
+       "activity": "Explore the area",
+       "category": null
+      },
+      "afternoon": null
+     },
+     {
+      "day": 2,
+      "date": "2026-12-20",
+      "hotel": {
+       "lat": 27.544793,
+       "lng": 93.819688,
+       "name": "Ziro Palace Inn",
+       "stars": 3,
+       "rating": 6.0,
+       "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+       "cost_per_night": 2481.83
+      },
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 27.54768180847168,
+       "lng": 93.89755249023438,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Talley Valley Wildlife Sanctuary",
+       "category": "nature"
+      },
+      "afternoon": null
+     },
+     {
+      "day": 3,
+      "date": "2026-12-21",
+      "hotel": {
+       "lat": 27.544793,
+       "lng": 93.819688,
+       "name": "Ziro Palace Inn",
+       "stars": 3,
+       "rating": 6.0,
+       "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+       "cost_per_night": 2481.83
+      },
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": null,
+       "lng": null,
+       "cost": 0.0,
+       "suits": null,
+       "rating": null,
+       "activity": "Explore the area",
+       "category": null
+      },
+      "afternoon": null
+     },
+     {
+      "day": 4,
+      "date": "2026-12-22",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 27.570068359375,
+       "lng": 94.02877044677734,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 1.0,
+       "activity": "Tale Valley WLS",
+       "category": "nature"
+      },
+      "afternoon": null
+     }
+    ],
+    "group": null,
+    "missing": [
+     {
+      "why": "No airport is known by this name. Write the destination in English, or as its airport code, to include flights.",
+      "what": "flights",
+      "search": "flight_agent",
+      "retryable": false
+     }
+    ],
+    "currency": "INR",
+    "total_cost": 7445.49,
+    "per_person_cost": 3722.74,
+    "local_intelligence": {
+     "best_times": {
+      "Meghna Cave": "Late afternoon, when the cave interior is illuminated by soft natural light.",
+      "Pange Valley": "Sunset, for golden light over terraced fields.",
+      "Ziro Valley Viewpoint": "Sunrise, for mist-filled panoramas of the valley.",
+      "Apatani Village (Ainong)": "Midday, to join community farming demonstrations and interact with locals.",
+      "Talley Valley Wildlife Sanctuary": "Early morning, when birds are most active and trails are dry."
+     },
+     "safety_tips": [
+      "December nights are freezing; wear thermal layers and carry a warm blanket.",
+      "Roads can be icy after night frost—drive slowly and use winter tires if possible.",
+      "Keep valuables in a lockable bag; stray dogs may roam near villages.",
+      "Carry a basic first-aid kit for minor cuts, as medical facilities are far."
+     ],
+     "tourist_traps": [
+      "Avoid homestays that charge extra for basic meals; most include simple local food.",
+      "Beware of unofficial guides demanding high fees for short walks; hire certified guides only.",
+      "Skip souvenir stalls selling mass-produced ‘tribal’ items; buy directly from artisans.",
+      "Do not trek at night without a local guide; routes become unsafe after dark."
+     ],
+     "cultural_norms": [
+      "Ask permission before photographing Apatani women, as modesty is highly valued.",
+      "Remove shoes when entering a local home or community hall.",
+      "Dress modestly—long sleeves and trousers are preferred, especially in villages.",
+      "Accept tea or snacks offered by hosts as a sign of respect."
+     ],
+     "local_transport": "Hire shared taxis from Daporijo to Ziro and use auto-rickshaws or bicycles within the valley; roads are narrow but scenic."
+    },
+    "per_person_breakdown": {
+     "stay": 3722.74,
+     "total": 3722.74,
+     "shares": [
+      {
+       "name": "Traveller 1",
+       "amount": 3723
+      },
+      {
+       "name": "Traveller 2",
+       "amount": 3722
+      }
+     ],
+     "flights": 0.0,
+     "activities": 0.0,
+     "travellers": 2
+    }
+   },
+   "total_cost": 7445.49,
+   "created_at": "2026-10-15T12:29:10.500319Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "54c5b206-646c-45d3-867c-34660ad963c7",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": "The Ziro valley — rice fields and the Apatani villages",
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": false,
+    "extracted_fields": {}
+   },
+   "duration_ms": 1458,
+   "turn": 1,
+   "token_count": 437,
+   "cost_usd": 0.0003137,
+   "created_at": "2026-10-15T12:29:01.307580Z"
+  },
+  {
+   "id": "dda43ccb-8043-44af-b3c5-96d8a13d551e",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "269144d2-9c29-45ed-a82c-44ac7c65b49a"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:01.327700Z"
+  },
+  {
+   "id": "337891b9-65d7-453f-bae4-28a78455b411",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "flight_agent",
+   "status": "failed",
+   "input": {
+    "date": "2026-12-19",
+    "budget": 60000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Ziro",
+    "return_date": "2026-12-22",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": {
+     "code": "UNKNOWN_DESTINATION",
+     "error": "Unknown airport: 'Ziro'. Pass an IATA code or add the city to _CITY_IATA in tools.py.",
+     "cheapest_inr": null
+    },
+    "flights": []
+   },
+   "duration_ms": 20,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:01.354231Z"
+  },
+  {
+   "id": "9c5596d0-4269-47eb-af32-870c93ae2d27",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 60000.0,
+    "cheapest_flight": 0.0,
+    "replan_attempts": 0,
+    "flights_evaluated": 0
+   },
+   "output": {
+    "reason": "Flight search unavailable (UNKNOWN_DESTINATION) — planning hotels and activities without flights.",
+    "decision": "continue",
+    "flight_cost": 0.0,
+    "total_budget": 60000.0,
+    "remaining_budget": 60000.0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:01.361718Z"
+  },
+  {
+   "id": "d14d68e8-22a4-49a1-a352-61bc54382cf8",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 2,
+    "check_in": "2026-12-19",
+    "check_out": "2026-12-22",
+    "destination": "Ziro",
+    "budget_per_night": 20000.0
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 27.544793,
+      "lng": 93.819688,
+      "name": "Ziro Palace Inn",
+      "stars": 3,
+      "rating": 6.0,
+      "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+      "price_per_night_inr": 2481.83
+     },
+     {
+      "lat": 27.60146,
+      "lng": 93.82466,
+      "name": "Kasa Resort",
+      "stars": 3,
+      "rating": 0.0,
+      "address": "Himalayan Heritage Complex, Lower Subansiri",
+      "price_per_night_inr": 3606.89
+     },
+     {
+      "lat": 27.588348,
+      "lng": 93.828321,
+      "name": "Vamoose Nehabo",
+      "stars": 0,
+      "rating": 3.0,
+      "address": "ziro arunachal pradesh india AIRPORT ROAD OLD ZIRO.PO-ZIRO.DIST-LOWER SUBANSIRI, Hāpoli",
+      "price_per_night_inr": 5967.02
+     }
+    ]
+   },
+   "duration_ms": 504,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:01.873539Z"
+  },
+  {
+   "id": "5f17439c-90e4-4914-aa19-54fdfac6c93e",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "nature",
+     "culture"
+    ],
+    "travellers": 2,
+    "destination": "Ziro"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Meghna Cave": "Late afternoon, when the cave interior is illuminated by soft natural light.",
+      "Pange Valley": "Sunset, for golden light over terraced fields.",
+      "Ziro Valley Viewpoint": "Sunrise, for mist-filled panoramas of the valley.",
+      "Apatani Village (Ainong)": "Midday, to join community farming demonstrations and interact with locals.",
+      "Talley Valley Wildlife Sanctuary": "Early morning, when birds are most active and trails are dry."
+     },
+     "safety_tips": [
+      "December nights are freezing; wear thermal layers and carry a warm blanket.",
+      "Roads can be icy after night frost—drive slowly and use winter tires if possible.",
+      "Keep valuables in a lockable bag; stray dogs may roam near villages.",
+      "Carry a basic first-aid kit for minor cuts, as medical facilities are far."
+     ],
+     "tourist_traps": [
+      "Avoid homestays that charge extra for basic meals; most include simple local food.",
+      "Beware of unofficial guides demanding high fees for short walks; hire certified guides only.",
+      "Skip souvenir stalls selling mass-produced ‘tribal’ items; buy directly from artisans.",
+      "Do not trek at night without a local guide; routes become unsafe after dark."
+     ],
+     "cultural_norms": [
+      "Ask permission before photographing Apatani women, as modesty is highly valued.",
+      "Remove shoes when entering a local home or community hall.",
+      "Dress modestly—long sleeves and trousers are preferred, especially in villages.",
+      "Accept tea or snacks offered by hosts as a sign of respect."
+     ],
+     "local_transport": "Hire shared taxis from Daporijo to Ziro and use auto-rickshaws or bicycles within the valley; roads are narrow but scenic."
+    }
+   },
+   "duration_ms": 1814,
+   "turn": 1,
+   "token_count": 1092,
+   "cost_usd": 0.00045495,
+   "created_at": "2026-10-15T12:29:03.187336Z"
+  },
+  {
+   "id": "fc67fba4-6d3a-4824-94bb-1d067eebb560",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "limit": 10,
+    "interests": [
+     "nature",
+     "culture"
+    ],
+    "destination": "Ziro"
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 27.54768180847168,
+      "lng": 93.89755249023438,
+      "name": "Talley Valley Wildlife Sanctuary",
+      "rating": 2.0,
+      "category": "nature",
+      "interests": [
+       "nature"
+      ],
+      "description": "A popular nature attraction in Ziro."
+     },
+     {
+      "lat": 27.570068359375,
+      "lng": 94.02877044677734,
+      "name": "Tale Valley WLS",
+      "rating": 1.0,
+      "category": "nature",
+      "interests": [
+       "nature"
+      ],
+      "description": "A lesser-known nature attraction in Ziro."
+     }
+    ]
+   },
+   "duration_ms": 2086,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:03.457888Z"
+  },
+  {
+   "id": "af101c11-c2b9-44e7-8300-9fa8097873ff",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-22",
+     "group_size": 2,
+     "start_date": "2026-12-19",
+     "destination": "Ziro"
+    },
+    "hotels_count": 3,
+    "flights_count": 0,
+    "attractions_count": 2,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-19",
+       "hotel": {
+        "lat": 27.544793,
+        "lng": 93.819688,
+        "name": "Ziro Palace Inn",
+        "stars": 3,
+        "rating": 6.0,
+        "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+        "cost_per_night": 2481.83
+       },
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": null,
+        "lng": null,
+        "cost": 0.0,
+        "suits": null,
+        "rating": null,
+        "activity": "Explore the area",
+        "category": null
+       },
+       "afternoon": null
+      },
+      {
+       "day": 2,
+       "date": "2026-12-20",
+       "hotel": {
+        "lat": 27.544793,
+        "lng": 93.819688,
+        "name": "Ziro Palace Inn",
+        "stars": 3,
+        "rating": 6.0,
+        "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+        "cost_per_night": 2481.83
+       },
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 27.54768180847168,
+        "lng": 93.89755249023438,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Talley Valley Wildlife Sanctuary",
+        "category": "nature"
+       },
+       "afternoon": null
+      },
+      {
+       "day": 3,
+       "date": "2026-12-21",
+       "hotel": {
+        "lat": 27.544793,
+        "lng": 93.819688,
+        "name": "Ziro Palace Inn",
+        "stars": 3,
+        "rating": 6.0,
+        "address": "BIIRII Village, PO & PS Haploi, Ziro, Lower Subansiri, Arunachal Pradesh, 791120, Lower Subansiri",
+        "cost_per_night": 2481.83
+       },
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": null,
+        "lng": null,
+        "cost": 0.0,
+        "suits": null,
+        "rating": null,
+        "activity": "Explore the area",
+        "category": null
+       },
+       "afternoon": null
+      },
+      {
+       "day": 4,
+       "date": "2026-12-22",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 27.570068359375,
+        "lng": 94.02877044677734,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 1.0,
+        "activity": "Tale Valley WLS",
+        "category": "nature"
+       },
+       "afternoon": null
+      }
+     ],
+     "group": null,
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 7445.49,
+     "per_person_cost": 3722.74,
+     "local_intelligence": {
+      "best_times": {
+       "Meghna Cave": "Late afternoon, when the cave interior is illuminated by soft natural light.",
+       "Pange Valley": "Sunset, for golden light over terraced fields.",
+       "Ziro Valley Viewpoint": "Sunrise, for mist-filled panoramas of the valley.",
+       "Apatani Village (Ainong)": "Midday, to join community farming demonstrations and interact with locals.",
+       "Talley Valley Wildlife Sanctuary": "Early morning, when birds are most active and trails are dry."
+      },
+      "safety_tips": [
+       "December nights are freezing; wear thermal layers and carry a warm blanket.",
+       "Roads can be icy after night frost—drive slowly and use winter tires if possible.",
+       "Keep valuables in a lockable bag; stray dogs may roam near villages.",
+       "Carry a basic first-aid kit for minor cuts, as medical facilities are far."
+      ],
+      "tourist_traps": [
+       "Avoid homestays that charge extra for basic meals; most include simple local food.",
+       "Beware of unofficial guides demanding high fees for short walks; hire certified guides only.",
+       "Skip souvenir stalls selling mass-produced ‘tribal’ items; buy directly from artisans.",
+       "Do not trek at night without a local guide; routes become unsafe after dark."
+      ],
+      "cultural_norms": [
+       "Ask permission before photographing Apatani women, as modesty is highly valued.",
+       "Remove shoes when entering a local home or community hall.",
+       "Dress modestly—long sleeves and trousers are preferred, especially in villages.",
+       "Accept tea or snacks offered by hosts as a sign of respect."
+      ],
+      "local_transport": "Hire shared taxis from Daporijo to Ziro and use auto-rickshaws or bicycles within the valley; roads are narrow but scenic."
+     },
+     "per_person_breakdown": {
+      "stay": 3722.74,
+      "total": 3722.74,
+      "shares": [
+       {
+        "name": "Traveller 1",
+        "amount": 3723
+       },
+       {
+        "name": "Traveller 2",
+        "amount": 3722
+       }
+      ],
+      "flights": 0.0,
+      "activities": 0.0,
+      "travellers": 2
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 7016,
+   "turn": 1,
+   "token_count": 3539,
+   "cost_usd": 0.0015906,
+   "created_at": "2026-10-15T12:29:10.481562Z"
+  },
+  {
+   "id": "5ba5159a-15b9-4106-a1b4-36b327e81b6f",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-22",
+    "trip_start": "2026-12-19",
+    "retry_count": 0,
+    "budget_range": [
+     5956.392,
+     8934.588
+    ],
+    "attractions_count": 2,
+    "expected_budget_total": 7445.49
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:10.496016Z"
+  },
+  {
+   "id": "898f6570-3edb-4b61-9250-b414c66eacdc",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 7445.49
+   },
+   "output": {
+    "missing": [
+     "flight_agent"
+    ],
+    "trip_status": "completed",
+    "itinerary_id": "25d554ca-65e9-457e-acf1-978fe41aeb52",
+    "unmapped_activities": []
+   },
+   "duration_ms": 20,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:10.520654Z"
+  },
+  {
+   "id": "1de99523-991b-4f73-b411-0c044e18d59d",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Ziro Palace Inn"
+     ],
+     "nights": 3,
+     "interests": [
+      "nature",
+      "culture"
+     ],
+     "group_size": 2,
+     "destination": "Ziro",
+     "user_message": "The Ziro valley — rice fields and the Apatani villages",
+     "top_activities": [
+      "Talley Valley Wildlife Sanctuary",
+      "Tale Valley WLS"
+     ],
+     "total_cost_inr": 7445.49,
+     "avg_hotel_stars": 3.0,
+     "per_person_per_night_inr": 1241
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "mid-range"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 1108,
+   "turn": 1,
+   "token_count": 813,
+   "cost_usd": 0.0002385,
+   "created_at": "2026-10-15T12:29:11.660064Z"
+  },
+  {
+   "id": "e2f7fcd1-9cd5-4b8d-8889-72c8b6a1ec8f",
+   "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 60000.0,
+    "end_date": "2026-12-22",
+    "interests": [
+     "nature",
+     "culture"
+    ],
+    "raw_input": "The Ziro valley — rice fields and the Apatani villages",
+    "group_size": 2,
+    "start_date": "2026-12-19",
+    "destination": "Ziro"
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 3,
+    "itinerary_id": "25d554ca-65e9-457e-acf1-978fe41aeb52",
+    "flight_status": "failed",
+    "flights_count": 0,
+    "budget_decision": {
+     "reason": "Flight search unavailable (UNKNOWN_DESTINATION) — planning hotels and activities without flights.",
+     "decision": "continue",
+     "flight_cost": 0.0,
+     "total_budget": 60000.0,
+     "remaining_budget": 60000.0
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 2,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 11819,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:29:11.668589Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-7b8b4ff2ca@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Ziro",
+    "start_date": "2026-12-19",
+    "end_date": "2026-12-22",
+    "budget": 60000,
+    "group_size": 2,
+    "interests": [
+     "nature",
+     "culture"
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee",
+    "user_id": "269144d2-9c29-45ed-a82c-44ac7c65b49a",
+    "destination": "Ziro",
+    "start_date": "2026-12-19",
+    "end_date": "2026-12-22",
+    "budget": 60000.0,
+    "group_size": 2,
+    "interests": [
+     "nature",
+     "culture"
+    ],
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-15T12:28:59.821153Z"
+   }
+  },
+  {
+   "request": "POST /trips/e0ce61fa-709a-49ce-8311-9ef6d0cf50ee/plan",
+   "sent": {
+    "raw_input": "The Ziro valley — rice fields and the Apatani villages"
+   },
+   "status": 202,
+   "seconds": 0.01,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "e0ce61fa-709a-49ce-8311-9ef6d0cf50ee"
+   }
+  }
+ ],
+ "seconds": 12.7,
+ "asleep_s": 0.0
+}
