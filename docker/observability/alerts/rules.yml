@@ -1,0 +1,150 @@
+# The alerts (Phase 34): four conditions in which somebody should stop and look, and what to look at.
+#
+#   PlanLatencyHigh        a plan takes longer than 30 s at p99              POST /trips/{trip_id}/plan
+#   EndpointErrorRateHigh  more than 5 % of an endpoint's requests fail       any endpoint, over 5 minutes
+#   CacheHitRatioLow       the tool server's cache answers under 30 %         mcp_cache_hit_ratio
+#   ModelErrorRateHigh     more than 10 model calls a minute fail             llm_calls_total{status="error"}
+#
+# Prometheus evaluates them (prometheus.yml: rule_files) and hands what fires to Alertmanager
+# (alertmanager.yml), which sends it on. Each one's message is meant to be read by somebody who was not
+# looking: which endpoint or which metric, what it is now, what the threshold is, and the numbers
+# behind it — how many plans, requests, lookups or calls — so that one slow plan on a quiet evening
+# reads differently from every plan being slow. What to do next is docs/runbook.md, one section an
+# alert; `runbook_url` opens it.
+#
+# Tested by tests.yml (`promtool test rules`, also run by CI and by tests/unit/test_phase34_alerts.py):
+# each alert fired on purpose from series written by hand, and each kept quiet where it must be. On the
+# running stack, `python scripts/alert_drill.py all` makes each condition happen for real.
+#
+# Two things every expression here leaves out:
+#   - health checks and other probes (/ping, /ready, /version, /admin/health-deep): a platform asks
+#     them every few seconds, and a 503 from /ready is it doing its job — and /admin/sentry-test, which
+#     fails on purpose (Phase 27): Phase 27's check calls it, and it fired this alert the first time
+#     that check ran beside the alerts;
+#   - the request that starts a plan, as a measure of how long planning takes. POST /plan is answered
+#     202 in a few milliseconds and the plan is made after; its own duration says nothing about the
+#     wait (DECISIONS #228). The plan's is planning_run_duration_seconds.
+groups:
+  - name: tripplanner
+    rules:
+      # ── 1. Plans are slow ───────────────────────────────────────────────────────────────────────
+      #
+      # p99 of the planning runs that POST /trips/{trip_id}/plan started, over 10 minutes. A plan takes
+      # 8 to 25 s on real providers; 30 is a bucket boundary of the histogram (metrics.RUN_BUCKETS), so
+      # "over 30 s" is counted, not interpolated. On this app's traffic a p99 over ten minutes is the
+      # slowest plan or two: one plan over 30 s is enough — which is why the message says how many
+      # plans there were and how many of them were slow.
+      - alert: PlanLatencyHigh
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (rate(planning_run_duration_seconds_bucket{kind="plan"}[10m]))
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+          endpoint: POST /trips/{trip_id}/plan
+          metric: planning_run_duration_seconds
+        annotations:
+          summary: >-
+            POST /trips/{trip_id}/plan — plans take {{ $value | humanizeDuration }} at p99 over the last
+            10 minutes; the threshold is 30s.
+          description: |-
+            Metric: planning_run_duration_seconds{kind="plan"}, p99 over 10m (the plan, not the request that started it, which is answered at once).
+            Now: {{ $value | humanizeDuration }} · threshold: 30s · backend: {{ $labels.job }}.
+            Plans in the last 10 min: {{ with printf `sum(increase(planning_run_duration_seconds_count{job="%s",kind="plan"}[10m]))` $labels.job | query }}{{ . | first | value | printf "%.0f" }}{{ else }}0{{ end }}, of which over 30s: {{ with printf `sum(increase(planning_run_duration_seconds_count{job="%s",kind="plan"}[10m])) - sum(increase(planning_run_duration_seconds_bucket{job="%s",kind="plan",le=~"30|30[.]0"}[10m]))` $labels.job $labels.job | query }}{{ . | first | value | printf "%.0f" }}{{ else }}?{{ end }}.
+            How they ended:{{ range printf `sort_desc(sum by (outcome) (increase(planning_run_duration_seconds_count{job="%s",kind="plan"}[10m])) > 0)` $labels.job | query }} {{ .Labels.outcome }} {{ .Value | printf "%.0f" }};{{ end }}
+            Look first: the dashboard's "How long a plan takes", then a slow plan's trace in Jaeger — which agent took the time.
+          runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh
+          dashboard: http://localhost:3001/d/tripplanner?var-job={{ $labels.job }}
+
+      # ── 2. An endpoint's requests fail ──────────────────────────────────────────────────────────
+      #
+      # The share of an endpoint's requests answered 5xx, over 5 minutes, per endpoint — so that the
+      # message can say which one. 4xx is the client's: a wrong password, a trip that is not yours, a
+      # plan asked for twice. The metric keeps the class, not the code; the message says what each code
+      # means here (503: something the app depends on cannot be reached; 500: a bug, reported to Sentry).
+      - alert: EndpointErrorRateHigh
+        expr: |
+          (
+              sum by (job, method, handler) (rate(http_requests_total{status="5xx", handler!~"/ping|/ready|/version|/admin/health-deep|/admin/sentry-test|none"}[5m]))
+            /
+              sum by (job, method, handler) (rate(http_requests_total{handler!~"/ping|/ready|/version|/admin/health-deep|/admin/sentry-test|none"}[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          endpoint: "{{ $labels.method }} {{ $labels.handler }}"
+          metric: http_requests_total
+        annotations:
+          summary: >-
+            {{ $labels.method }} {{ $labels.handler }} — {{ $value | humanizePercentage }} of its requests
+            failed over the last 5 minutes; the threshold is 5%.
+          description: |-
+            Metric: http_requests_total{status="5xx"} ÷ all requests to {{ $labels.method }} {{ $labels.handler }}, over 5m.
+            Now: {{ $value | humanizePercentage }} · threshold: 5% · backend: {{ $labels.job }}.
+            Requests in the last 5 min: {{ with printf `sum(increase(http_requests_total{job="%s",method="%s",handler="%s"}[5m]))` $labels.job $labels.method $labels.handler | query }}{{ . | first | value | printf "%.0f" }}{{ else }}?{{ end }}, of which 5xx: {{ with printf `sum(increase(http_requests_total{job="%s",method="%s",handler="%s",status="5xx"}[5m]))` $labels.job $labels.method $labels.handler | query }}{{ . | first | value | printf "%.0f" }}{{ else }}?{{ end }}.
+            Every endpoint failing now:{{ range printf `sort_desc(sum by (method, handler) (rate(http_requests_total{job="%s",status="5xx",handler!~"/ping|/ready|/version|/admin/health-deep|/admin/sentry-test|none"}[5m])) / sum by (method, handler) (rate(http_requests_total{job="%s",handler!~"/ping|/ready|/version|/admin/health-deep|/admin/sentry-test|none"}[5m])) > 0.05)` $labels.job $labels.job | query }} {{ .Labels.method }} {{ .Labels.handler }} {{ .Value | humanizePercentage }};{{ end }}
+            503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with "could not be served".
+          runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh
+          dashboard: http://localhost:3001/d/tripplanner?var-job={{ $labels.job }}
+
+      # ── 3. The cache stops answering ────────────────────────────────────────────────────────────
+      #
+      # mcp_cache_hit_ratio is hits ÷ lookups over five minutes, per process, and NaN when nothing was
+      # looked up — "nobody asked" is not "nothing was found", and this does not fire at night. A trip
+      # created normally is a miss for each search when it is warmed and a hit for each when it is
+      # planned: about 0.5. Under 0.3 the plans are asking the providers themselves.
+      #
+      # Only with at least 10 lookups in those five minutes: one trip created and never planned is four
+      # or five misses and a ratio of 0, and that is not Redis or the warming going wrong. The floor is
+      # mcp_cache_window_lookups — the lookups the ratio is of. It was the counter's increase over five
+      # minutes, until the quiet drill (scripts/alert_drill.py quiet) showed what that misses: after a
+      # restart the counter still holds the last process's lookups and the ratio only the new one's, so
+      # a backend's first few misses after a deploy passed the floor and went pending.
+      - alert: CacheHitRatioLow
+        expr: |
+          mcp_cache_hit_ratio < 0.3
+          and on (job, instance)
+          mcp_cache_window_lookups >= 10
+        for: 3m
+        labels:
+          severity: warning
+          metric: mcp_cache_hit_ratio
+        annotations:
+          summary: >-
+            The tool server's cache answered {{ $value | humanizePercentage }} of lookups over the last
+            5 minutes; the threshold is 30%.
+          description: |-
+            Metric: mcp_cache_hit_ratio (hits ÷ lookups over 5m, this process: {{ $labels.instance }}), of {{ with printf `mcp_cache_window_lookups{job="%s",instance="%s"}` $labels.job $labels.instance | query }}{{ . | first | value | printf "%.0f" }}{{ else }}?{{ end }} lookups.
+            Now: {{ $value | humanizePercentage }} · threshold: 30% · backend: {{ $labels.job }}.
+            By cache, over 5m:{{ range printf `sort_desc(sum by (cache, result) (increase(mcp_cache_lookups_total{job="%s",instance="%s"}[5m])) > 0)` $labels.job $labels.instance | query }} {{ .Labels.cache }} {{ .Labels.result }} {{ .Value | printf "%.0f" }};{{ end }}
+            error = Redis could not be asked; miss = asked and not there (the warming did not run, or the entries are gone).
+            Look first: GET /admin/health-deep (redis), then the log lines with "[CACHE WARM]".
+          runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#cachehitratiolow
+          dashboard: http://localhost:3001/d/tripplanner?var-job={{ $labels.job }}
+
+      # ── 4. The models fail ──────────────────────────────────────────────────────────────────────
+      #
+      # Failed calls to a model a minute, every agent and model together, over 5 minutes. A failure is
+      # a call the provider's client gave up on (its own retries are inside it): a 429, a 500, a
+      # timeout. Most have a fallback — Gemini's short prompts go to Groq's small model — so plans may
+      # still be made while this fires; the message says which agents and models are failing.
+      - alert: ModelErrorRateHigh
+        expr: |
+          sum by (job) (rate(llm_calls_total{status="error"}[5m])) * 60 > 10
+        for: 2m
+        labels:
+          severity: critical
+          metric: llm_calls_total
+        annotations:
+          summary: >-
+            {{ $value | printf "%.1f" }} model calls a minute are failing, over the last 5 minutes; the
+            threshold is 10 a minute.
+          description: |-
+            Metric: llm_calls_total{status="error"}, a minute, over 5m — every agent and model.
+            Now: {{ $value | printf "%.1f" }} a minute · threshold: 10 a minute · backend: {{ $labels.job }}.
+            Failed calls in the last 5 min, by agent and model:{{ range printf `sort_desc(sum by (agent, model) (increase(llm_calls_total{job="%s",status="error"}[5m])) > 0)` $labels.job | query }} {{ .Labels.agent }} → {{ .Labels.model }} {{ .Value | printf "%.0f" }};{{ end }}
+            Of all calls: {{ with printf `sum(rate(llm_calls_total{job="%s",status="error"}[5m])) / sum(rate(llm_calls_total{job="%s"}[5m]))` $labels.job $labels.job | query }}{{ . | first | value | humanizePercentage }}{{ else }}?{{ end }} failed.
+            Look first: the log lines with "Gemini unavailable" or the provider's status code; a 429 is a quota, read the provider's limits.
+          runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#modelerrorratehigh
+          dashboard: http://localhost:3001/d/tripplanner?var-job={{ $labels.job }}

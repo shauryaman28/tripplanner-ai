@@ -1,6 +1,6 @@
 # What runs on every push (Phase 28): is this commit fit to merge — and, on main, deploy it.
 #
-#   backend    lint, the migrations, the unit and contract tests           aim: under 2 minutes
+#   backend    lint, the alert rules, the migrations, the unit and contract tests   aim: under 2 minutes
 #   frontend   types, lint, a production build                              aim: under 3 minutes
 #   deploy     only on main, only after both: .github/workflows/deploy.yml
 #
@@ -68,6 +68,14 @@ jobs:
 
       - name: Lint (ruff)
         run: ruff check . && ruff format --check .
+
+      - name: Alert rules — promtool and amtool, at the stack's own versions
+        # Phase 34: each alert of docker/observability/alerts/rules.yml fired on purpose from series written by
+        # hand, and kept quiet where it must be (tests.yml); Alertmanager's config read the way it reads it.
+        run: |
+          docker run --rm -v "$PWD/docker/observability:/w:ro" --entrypoint promtool prom/prometheus:v3.15.0 check rules /w/alerts/rules.yml
+          docker run --rm -v "$PWD/docker/observability:/w:ro" --entrypoint promtool prom/prometheus:v3.15.0 test rules /w/alerts/tests.yml
+          docker run --rm -v "$PWD/docker/observability:/w:ro" --entrypoint amtool prom/alertmanager:v0.34.1 check-config /w/alertmanager.yml
 
       - name: Migrations — every one applies, the models say nothing they do not, and they come down again
         env:

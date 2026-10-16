@@ -4,8 +4,10 @@ Operational endpoints.
 GET /admin/embedding-health   embedding pipeline backlog (Phase 14)
 GET /admin/cost-summary       tokens and model cost, by agent and by day (Phase 26)
 GET /admin/sentry-test        fails on purpose, to see error reporting work (Phase 27; needs OPS_TOKEN)
+GET /admin/health-deep        every dependency asked to do its work, and what each said (Phase 34; the
+                              operator's: OPS_TOKEN, as for GET /metrics)
 
-Any authenticated user may call these for now — there is no admin role until
+Any authenticated user may call the first two for now — there is no admin role until
 the admin dashboard phase. Both report on the whole system, not on the
 caller's own trips; neither shows anything of anyone's trip.
 """
@@ -14,12 +16,13 @@ import hmac
 from datetime import date, datetime, time, timedelta, timezone
 
 import redis.asyncio as aioredis
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import Date, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user, get_redis_dep
+from app.api.deps import get_current_user, get_redis_dep, may_check_health
+from app.core import deep_health, error_reporting
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.agent_run import AgentRun
@@ -27,9 +30,24 @@ from app.models.embedding import Embedding
 from app.models.user import User
 from app.schemas.cost import AgentCost, CostLine, CostSummary, DayCost
 from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
+from src.ai.mcp_server.config import mcp_settings
 from src.ai.utils.embeddings import EMBEDDINGS_PENDING_KEY
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+async def embedding_backlog(db: AsyncSession, redis: aioredis.Redis) -> dict[str, int]:
+    """`in_flight` = jobs running right now (Redis counter); `pending_retry` = itineraries
+    whose embedding failed and will be retried on the next startup.
+
+    Phase 34: also what the `embedding_queue_depth` gauge reports (main.py reads it every
+    15 s) — the same two numbers on the dashboard as here.
+    """
+    in_flight = max(int(await redis.get(EMBEDDINGS_PENDING_KEY) or 0), 0)
+    pending_retry = await db.scalar(
+        select(func.count()).select_from(Embedding).where(Embedding.embedding_model == PENDING_RETRY_MODEL)
+    )
+    return {"in_flight": in_flight, "pending_retry": pending_retry or 0}
 
 
 @router.get("/embedding-health")
@@ -38,17 +56,33 @@ async def embedding_health(
     db: AsyncSession = Depends(get_db),
     redis: aioredis.Redis = Depends(get_redis_dep),
 ) -> dict:
-    """`in_flight` = jobs running right now (Redis counter); `pending_retry` = itineraries
-    whose embedding failed and will be retried on the next startup."""
-    in_flight = max(int(await redis.get(EMBEDDINGS_PENDING_KEY) or 0), 0)
-    pending_retry = await db.scalar(
-        select(func.count()).select_from(Embedding).where(Embedding.embedding_model == PENDING_RETRY_MODEL)
-    )
-    return {
-        "status": "degraded" if pending_retry else "ok",
-        "in_flight": in_flight,
-        "pending_retry": pending_retry or 0,
-    }
+    backlog = await embedding_backlog(db, redis)
+    return {"status": "degraded" if backlog["pending_retry"] else "ok", **backlog}
+
+
+# ── GET /admin/health-deep ─────────────────────────────────────────────────
+
+_scrub = error_reporting.Scrubber(error_reporting.secrets_of(settings, mcp_settings)).text
+
+
+@router.get("/health-deep")
+async def health_deep(response: Response, _: None = Depends(may_check_health)) -> dict:
+    """Phase 34 — Postgres, Redis, the tool server and LangSmith, each asked to do its work once.
+
+    Postgres runs `SELECT 1` through the app's pool, Redis answers `PING`, the tool server answers
+    `estimate_budget` (started first if it is not running), and LangSmith is shown the key. Each
+    has a deadline of its own and they are asked together, so one that hangs is reported as
+    hanging and the answer still comes within ten seconds. 503 when something a plan needs is
+    failing; LangSmith failing is `degraded`, and 200 — plans are made without it. What each
+    check found is in `dependencies` (app/core/deep_health.py says what each status means).
+
+    The operator's, like GET /metrics: with `OPS_TOKEN` set it answers only to it (as
+    `Authorization: Bearer …` or `X-Ops-Token`), and a deployment without one answers nobody.
+    """
+    found = await deep_health.report(settings, _scrub)
+    if found["status"] == "failing":
+        response.status_code = 503
+    return found
 
 
 # ── GET /admin/cost-summary ────────────────────────────────────────────────

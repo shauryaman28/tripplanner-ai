@@ -1,0 +1,844 @@
+{
+ "drill": "slow-plans",
+ "began": "2026-10-16T17:37:20+00:00",
+ "commit": "b312dffc885568800ce7028cd19607c8902b6762",
+ "alert": "PlanLatencyHigh",
+ "cause": "the model that writes itineraries stops answering",
+ "threshold": 30,
+ "timeline_s": {
+  "broken": 92.3,
+  "pending": 133.64,
+  "firing": 431.91,
+  "delivered": 442.75,
+  "mended": 442.75,
+  "resolved": 1078.26,
+  "delivered_at_utc": "2026-10-16T17:44:39+00:00"
+ },
+ "measure": {
+  "before": {
+   "value": 15.35,
+   "threshold": 30
+  },
+  "while_broken": {
+   "value": 44.6062,
+   "threshold": 30
+  },
+  "after": {
+   "value": 44.7667,
+   "threshold": 30
+  }
+ },
+ "traffic": {
+  "before": {
+   "visits": 5,
+   "list": {
+    "200": 5
+   },
+   "create": {
+    "201": 5
+   },
+   "plan": {
+    "202": 5
+   },
+   "outcome": {
+    "completed": 4,
+    "failed": 1
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.2,
+    "max": 36.3
+   }
+  },
+  "while_broken": {
+   "visits": 18,
+   "list": {
+    "200": 18
+   },
+   "create": {
+    "201": 18
+   },
+   "plan": {
+    "202": 18
+   },
+   "outcome": {
+    "completed": 1,
+    "failed": 17
+   },
+   "plan_seconds": {
+    "min": 12.1,
+    "median": 36.4,
+    "max": 40.4
+   }
+  },
+  "after": {
+   "visits": 32,
+   "list": {
+    "200": 32
+   },
+   "create": {
+    "201": 32
+   },
+   "plan": {
+    "202": 32
+   },
+   "outcome": {
+    "completed": 32
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.1,
+    "max": 14.2
+   }
+  }
+ },
+ "delivered": [
+  {
+   "receiver": "stand-in",
+   "status": "firing",
+   "alerts": [
+    {
+     "status": "firing",
+     "labels": {
+      "alertname": "PlanLatencyHigh",
+      "endpoint": "POST /trips/{trip_id}/plan",
+      "job": "tripplanner-prodlike",
+      "metric": "planning_run_duration_seconds",
+      "severity": "warning"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: planning_run_duration_seconds{kind=\"plan\"}, p99 over 10m (the plan, not the request that started it, which is answered at once).\nNow: 44.58s · threshold: 30s · backend: tripplanner-prodlike.\nPlans in the last 10 min: 45, of which over 30s: 16.\nHow they ended: completed 29; no_plan 16;\nLook first: the dashboard's \"How long a plan takes\", then a slow plan's trace in Jaeger — which agent took the time.",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh",
+      "summary": "POST /trips/{trip_id}/plan — plans take 44.58s at p99 over the last 10 minutes; the threshold is 30s."
+     },
+     "startsAt": "2026-10-16T17:44:29.246Z",
+     "endsAt": "0001-01-01T00:00:00Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=histogram_quantile%280.99%2C+sum+by+%28job%2C+le%29+%28rate%28planning_run_duration_seconds_bucket%7Bkind%3D%22plan%22%7D%5B10m%5D%29%29%29+%3E+30&g0.tab=1",
+     "fingerprint": "ba96d121fcbd9ca7"
+    }
+   ],
+   "notification_reason": "first notification",
+   "groupLabels": {
+    "alertname": "PlanLatencyHigh",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "PlanLatencyHigh",
+    "endpoint": "POST /trips/{trip_id}/plan",
+    "job": "tripplanner-prodlike",
+    "metric": "planning_run_duration_seconds",
+    "severity": "warning"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: planning_run_duration_seconds{kind=\"plan\"}, p99 over 10m (the plan, not the request that started it, which is answered at once).\nNow: 44.58s · threshold: 30s · backend: tripplanner-prodlike.\nPlans in the last 10 min: 45, of which over 30s: 16.\nHow they ended: completed 29; no_plan 16;\nLook first: the dashboard's \"How long a plan takes\", then a slow plan's trace in Jaeger — which agent took the time.",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh",
+    "summary": "POST /trips/{trip_id}/plan — plans take 44.58s at p99 over the last 10 minutes; the threshold is 30s."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"PlanLatencyHigh\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T17:44:39+00:00"
+  }
+ ],
+ "resolved": [
+  {
+   "receiver": "stand-in",
+   "status": "resolved",
+   "alerts": [
+    {
+     "status": "resolved",
+     "labels": {
+      "alertname": "PlanLatencyHigh",
+      "endpoint": "POST /trips/{trip_id}/plan",
+      "job": "tripplanner-prodlike",
+      "metric": "planning_run_duration_seconds",
+      "severity": "warning"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: planning_run_duration_seconds{kind=\"plan\"}, p99 over 10m (the plan, not the request that started it, which is answered at once).\nNow: 40.35s · threshold: 30s · backend: tripplanner-prodlike.\nPlans in the last 10 min: 31, of which over 30s: 1.\nHow they ended: completed 30; no_plan 1;\nLook first: the dashboard's \"How long a plan takes\", then a slow plan's trace in Jaeger — which agent took the time.",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh",
+      "summary": "POST /trips/{trip_id}/plan — plans take 40.35s at p99 over the last 10 minutes; the threshold is 30s."
+     },
+     "startsAt": "2026-10-16T17:44:29.246Z",
+     "endsAt": "2026-10-16T17:55:14.246Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=histogram_quantile%280.99%2C+sum+by+%28job%2C+le%29+%28rate%28planning_run_duration_seconds_bucket%7Bkind%3D%22plan%22%7D%5B10m%5D%29%29%29+%3E+30&g0.tab=1",
+     "fingerprint": "ba96d121fcbd9ca7"
+    }
+   ],
+   "notification_reason": "all alerts resolved",
+   "groupLabels": {
+    "alertname": "PlanLatencyHigh",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "PlanLatencyHigh",
+    "endpoint": "POST /trips/{trip_id}/plan",
+    "job": "tripplanner-prodlike",
+    "metric": "planning_run_duration_seconds",
+    "severity": "warning"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: planning_run_duration_seconds{kind=\"plan\"}, p99 over 10m (the plan, not the request that started it, which is answered at once).\nNow: 40.35s · threshold: 30s · backend: tripplanner-prodlike.\nPlans in the last 10 min: 31, of which over 30s: 1.\nHow they ended: completed 30; no_plan 1;\nLook first: the dashboard's \"How long a plan takes\", then a slow plan's trace in Jaeger — which agent took the time.",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh",
+    "summary": "POST /trips/{trip_id}/plan — plans take 40.35s at p99 over the last 10 minutes; the threshold is 30s."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"PlanLatencyHigh\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T17:55:39+00:00"
+  }
+ ],
+ "alert_changes": [
+  {
+   "t": 133.64,
+   "alert": "PlanLatencyHigh",
+   "about": "POST /trips/{trip_id}/plan",
+   "state": "pending",
+   "value": "3.309148177429677e+01",
+   "active_at": "2026-10-16T17:39:29.246542836Z"
+  },
+  {
+   "t": 431.91,
+   "alert": "PlanLatencyHigh",
+   "about": "POST /trips/{trip_id}/plan",
+   "state": "firing",
+   "value": "4.4576760624719434e+01",
+   "active_at": "2026-10-16T17:39:29.246542836Z"
+  },
+  {
+   "t": 1078.26,
+   "alert": "PlanLatencyHigh",
+   "about": "POST /trips/{trip_id}/plan",
+   "state": "inactive"
+  }
+ ],
+ "measures": [
+  {
+   "t": 2.32,
+   "PlanLatencyHigh": 15.125,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": null,
+   "cache lookups (5 min)": 296.9552,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 17.46,
+   "PlanLatencyHigh": 15.175,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8571,
+   "cache lookups (5 min)": 286.7682,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 32.61,
+   "PlanLatencyHigh": 15.225,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8182,
+   "cache lookups (5 min)": 275.5644,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 47.76,
+   "PlanLatencyHigh": 15.275,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8824,
+   "cache lookups (5 min)": 265.3861,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 62.91,
+   "PlanLatencyHigh": 15.3,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8571,
+   "cache lookups (5 min)": 252.1635,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 78.07,
+   "PlanLatencyHigh": 15.35,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8571,
+   "cache lookups (5 min)": 241.9889,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 93.22,
+   "PlanLatencyHigh": 15.4,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8438,
+   "cache lookups (5 min)": 231.8019,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 108.37,
+   "PlanLatencyHigh": 15.475,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8684,
+   "cache lookups (5 min)": 219.5912,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 123.52,
+   "PlanLatencyHigh": 15.525,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8571,
+   "cache lookups (5 min)": 209.4207,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 138.67,
+   "PlanLatencyHigh": 33.235,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8723,
+   "cache lookups (5 min)": 197.2116,
+   "ModelErrorRateHigh": 0.2012
+  },
+  {
+   "t": 153.84,
+   "PlanLatencyHigh": 39.2703,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.88,
+   "cache lookups (5 min)": 182.9658,
+   "ModelErrorRateHigh": 0.4025
+  },
+  {
+   "t": 168.99,
+   "PlanLatencyHigh": 41.2317,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8909,
+   "cache lookups (5 min)": 169.7403,
+   "ModelErrorRateHigh": 0.6041
+  },
+  {
+   "t": 184.14,
+   "PlanLatencyHigh": 41.3833,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8814,
+   "cache lookups (5 min)": 162.6253,
+   "ModelErrorRateHigh": 0.6044
+  },
+  {
+   "t": 199.29,
+   "PlanLatencyHigh": 42.326,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8788,
+   "cache lookups (5 min)": 149.3985,
+   "ModelErrorRateHigh": 0.8063
+  },
+  {
+   "t": 214.44,
+   "PlanLatencyHigh": 42.9217,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8714,
+   "cache lookups (5 min)": 138.2093,
+   "ModelErrorRateHigh": 1.0084
+  },
+  {
+   "t": 229.6,
+   "PlanLatencyHigh": 43.2937,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8701,
+   "cache lookups (5 min)": 128.0372,
+   "ModelErrorRateHigh": 1.2107
+  },
+  {
+   "t": 244.78,
+   "PlanLatencyHigh": 43.3695,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8625,
+   "cache lookups (5 min)": 116.8575,
+   "ModelErrorRateHigh": 1.2114
+  },
+  {
+   "t": 259.96,
+   "PlanLatencyHigh": 43.6458,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8506,
+   "cache lookups (5 min)": 103.6406,
+   "ModelErrorRateHigh": 1.4142
+  },
+  {
+   "t": 275.13,
+   "PlanLatencyHigh": 43.8343,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8352,
+   "cache lookups (5 min)": 92.4538,
+   "ModelErrorRateHigh": 1.6171
+  },
+  {
+   "t": 290.29,
+   "PlanLatencyHigh": 43.9808,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8438,
+   "cache lookups (5 min)": 97.1143,
+   "ModelErrorRateHigh": 1.821
+  },
+  {
+   "t": 305.45,
+   "PlanLatencyHigh": 44.0312,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8384,
+   "cache lookups (5 min)": 97.4797,
+   "ModelErrorRateHigh": 1.8211
+  },
+  {
+   "t": 320.6,
+   "PlanLatencyHigh": 44.1584,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8351,
+   "cache lookups (5 min)": 98.6203,
+   "ModelErrorRateHigh": 2.0246
+  },
+  {
+   "t": 335.78,
+   "PlanLatencyHigh": 44.2487,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8247,
+   "cache lookups (5 min)": 95.5678,
+   "ModelErrorRateHigh": 2.2284
+  },
+  {
+   "t": 350.94,
+   "PlanLatencyHigh": 44.324,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8229,
+   "cache lookups (5 min)": 96.5872,
+   "ModelErrorRateHigh": 2.4321
+  },
+  {
+   "t": 366.09,
+   "PlanLatencyHigh": 44.3617,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8144,
+   "cache lookups (5 min)": 95.5706,
+   "ModelErrorRateHigh": 2.4334
+  },
+  {
+   "t": 381.27,
+   "PlanLatencyHigh": 44.4225,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.8041,
+   "cache lookups (5 min)": 98.6215,
+   "ModelErrorRateHigh": 2.6379
+  },
+  {
+   "t": 396.45,
+   "PlanLatencyHigh": 44.4854,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7938,
+   "cache lookups (5 min)": 95.5755,
+   "ModelErrorRateHigh": 2.8425
+  },
+  {
+   "t": 411.64,
+   "PlanLatencyHigh": 44.5298,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7917,
+   "cache lookups (5 min)": 96.5987,
+   "ModelErrorRateHigh": 3.0475
+  },
+  {
+   "t": 426.8,
+   "PlanLatencyHigh": 44.5599,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7835,
+   "cache lookups (5 min)": 95.5867,
+   "ModelErrorRateHigh": 2.8474
+  },
+  {
+   "t": 441.98,
+   "PlanLatencyHigh": 44.6062,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7677,
+   "cache lookups (5 min)": 100.6774,
+   "ModelErrorRateHigh": 2.8965
+  },
+  {
+   "t": 457.14,
+   "PlanLatencyHigh": 44.6454,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7576,
+   "cache lookups (5 min)": 100.4805,
+   "ModelErrorRateHigh": 3.0508
+  },
+  {
+   "t": 472.3,
+   "PlanLatencyHigh": 44.6652,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7551,
+   "cache lookups (5 min)": 96.404,
+   "ModelErrorRateHigh": 3.0508
+  },
+  {
+   "t": 487.47,
+   "PlanLatencyHigh": 44.6821,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7579,
+   "cache lookups (5 min)": 96.4102,
+   "ModelErrorRateHigh": 2.8474
+  },
+  {
+   "t": 502.63,
+   "PlanLatencyHigh": 44.6989,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7423,
+   "cache lookups (5 min)": 95.3864,
+   "ModelErrorRateHigh": 2.6441
+  },
+  {
+   "t": 517.79,
+   "PlanLatencyHigh": 44.7157,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.4311,
+   "ModelErrorRateHigh": 2.6441
+  },
+  {
+   "t": 532.96,
+   "PlanLatencyHigh": 44.7241,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7216,
+   "cache lookups (5 min)": 96.3922,
+   "ModelErrorRateHigh": 2.4407
+  },
+  {
+   "t": 548.13,
+   "PlanLatencyHigh": 44.741,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7245,
+   "cache lookups (5 min)": 97.6278,
+   "ModelErrorRateHigh": 2.2373
+  },
+  {
+   "t": 563.28,
+   "PlanLatencyHigh": 44.7578,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 96.6098,
+   "ModelErrorRateHigh": 2.2373
+  },
+  {
+   "t": 578.39,
+   "PlanLatencyHigh": 44.7667,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6447,
+   "ModelErrorRateHigh": 2.0339
+  },
+  {
+   "t": 593.5,
+   "PlanLatencyHigh": 44.7583,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7245,
+   "cache lookups (5 min)": 97.6265,
+   "ModelErrorRateHigh": 1.8305
+  },
+  {
+   "t": 608.6,
+   "PlanLatencyHigh": 44.75,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 99.659,
+   "ModelErrorRateHigh": 1.6271
+  },
+  {
+   "t": 623.7,
+   "PlanLatencyHigh": 44.7578,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 98.6444,
+   "ModelErrorRateHigh": 1.4237
+  },
+  {
+   "t": 638.85,
+   "PlanLatencyHigh": 44.7495,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6447,
+   "ModelErrorRateHigh": 1.4237
+  },
+  {
+   "t": 654.01,
+   "PlanLatencyHigh": 44.7495,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5932,
+   "ModelErrorRateHigh": 1.2203
+  },
+  {
+   "t": 669.17,
+   "PlanLatencyHigh": 44.7495,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7245,
+   "cache lookups (5 min)": 97.6308,
+   "ModelErrorRateHigh": 1.017
+  },
+  {
+   "t": 684.33,
+   "PlanLatencyHigh": 44.7579,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 96.6105,
+   "ModelErrorRateHigh": 0.8136
+  },
+  {
+   "t": 699.46,
+   "PlanLatencyHigh": 44.7496,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6441,
+   "ModelErrorRateHigh": 0.8136
+  },
+  {
+   "t": 714.56,
+   "PlanLatencyHigh": 44.7412,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.591,
+   "ModelErrorRateHigh": 0.6102
+  },
+  {
+   "t": 729.69,
+   "PlanLatencyHigh": 44.7265,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7245,
+   "cache lookups (5 min)": 97.6265,
+   "ModelErrorRateHigh": 0.4068
+  },
+  {
+   "t": 744.83,
+   "PlanLatencyHigh": 44.7188,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 96.6105,
+   "ModelErrorRateHigh": 0.2034
+  },
+  {
+   "t": 759.95,
+   "PlanLatencyHigh": 44.7094,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 100.6783,
+   "ModelErrorRateHigh": 0.2034
+  },
+  {
+   "t": 775.13,
+   "PlanLatencyHigh": 44.69,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 98.6431,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 790.3,
+   "PlanLatencyHigh": 44.6679,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 98.6437,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 805.47,
+   "PlanLatencyHigh": 44.6423,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5922,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 820.66,
+   "PlanLatencyHigh": 44.6423,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6437,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 835.83,
+   "PlanLatencyHigh": 44.6125,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5935,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 851.0,
+   "PlanLatencyHigh": 44.5773,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7396,
+   "cache lookups (5 min)": 96.6105,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 866.17,
+   "PlanLatencyHigh": 44.5773,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 96.6121,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 881.29,
+   "PlanLatencyHigh": 44.535,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6437,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 896.42,
+   "PlanLatencyHigh": 44.4833,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5948,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 911.55,
+   "PlanLatencyHigh": 44.4188,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 97.6261,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 926.71,
+   "PlanLatencyHigh": 44.3571,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 98.6467,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 941.88,
+   "PlanLatencyHigh": 44.3357,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 100.679,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 957.05,
+   "PlanLatencyHigh": 44.225,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6441,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 972.19,
+   "PlanLatencyHigh": 44.07,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5922,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 987.3,
+   "PlanLatencyHigh": 43.8375,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7245,
+   "cache lookups (5 min)": 97.6291,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1002.44,
+   "PlanLatencyHigh": 43.45,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5935,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1017.57,
+   "PlanLatencyHigh": 43.45,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 98.6454,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1032.73,
+   "PlanLatencyHigh": 42.675,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 95.5942,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1047.91,
+   "PlanLatencyHigh": 40.35,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7396,
+   "cache lookups (5 min)": 96.6102,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1063.09,
+   "PlanLatencyHigh": 14.9482,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups (5 min)": 96.6125,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1078.26,
+   "PlanLatencyHigh": 14.95,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 100.6783,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 1093.44,
+   "PlanLatencyHigh": 14.95,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7273,
+   "cache lookups (5 min)": 98.6424,
+   "ModelErrorRateHigh": 0.0
+  }
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "90 s of travellers as usual: PlanLatencyHigh is quiet",
+   "detail": "{\"visits\": 4, \"list\": {\"200\": 4}, \"create\": {\"201\": 4}, \"plan\": {\"202\": 4}, \"outcome\": {\"completed\": 4}, \"plan_seconds\": {\"min\": 10.1, \"median\": 12.2, \"max\": 14.2}}"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: pending",
+   "detail": "41 s after"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: firing",
+   "detail": "340 s after"
+  },
+  {
+   "ok": true,
+   "what": "the receiver was sent it",
+   "detail": "1 notification(s), 1 alert(s), 350 s after it broke"
+  },
+  {
+   "ok": true,
+   "what": "its message says what to know POST /trips/{trip_id}/plan",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "mended: resolved, and the receiver told",
+   "detail": "636 s after it was mended"
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

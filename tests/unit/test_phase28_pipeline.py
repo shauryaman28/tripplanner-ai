@@ -91,7 +91,7 @@ def test_the_backend_job_lints_checks_the_migrations_and_runs_the_tests_on_the_v
     backend = CI["jobs"]["backend"]
     ran = commands(backend)
 
-    install, lint, migrations, tests = ran
+    install, lint, alert_rules, migrations, tests = ran
     assert install == "pip install -r requirements.txt -r requirements-dev.txt -c constraints.txt"
     assert lint == "ruff check . && ruff format --check ."  # the roadmap's `ruff check src/`, and the rest of the repo
     assert tests == "pytest tests/unit/ tests/contract/ -v"  # the roadmap's, word for word
@@ -114,6 +114,9 @@ def test_the_backend_job_lints_checks_the_migrations_and_runs_the_tests_on_the_v
     }
     # lint before anything slow: the cheapest failure first
     assert ran.index(lint) < ran.index(migrations) < ran.index(tests)
+    # Phase 34: the alert rules, tested by promtool (tests/unit/test_phase34_alerts.py says what it runs)
+    assert "--entrypoint promtool" in alert_rules and "test rules" in alert_rules
+    assert ran.index(lint) < ran.index(alert_rules) < ran.index(migrations)
 
 
 def test_the_frontend_job_checks_types_lints_and_builds_what_the_lock_file_says():

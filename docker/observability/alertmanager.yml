@@ -1,0 +1,36 @@
+# Where an alert goes once Prometheus says it fires (Phase 34): here, to the stand-in receiver of
+# scripts/alert_receiver.py — a container of this stack that prints each one as it arrives and keeps
+# them (http://localhost:9011/alerts). The alerts themselves are alerts/rules.yml.
+#
+# One notification per alert and backend: the same alert for several endpoints at once (the database
+# gone: every endpoint that needs it fails) is one message listing them, not one each. A resolved
+# alert is sent too — "it stopped" is part of what the person who got the first message needs.
+#
+# A deployment sends them to people instead. With a Slack incoming webhook (Slack → Apps → Incoming
+# Webhooks; the URL is a secret — a file next to this one, git-ignored like secrets/ops_token):
+#
+#   receivers:
+#     - name: on-call
+#       slack_configs:
+#         - api_url_file: /etc/alertmanager/secrets/slack_webhook
+#           channel: "#tripplanner-alerts"
+#           send_resolved: true
+#           title: '{{ .Status | toUpper }} {{ .CommonLabels.alertname }} — {{ .CommonLabels.job }}'
+#           text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\nRunbook: {{ .Annotations.runbook_url }}\n\n{{ end }}'
+#
+# and `receiver: on-call` below. HOW_TO_RUN.md, Step 32 D.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: stand-in
+  group_by: [alertname, job]
+  group_wait: 10s # the first notification of a group: wait this long for the rest of it to arrive
+  group_interval: 1m # a group that changes (an endpoint joins, one resolves): at most one message a minute
+  repeat_interval: 4h # still firing: said again this often
+
+receivers:
+  - name: stand-in
+    webhook_configs:
+      - url: http://alert-receiver:9011/alerts
+        send_resolved: true

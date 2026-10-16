@@ -111,6 +111,8 @@ def handler_for(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
             url = urlsplit(self.path)
             if url.path.rstrip("/") == "/info":
                 self._answer(200, SERVER_INFO)
+            elif url.path.rstrip("/") == "/api/v1/sessions":  # Phase 34: GET /admin/health-deep shows LangSmith its key
+                self._answer(200, [])
             elif url.path.rstrip("/") == "/traces":
                 trip_id = (parse_qs(url.query).get("trip_id") or [None])[0]
                 self._answer(200, [as_json(root) for root in receiver.runs.traces(trip_id)])

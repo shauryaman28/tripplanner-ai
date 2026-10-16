@@ -19,6 +19,7 @@ The rest are the app's own, counted where the thing happens:
     mcp_tool_call_duration_seconds{tool}
     mcp_cache_lookups_total{cache, result}              hit, miss, or error (Redis could not be asked)
     mcp_cache_hit_ratio                                 hits ÷ lookups over the last five minutes
+    mcp_cache_window_lookups                            …of how many lookups (Phase 34: the alert's floor)
     itinerary_builds_total{status}                      success, failure, or retry (sent back by the evaluator)
     planning_run_duration_seconds{kind, outcome}        a whole run: the request that starts one is
     planning_runs_in_progress                           answered at once, so its own duration says nothing
@@ -33,6 +34,13 @@ test watches, and what "it got slow" is usually made of:
     redis_pool_connections_limit
     event_loop_lag_seconds                              how late the event loop ran what was due: every
                                                         request of this process waits behind whatever holds it
+
+And one about work owed (Phase 34):
+
+    embedding_queue_depth{state}                        itineraries waiting for their embedding: in_flight
+                                                        (being embedded now) or pending_retry (it failed, and
+                                                        is retried at the next start). The whole system's
+                                                        numbers — every instance reports the same: take max()
 
 A request's duration is the time to its first byte, not its last: an event stream is open for
 minutes by design, and those minutes are not latency.
@@ -102,6 +110,12 @@ CACHE_LOOKUPS = Counter(
 CACHE_HIT_RATIO = Gauge(
     "mcp_cache_hit_ratio", "Cache hits divided by lookups over the last five minutes; NaN when there were none."
 )
+# Phase 34: how many lookups that ratio is of. An alert on a low ratio needs a floor — four misses
+# are a ratio of 0 — and the floor must count the same lookups: the counter's increase over five
+# minutes does not, after a restart (it still holds the last process's lookups; the ratio does not).
+CACHE_WINDOW_LOOKUPS = Gauge(
+    "mcp_cache_window_lookups", "How many lookups mcp_cache_hit_ratio is of: this process's, in the last five minutes."
+)
 BUILDS = Counter(
     "itinerary_builds_total", "Itineraries built: saved, given up, or sent back to be built again.", ["status"]
 )
@@ -128,6 +142,13 @@ REDIS_POOL = Gauge(
 )
 REDIS_POOL_LIMIT = Gauge("redis_pool_connections_limit", "The most connections the Redis pool will open.")
 LOOP_LAG = Histogram("event_loop_lag_seconds", "How late the event loop ran a task that was due.", buckets=LAG_BUCKETS)
+EMBEDDING_QUEUE = Gauge(
+    "embedding_queue_depth",
+    "Itineraries waiting for their embedding: being embedded (in_flight), or failed and owed (pending_retry).",
+    ["state"],
+)
+EMBEDDING_STATES = ("in_flight", "pending_retry")
+EMBEDDING_EVERY_S = 15.0  # how often the queue is counted: a query and a Redis read, per instance
 
 # A build that has never failed is 0 failures, not no data: these exist from the start.
 for _status in BUILD_STATUSES:
@@ -172,17 +193,25 @@ class Window:
         with self._lock:
             self._seen.append((self._clock(), hits, lookups))
 
-    def ratio(self) -> float:
+    def _counts(self) -> tuple[int, int]:
+        """(hits, lookups) in the window, as it is now."""
         with self._lock:
             oldest = self._clock() - self._seconds
             while self._seen and self._seen[0][0] < oldest:
                 self._seen.popleft()
-            lookups = sum(entry[2] for entry in self._seen)
-            return sum(entry[1] for entry in self._seen) / lookups if lookups else math.nan
+            return sum(entry[1] for entry in self._seen), sum(entry[2] for entry in self._seen)
+
+    def ratio(self) -> float:
+        hits, lookups = self._counts()
+        return hits / lookups if lookups else math.nan
+
+    def lookups(self) -> float:
+        return float(self._counts()[1])
 
 
 cache_window = Window()
 CACHE_HIT_RATIO.set_function(cache_window.ratio)
+CACHE_WINDOW_LOOKUPS.set_function(cache_window.lookups)
 
 
 def llm_call(
@@ -249,6 +278,30 @@ def planning_run(kind: str) -> Iterator[Run]:
 
 def build_info(version: str, commit: str | None) -> None:
     BUILD_INFO.labels(version, (commit or "")[:12] or "unknown").set(1)
+
+
+# ── Work owed (Phase 34) ───────────────────────────────────────────────────
+
+
+async def watch_embedding_queue(count: Callable[[], Any], every: float = EMBEDDING_EVERY_S) -> None:
+    """For as long as it runs: count the embedding queue every `every` seconds and report it.
+
+    `count()` is awaited and returns {"in_flight": n, "pending_retry": n} — the numbers of
+    GET /admin/embedding-health. Counted here, not when Prometheus asks: a scrape is answered in
+    another thread, and these numbers are a query and a Redis read away. When they cannot be
+    counted the gauge says NaN — no data, never a queue of 0 that is not known to be empty.
+    """
+    while True:
+        try:
+            counted = await count()
+            for state in EMBEDDING_STATES:
+                EMBEDDING_QUEUE.labels(state).set(float(counted[state]))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            for state in EMBEDDING_STATES:
+                EMBEDDING_QUEUE.labels(state).set(math.nan)
+        await asyncio.sleep(every)
 
 
 # ── What runs out under load (Phase 30) ────────────────────────────────────

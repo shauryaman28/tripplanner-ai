@@ -1,0 +1,574 @@
+{
+ "drill": "model-errors",
+ "began": "2026-10-16T18:16:42+00:00",
+ "commit": "b312dffc885568800ce7028cd19607c8902b6762",
+ "alert": "ModelErrorRateHigh",
+ "cause": "both short-prompt models answer 429",
+ "threshold": 10,
+ "timeline_s": {
+  "broken": 92.31,
+  "pending": 229.94,
+  "firing": 351.26,
+  "delivered": 357.8,
+  "mended": 357.8,
+  "resolved": 543.45,
+  "delivered_at_utc": "2026-10-16T18:22:39+00:00"
+ },
+ "measure": {
+  "before": {
+   "value": 0.0,
+   "threshold": 10
+  },
+  "while_broken": {
+   "value": 20.5176,
+   "threshold": 10
+  },
+  "after": {
+   "value": 21.3478,
+   "threshold": 10
+  }
+ },
+ "traffic": {
+  "before": {
+   "visits": 18,
+   "list": {
+    "200": 18
+   },
+   "create": {
+    "201": 18
+   },
+   "plan": {
+    "202": 18
+   },
+   "outcome": {
+    "completed": 18
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 14.1,
+    "max": 14.2
+   }
+  },
+  "while_broken": {
+   "visits": 53,
+   "list": {
+    "200": 53
+   },
+   "create": {
+    "201": 53
+   },
+   "plan": {
+    "202": 53
+   },
+   "outcome": {
+    "completed": 53
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.1,
+    "max": 14.2
+   }
+  },
+  "after": {
+   "visits": 45,
+   "list": {
+    "200": 45
+   },
+   "create": {
+    "201": 45
+   },
+   "plan": {
+    "202": 45
+   },
+   "outcome": {
+    "completed": 45
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.1,
+    "max": 14.3
+   }
+  }
+ },
+ "delivered": [
+  {
+   "receiver": "stand-in",
+   "status": "firing",
+   "alerts": [
+    {
+     "status": "firing",
+     "labels": {
+      "alertname": "ModelErrorRateHigh",
+      "job": "tripplanner-prodlike",
+      "metric": "llm_calls_total",
+      "severity": "critical"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: llm_calls_total{status=\"error\"}, a minute, over 5m — every agent and model.\nNow: 20.1 a minute · threshold: 10 a minute · backend: tripplanner-prodlike.\nFailed calls in the last 5 min, by agent and model: intent_parsing → gemini-3.5-flash 50; intent_parsing → openai/gpt-oss-20b 50;\nOf all calls: 34.62% failed.\nLook first: the log lines with \"Gemini unavailable\" or the provider's status code; a 429 is a quota, read the provider's limits.",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#modelerrorratehigh",
+      "summary": "20.1 model calls a minute are failing, over the last 5 minutes; the threshold is 10 a minute."
+     },
+     "startsAt": "2026-10-16T18:22:29.246Z",
+     "endsAt": "0001-01-01T00:00:00Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=sum+by+%28job%29+%28rate%28llm_calls_total%7Bstatus%3D%22error%22%7D%5B5m%5D%29%29+%2A+60+%3E+10&g0.tab=1",
+     "fingerprint": "f902c3453d01be8e"
+    }
+   ],
+   "notification_reason": "first notification",
+   "groupLabels": {
+    "alertname": "ModelErrorRateHigh",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "ModelErrorRateHigh",
+    "job": "tripplanner-prodlike",
+    "metric": "llm_calls_total",
+    "severity": "critical"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: llm_calls_total{status=\"error\"}, a minute, over 5m — every agent and model.\nNow: 20.1 a minute · threshold: 10 a minute · backend: tripplanner-prodlike.\nFailed calls in the last 5 min, by agent and model: intent_parsing → gemini-3.5-flash 50; intent_parsing → openai/gpt-oss-20b 50;\nOf all calls: 34.62% failed.\nLook first: the log lines with \"Gemini unavailable\" or the provider's status code; a 429 is a quota, read the provider's limits.",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#modelerrorratehigh",
+    "summary": "20.1 model calls a minute are failing, over the last 5 minutes; the threshold is 10 a minute."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"ModelErrorRateHigh\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T18:22:39+00:00"
+  }
+ ],
+ "resolved": [
+  {
+   "receiver": "stand-in",
+   "status": "resolved",
+   "alerts": [
+    {
+     "status": "resolved",
+     "labels": {
+      "alertname": "ModelErrorRateHigh",
+      "job": "tripplanner-prodlike",
+      "metric": "llm_calls_total",
+      "severity": "critical"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: llm_calls_total{status=\"error\"}, a minute, over 5m — every agent and model.\nNow: 10.6 a minute · threshold: 10 a minute · backend: tripplanner-prodlike.\nFailed calls in the last 5 min, by agent and model: intent_parsing → gemini-3.5-flash 26; intent_parsing → openai/gpt-oss-20b 26;\nOf all calls: 20% failed.\nLook first: the log lines with \"Gemini unavailable\" or the provider's status code; a 429 is a quota, read the provider's limits.",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#modelerrorratehigh",
+      "summary": "10.6 model calls a minute are failing, over the last 5 minutes; the threshold is 10 a minute."
+     },
+     "startsAt": "2026-10-16T18:22:29.246Z",
+     "endsAt": "2026-10-16T18:25:44.246Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=sum+by+%28job%29+%28rate%28llm_calls_total%7Bstatus%3D%22error%22%7D%5B5m%5D%29%29+%2A+60+%3E+10&g0.tab=1",
+     "fingerprint": "f902c3453d01be8e"
+    }
+   ],
+   "notification_reason": "all alerts resolved",
+   "groupLabels": {
+    "alertname": "ModelErrorRateHigh",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "ModelErrorRateHigh",
+    "job": "tripplanner-prodlike",
+    "metric": "llm_calls_total",
+    "severity": "critical"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: llm_calls_total{status=\"error\"}, a minute, over 5m — every agent and model.\nNow: 10.6 a minute · threshold: 10 a minute · backend: tripplanner-prodlike.\nFailed calls in the last 5 min, by agent and model: intent_parsing → gemini-3.5-flash 26; intent_parsing → openai/gpt-oss-20b 26;\nOf all calls: 20% failed.\nLook first: the log lines with \"Gemini unavailable\" or the provider's status code; a 429 is a quota, read the provider's limits.",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#modelerrorratehigh",
+    "summary": "10.6 model calls a minute are failing, over the last 5 minutes; the threshold is 10 a minute."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"ModelErrorRateHigh\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T18:26:39+00:00"
+  }
+ ],
+ "alert_changes": [
+  {
+   "t": 229.94,
+   "alert": "ModelErrorRateHigh",
+   "about": "",
+   "state": "pending",
+   "value": "1.0470966779661016e+01",
+   "active_at": "2026-10-16T18:20:29.246542836Z"
+  },
+  {
+   "t": 351.26,
+   "alert": "ModelErrorRateHigh",
+   "about": "",
+   "state": "firing",
+   "value": "2.013633852088637e+01",
+   "active_at": "2026-10-16T18:20:29.246542836Z"
+  },
+  {
+   "t": 543.45,
+   "alert": "ModelErrorRateHigh",
+   "about": "",
+   "state": "inactive"
+  }
+ ],
+ "measures": [
+  {
+   "t": 2.33,
+   "PlanLatencyHigh": 29.03,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": null,
+   "cache lookups (5 min)": 331.5265,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 17.47,
+   "PlanLatencyHigh": 29.05,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.4615,
+   "cache lookups (5 min)": 326.4396,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 32.62,
+   "PlanLatencyHigh": 29.05,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5294,
+   "cache lookups (5 min)": 321.3538,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 47.82,
+   "PlanLatencyHigh": 29.04,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5577,
+   "cache lookups (5 min)": 323.3865,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 62.99,
+   "PlanLatencyHigh": 29.04,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5556,
+   "cache lookups (5 min)": 315.2606,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 78.15,
+   "PlanLatencyHigh": 29.04,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5591,
+   "cache lookups (5 min)": 319.321,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 93.32,
+   "PlanLatencyHigh": 29.03,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5636,
+   "cache lookups (5 min)": 319.3145,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 108.49,
+   "PlanLatencyHigh": 29.02,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5649,
+   "cache lookups (5 min)": 326.4484,
+   "ModelErrorRateHigh": 0.8107
+  },
+  {
+   "t": 123.66,
+   "PlanLatencyHigh": 29.03,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5695,
+   "cache lookups (5 min)": 326.4307,
+   "ModelErrorRateHigh": 2.028
+  },
+  {
+   "t": 138.86,
+   "PlanLatencyHigh": 29.01,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.568,
+   "cache lookups (5 min)": 330.5107,
+   "ModelErrorRateHigh": 3.2468
+  },
+  {
+   "t": 154.05,
+   "PlanLatencyHigh": 29.01,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5684,
+   "cache lookups (5 min)": 334.5842,
+   "ModelErrorRateHigh": 4.4671
+  },
+  {
+   "t": 169.22,
+   "PlanLatencyHigh": 29.01,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5721,
+   "cache lookups (5 min)": 337.6351,
+   "ModelErrorRateHigh": 5.6887
+  },
+  {
+   "t": 184.4,
+   "PlanLatencyHigh": 28.99,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5702,
+   "cache lookups (5 min)": 337.6283,
+   "ModelErrorRateHigh": 6.9119
+  },
+  {
+   "t": 199.58,
+   "PlanLatencyHigh": 28.99,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5703,
+   "cache lookups (5 min)": 346.7891,
+   "ModelErrorRateHigh": 8.4009
+  },
+  {
+   "t": 214.75,
+   "PlanLatencyHigh": 28.7375,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5714,
+   "cache lookups (5 min)": 346.7785,
+   "ModelErrorRateHigh": 9.6066
+  },
+  {
+   "t": 229.94,
+   "PlanLatencyHigh": 28.725,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5714,
+   "cache lookups (5 min)": 351.8584,
+   "ModelErrorRateHigh": 10.8143
+  },
+  {
+   "t": 245.12,
+   "PlanLatencyHigh": 28.7125,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5756,
+   "cache lookups (5 min)": 354.9153,
+   "ModelErrorRateHigh": 12.023
+  },
+  {
+   "t": 260.28,
+   "PlanLatencyHigh": 28.3,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5723,
+   "cache lookups (5 min)": 357.9661,
+   "ModelErrorRateHigh": 13.2325
+  },
+  {
+   "t": 275.46,
+   "PlanLatencyHigh": 28.2667,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5722,
+   "cache lookups (5 min)": 365.0847,
+   "ModelErrorRateHigh": 14.4447
+  },
+  {
+   "t": 290.63,
+   "PlanLatencyHigh": 27.4,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.573,
+   "cache lookups (5 min)": 371.3626,
+   "ModelErrorRateHigh": 15.658
+  },
+  {
+   "t": 305.79,
+   "PlanLatencyHigh": 24.9583,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5733,
+   "cache lookups (5 min)": 390.4426,
+   "ModelErrorRateHigh": 16.8698
+  },
+  {
+   "t": 320.93,
+   "PlanLatencyHigh": 24.95,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5795,
+   "cache lookups (5 min)": 392.5397,
+   "ModelErrorRateHigh": 18.0837
+  },
+  {
+   "t": 336.08,
+   "PlanLatencyHigh": 23.675,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5773,
+   "cache lookups (5 min)": 388.4733,
+   "ModelErrorRateHigh": 19.3003
+  },
+  {
+   "t": 351.26,
+   "PlanLatencyHigh": 19.85,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5802,
+   "cache lookups (5 min)": 392.541,
+   "ModelErrorRateHigh": 20.5176
+  },
+  {
+   "t": 366.42,
+   "PlanLatencyHigh": 14.997,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5923,
+   "cache lookups (5 min)": 389.4835,
+   "ModelErrorRateHigh": 21.3342
+  },
+  {
+   "t": 381.6,
+   "PlanLatencyHigh": 14.997,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6051,
+   "cache lookups (5 min)": 391.4972,
+   "ModelErrorRateHigh": 21.3478
+  },
+  {
+   "t": 396.79,
+   "PlanLatencyHigh": 14.9964,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6209,
+   "cache lookups (5 min)": 392.4781,
+   "ModelErrorRateHigh": 21.1526
+  },
+  {
+   "t": 411.97,
+   "PlanLatencyHigh": 14.9961,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6375,
+   "cache lookups (5 min)": 388.3878,
+   "ModelErrorRateHigh": 19.9323
+  },
+  {
+   "t": 427.14,
+   "PlanLatencyHigh": 14.9967,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6505,
+   "cache lookups (5 min)": 392.4368,
+   "ModelErrorRateHigh": 18.7119
+  },
+  {
+   "t": 442.31,
+   "PlanLatencyHigh": 14.9963,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6684,
+   "cache lookups (5 min)": 391.4085,
+   "ModelErrorRateHigh": 17.4918
+  },
+  {
+   "t": 457.48,
+   "PlanLatencyHigh": 14.9958,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6821,
+   "cache lookups (5 min)": 389.3623,
+   "ModelErrorRateHigh": 16.2714
+  },
+  {
+   "t": 472.63,
+   "PlanLatencyHigh": 14.9953,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6972,
+   "cache lookups (5 min)": 392.4013,
+   "ModelErrorRateHigh": 15.0509
+  },
+  {
+   "t": 487.82,
+   "PlanLatencyHigh": 14.9957,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7154,
+   "cache lookups (5 min)": 389.349,
+   "ModelErrorRateHigh": 13.8307
+  },
+  {
+   "t": 503.01,
+   "PlanLatencyHigh": 14.9947,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7282,
+   "cache lookups (5 min)": 391.3857,
+   "ModelErrorRateHigh": 12.6104
+  },
+  {
+   "t": 518.15,
+   "PlanLatencyHigh": 14.9946,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.743,
+   "cache lookups (5 min)": 392.388,
+   "ModelErrorRateHigh": 11.3897
+  },
+  {
+   "t": 533.31,
+   "PlanLatencyHigh": 14.9948,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7609,
+   "cache lookups (5 min)": 388.3308,
+   "ModelErrorRateHigh": 10.1695
+  },
+  {
+   "t": 548.48,
+   "PlanLatencyHigh": 14.9943,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.771,
+   "cache lookups (5 min)": 392.4135,
+   "ModelErrorRateHigh": 8.9493
+  },
+  {
+   "t": 563.66,
+   "PlanLatencyHigh": 14.9945,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7892,
+   "cache lookups (5 min)": 388.3559,
+   "ModelErrorRateHigh": 7.7289
+  },
+  {
+   "t": 578.83,
+   "PlanLatencyHigh": 14.9939,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7938,
+   "cache lookups (5 min)": 388.3821,
+   "ModelErrorRateHigh": 6.5086
+  },
+  {
+   "t": 593.99,
+   "PlanLatencyHigh": 14.9935,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7928,
+   "cache lookups (5 min)": 391.452,
+   "ModelErrorRateHigh": 5.2882
+  }
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "90 s of travellers as usual: ModelErrorRateHigh is quiet",
+   "detail": "{\"visits\": 14, \"list\": {\"200\": 14}, \"create\": {\"201\": 14}, \"plan\": {\"202\": 14}, \"outcome\": {\"completed\": 14}, \"plan_seconds\": {\"min\": 10.1, \"median\": 14.1, \"max\": 14.2}}"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: pending",
+   "detail": "138 s after"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: firing",
+   "detail": "259 s after"
+  },
+  {
+   "ok": true,
+   "what": "the receiver was sent it",
+   "detail": "1 notification(s), 1 alert(s), 265 s after it broke"
+  },
+  {
+   "ok": true,
+   "what": "its message says what to know",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "mended: resolved, and the receiver told",
+   "detail": "186 s after it was mended"
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

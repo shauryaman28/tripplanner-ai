@@ -1,15 +1,18 @@
 """The observability stack on this machine: up, down, and what it is doing (Phase 29).
 
-    python scripts/observability.py up        # start Prometheus, Grafana, Jaeger, Loki and Alloy; wait for them
+    python scripts/observability.py up        # start Prometheus, Grafana, Jaeger, Loki and Alloy — and, since
+                                              # Phase 34, Alertmanager and the alert receiver; wait for them
     python scripts/observability.py down      # stop them and delete what they kept
     python scripts/observability.py ps        # what is running
     python scripts/observability.py logs      # their own logs        (logs -f grafana to follow one)
 
 What the stack is: docker/observability/compose.yml. Where to look once it is up:
 
-    Grafana      http://localhost:3001        the dashboard; Explore for the log lines
-    Prometheus   http://localhost:9090        Status → Targets says whether it can read the backend
-    Jaeger       http://localhost:16686       the traces
+    Grafana        http://localhost:3001      the dashboard; Explore for the log lines
+    Prometheus     http://localhost:9090      Status → Targets says whether it can read the backend; Alerts
+    Alertmanager   http://localhost:9093      what fires, and the silences
+    alert receiver http://localhost:9011      every alert sent (logs -f alert-receiver prints them as they come)
+    Jaeger         http://localhost:16686     the traces
 
 The app is told about it by two settings (HOW_TO_RUN.md, Step 27):
 
@@ -44,6 +47,8 @@ READY = {
     "Grafana": "http://localhost:3001/api/health",
     "Jaeger": "http://localhost:16686/",
     "Loki": "http://localhost:3110/ready",
+    "Alertmanager": "http://localhost:9093/-/ready",  # Phase 34
+    "the alert receiver": "http://localhost:9011/",
 }
 
 
@@ -96,7 +101,9 @@ def main() -> int:
         if compose("up", "-d", *args.rest, *extra, check=False) != 0:
             print("docker compose could not start the stack — its own message is above.")
             return 1
-        print("waiting for Prometheus, Grafana, Jaeger and Loki to answer…", flush=True)
+        print(
+            "waiting for Prometheus, Grafana, Jaeger, Loki, Alertmanager and the alert receiver to answer…", flush=True
+        )
         silent = wait_until_ready()
         if silent:
             print(f"not answering: {', '.join(silent)}. Their logs: python scripts/observability.py logs")
@@ -104,7 +111,8 @@ def main() -> int:
         print(
             "ready.\n"
             "  Grafana      http://localhost:3001\n"
-            "  Prometheus   http://localhost:9090/targets\n"
+            "  Prometheus   http://localhost:9090/targets     (alerts: http://localhost:9090/alerts)\n"
+            "  Alertmanager http://localhost:9093             (what was sent: http://localhost:9011/alerts)\n"
             "  Jaeger       http://localhost:16686\n"
             "Tell the app:  OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318  LOG_FORMAT=json\n"
             "Next:          python scripts/observability_check.py"

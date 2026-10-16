@@ -1,0 +1,395 @@
+# Each alert of rules.yml made to fire on purpose, and kept quiet where it must be (Phase 34).
+#
+#     docker run --rm -v "$PWD/docker/observability/alerts:/alerts:ro" --entrypoint promtool \
+#         prom/prometheus:v3.15.0 test rules /alerts/tests.yml
+#
+# The series are written by hand, a sample a minute, labelled as Prometheus labels the app's: the job
+# and instance of the production-like stack's scrape, and `le` as the app writes it and Prometheus
+# keeps it — "30.0", not "30" (read from the running stack: Prometheus 3.15 does not rewrite it).
+# An alert that is only pending is not in `exp_alerts` — so an empty list part-way through a test is
+# its `for:` being held to. Each firing alert's message is compared whole: what the person who gets it
+# reads is part of what is tested.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 15s
+
+tests:
+  # ── PlanLatencyHigh ───────────────────────────────────────────────────────────────────────────
+  # Three plans a minute: two finish in 12 s, one gives up at 36 s (the builder's model not answering,
+  # as in Phase 31's chaos exercise). p99 of three is the slowest: inside the 30–45 s bucket.
+  - name: plans slower than 30 s at p99 fire, after five minutes, saying how many there were
+    interval: 1m
+    input_series:
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="completed", le="25.0"}'
+        values: "0+2x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="completed", le="30.0"}'
+        values: "0+2x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="completed", le="45.0"}'
+        values: "0+2x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="completed", le="+Inf"}'
+        values: "0+2x15"
+      - series: 'planning_run_duration_seconds_count{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="completed"}'
+        values: "0+2x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="no_plan", le="25.0"}'
+        values: "0x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="no_plan", le="30.0"}'
+        values: "0x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="no_plan", le="45.0"}'
+        values: "0+1x15"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="no_plan", le="+Inf"}'
+        values: "0+1x15"
+      - series: 'planning_run_duration_seconds_count{job="tripplanner-prodlike", instance="host.docker.internal:8200", kind="plan", outcome="no_plan"}'
+        values: "0+1x15"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: PlanLatencyHigh
+        exp_alerts: [] # over 30 s since the first minute — but pending: not five minutes yet
+      - eval_time: 10m
+        alertname: PlanLatencyHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: tripplanner-prodlike
+              endpoint: POST /trips/{trip_id}/plan
+              metric: planning_run_duration_seconds
+            exp_annotations:
+              summary: >-
+                POST /trips/{trip_id}/plan — plans take 44.55s at p99 over the last 10 minutes; the threshold is 30s.
+              description: |-
+                Metric: planning_run_duration_seconds{kind="plan"}, p99 over 10m (the plan, not the request that started it, which is answered at once).
+                Now: 44.55s · threshold: 30s · backend: tripplanner-prodlike.
+                Plans in the last 10 min: 30, of which over 30s: 10.
+                How they ended: completed 20; no_plan 10;
+                Look first: the dashboard's "How long a plan takes", then a slow plan's trace in Jaeger — which agent took the time.
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+
+  - name: plans of up to 30 s, slow refinements, and no plans at all do not fire
+    interval: 1m
+    input_series:
+      # every plan inside 30 s: p99 is at most the bucket's edge, 30, which is not over it
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="25.0"}'
+        values: "0+2x20"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="30.0"}'
+        values: "0+3x20"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="45.0"}'
+        values: "0+3x20"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="+Inf"}'
+        values: "0+3x20"
+      # a refinement is not a plan: POST /refine is not the endpoint this is about
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="refine", outcome="completed", le="30.0"}'
+        values: "0x20"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="refine", outcome="completed", le="+Inf"}'
+        values: "0+5x20"
+      # another backend that planned nothing: the rate of nothing is no quantile, and no alert
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-dev", kind="plan", outcome="completed", le="30.0"}'
+        values: "4x20"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-dev", kind="plan", outcome="completed", le="+Inf"}'
+        values: "7x20"
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: PlanLatencyHigh
+        exp_alerts: []
+
+  - name: slow plans that stop being slow stop the alert, once they have left the ten minutes
+    interval: 1m
+    input_series:
+      # one plan a minute at 36 s for 12 minutes, then one a minute at 12 s
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="30.0"}'
+        values: "0x12 1+1x20"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="45.0"}'
+        values: "0+1x32"
+      - series: 'planning_run_duration_seconds_bucket{job="tripplanner-prodlike", kind="plan", outcome="completed", le="+Inf"}'
+        values: "0+1x32"
+      - series: 'planning_run_duration_seconds_count{job="tripplanner-prodlike", kind="plan", outcome="completed"}'
+        values: "0+1x32"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: PlanLatencyHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: tripplanner-prodlike
+              endpoint: POST /trips/{trip_id}/plan
+              metric: planning_run_duration_seconds
+            exp_annotations:
+              summary: >-
+                POST /trips/{trip_id}/plan — plans take 44.85s at p99 over the last 10 minutes; the threshold is 30s.
+              description: |-
+                Metric: planning_run_duration_seconds{kind="plan"}, p99 over 10m (the plan, not the request that started it, which is answered at once).
+                Now: 44.85s · threshold: 30s · backend: tripplanner-prodlike.
+                Plans in the last 10 min: 10, of which over 30s: 10.
+                How they ended: completed 10;
+                Look first: the dashboard's "How long a plan takes", then a slow plan's trace in Jaeger — which agent took the time.
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+      # four minutes after the last slow plan, still firing: they are in the ten-minute window (a five-minute
+      # one would have let them go by now)
+      - eval_time: 16m
+        alertname: PlanLatencyHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: tripplanner-prodlike
+              endpoint: POST /trips/{trip_id}/plan
+              metric: planning_run_duration_seconds
+            exp_annotations:
+              summary: >-
+                POST /trips/{trip_id}/plan — plans take 44.75s at p99 over the last 10 minutes; the threshold is 30s.
+              description: |-
+                Metric: planning_run_duration_seconds{kind="plan"}, p99 over 10m (the plan, not the request that started it, which is answered at once).
+                Now: 44.75s · threshold: 30s · backend: tripplanner-prodlike.
+                Plans in the last 10 min: 10, of which over 30s: 6.
+                How they ended: completed 10;
+                Look first: the dashboard's "How long a plan takes", then a slow plan's trace in Jaeger — which agent took the time.
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#planlatencyhigh
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+      - eval_time: 30m
+        alertname: PlanLatencyHigh
+        exp_alerts: []
+
+  # ── EndpointErrorRateHigh ─────────────────────────────────────────────────────────────────────
+  - name: an endpoint with more than 5 % of its requests failing fires, naming it and the others failing
+    interval: 1m
+    input_series:
+      # POST /plan: 9 answered, 1 failed a minute — 10 %
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/trips/{trip_id}/plan", method="POST", status="2xx"}'
+        values: "0+9x10"
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/trips/{trip_id}/plan", method="POST", status="5xx"}'
+        values: "0+1x10"
+      # GET /trips: 24 answered, 1 failed a minute — 4 %: under the threshold
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/trips", method="GET", status="2xx"}'
+        values: "0+24x10"
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/trips", method="GET", status="5xx"}'
+        values: "0+1x10"
+      # POST /trips: 19 answered, 1 failed — exactly 5 %: not over it
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/trips", method="POST", status="2xx"}'
+        values: "0+19x10"
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/trips", method="POST", status="5xx"}'
+        values: "0+1x10"
+      # wrong passwords and trips that are someone else's are the client's: 4xx, never an alert
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/auth/login", method="POST", status="4xx"}'
+        values: "0+30x10"
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/auth/login", method="POST", status="2xx"}'
+        values: "0+1x10"
+      # a platform's health check answered 503 while a dependency is away: that is its job
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/ready", method="GET", status="5xx"}'
+        values: "0+6x10"
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/admin/health-deep", method="GET", status="5xx"}'
+        values: "0+2x10"
+      # the route that fails on purpose, to show error reporting works (Phase 27): its 500 is the point of it
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/admin/sentry-test", method="GET", status="5xx"}'
+        values: "0+1x10"
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="/admin/sentry-test", method="GET", status="4xx"}'
+        values: "0+1x10"
+      # requests to no route at all
+      - series: 'http_requests_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", handler="none", method="GET", status="5xx"}'
+        values: "0+1x10"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: EndpointErrorRateHigh
+        exp_alerts: [] # failing from the first minute — pending for two
+      - eval_time: 5m
+        alertname: EndpointErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: tripplanner-prodlike
+              method: POST
+              handler: /trips/{trip_id}/plan
+              endpoint: POST /trips/{trip_id}/plan
+              metric: http_requests_total
+            exp_annotations:
+              summary: >-
+                POST /trips/{trip_id}/plan — 10% of its requests failed over the last 5 minutes; the threshold is 5%.
+              description: |-
+                Metric: http_requests_total{status="5xx"} ÷ all requests to POST /trips/{trip_id}/plan, over 5m.
+                Now: 10% · threshold: 5% · backend: tripplanner-prodlike.
+                Requests in the last 5 min: 50, of which 5xx: 5.
+                Every endpoint failing now: POST /trips/{trip_id}/plan 10%;
+                503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with "could not be served".
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+
+  - name: an endpoint nobody asked fails nothing, and the failures stop the alert once they stop
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="tripplanner-prodlike", handler="/trips/{trip_id}/status", method="GET", status="2xx"}'
+        values: "0+10x30"
+      - series: 'http_requests_total{job="tripplanner-prodlike", handler="/trips/{trip_id}/status", method="GET", status="5xx"}'
+        values: "0+5x8 40x22" # half failing for eight minutes, then none
+      # an endpoint with no requests at all: 0 ÷ 0 is no ratio
+      - series: 'http_requests_total{job="tripplanner-prodlike", handler="/trips/{trip_id}/itinerary", method="GET", status="5xx"}'
+        values: "3x30"
+      - series: 'http_requests_total{job="tripplanner-prodlike", handler="/trips/{trip_id}/itinerary", method="GET", status="2xx"}'
+        values: "100x30"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: EndpointErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: tripplanner-prodlike
+              method: GET
+              handler: /trips/{trip_id}/status
+              endpoint: GET /trips/{trip_id}/status
+              metric: http_requests_total
+            exp_annotations:
+              summary: >-
+                GET /trips/{trip_id}/status — 33.33% of its requests failed over the last 5 minutes; the threshold is 5%.
+              description: |-
+                Metric: http_requests_total{status="5xx"} ÷ all requests to GET /trips/{trip_id}/status, over 5m.
+                Now: 33.33% · threshold: 5% · backend: tripplanner-prodlike.
+                Requests in the last 5 min: 75, of which 5xx: 25.
+                Every endpoint failing now: GET /trips/{trip_id}/status 33.33%;
+                503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with "could not be served".
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+      - eval_time: 20m
+        alertname: EndpointErrorRateHigh
+        exp_alerts: []
+
+  # ── CacheHitRatioLow ──────────────────────────────────────────────────────────────────────────
+  - name: a cache that answers under 30 % of many lookups fires, saying what the lookups were
+    interval: 1m
+    input_series:
+      - series: 'mcp_cache_hit_ratio{job="tripplanner-prodlike", instance="host.docker.internal:8200"}'
+        values: "0.5 0.5 0.1x10"
+      - series: 'mcp_cache_window_lookups{job="tripplanner-prodlike", instance="host.docker.internal:8200"}'
+        values: "8 16 24 32 40x9"
+      - series: 'mcp_cache_lookups_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", cache="flights", result="hit"}'
+        values: "0+1x12"
+      - series: 'mcp_cache_lookups_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", cache="flights", result="miss"}'
+        values: "0+4x12"
+      - series: 'mcp_cache_lookups_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", cache="hotels", result="miss"}'
+        values: "0+3x12"
+      - series: 'mcp_cache_lookups_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", cache="hotels", result="error"}'
+        values: "0x12"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: CacheHitRatioLow
+        exp_alerts: [] # low since the second minute — pending for three
+      - eval_time: 6m
+        alertname: CacheHitRatioLow
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: tripplanner-prodlike
+              instance: host.docker.internal:8200
+              metric: mcp_cache_hit_ratio
+            exp_annotations:
+              summary: >-
+                The tool server's cache answered 10% of lookups over the last 5 minutes; the threshold is 30%.
+              description: |-
+                Metric: mcp_cache_hit_ratio (hits ÷ lookups over 5m, this process: host.docker.internal:8200), of 40 lookups.
+                Now: 10% · threshold: 30% · backend: tripplanner-prodlike.
+                By cache, over 5m: flights miss 20; hotels miss 15; flights hit 5;
+                error = Redis could not be asked; miss = asked and not there (the warming did not run, or the entries are gone).
+                Look first: GET /admin/health-deep (redis), then the log lines with "[CACHE WARM]".
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#cachehitratiolow
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+
+  - name: a low ratio of a few lookups, a ratio of nothing, and a ratio at the threshold do not fire
+    interval: 1m
+    input_series:
+      # one trip created and never planned: four misses, a ratio of 0 — not Redis going wrong
+      - series: 'mcp_cache_hit_ratio{job="tripplanner-prodlike", instance="a"}'
+        values: "0x15"
+      - series: 'mcp_cache_window_lookups{job="tripplanner-prodlike", instance="a"}'
+        values: "4x15"
+      # nobody looked anything up: NaN, which is not under anything
+      - series: 'mcp_cache_hit_ratio{job="tripplanner-prodlike", instance="b"}'
+        values: "NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
+      - series: 'mcp_cache_window_lookups{job="tripplanner-prodlike", instance="b"}'
+        values: "0x15"
+      # exactly 30 %, of plenty
+      - series: 'mcp_cache_hit_ratio{job="tripplanner-prodlike", instance="c"}'
+        values: "0.3x15"
+      - series: 'mcp_cache_window_lookups{job="tripplanner-prodlike", instance="c"}'
+        values: "100x15"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: CacheHitRatioLow
+        exp_alerts: []
+
+  # What the quiet drill found (docs/phase34_build_log.md): the backend restarted, its first trips' searches
+  # are warmed — misses — and not yet planned. The new process's ratio is of those few lookups; the counter's
+  # increase over five minutes still holds the hundreds of the process before. A floor on the counter let
+  # this through and the alert went pending; the floor is the lookups the ratio is of.
+  - name: the first few misses after a restart do not pass the floor, however many lookups the last process made
+    # A sample every 15 s, as near the real scrape (5 s) as a test needs: the last process's lookups stay in a
+    # counter's five-minute increase for nearly five minutes after it is gone — longer than this alert's `for:`.
+    interval: 15s
+    input_series:
+      # a restart at 5m: the ratio until then is the old process's; after it, the new one's four misses
+      - series: 'mcp_cache_hit_ratio{job="tripplanner-prodlike", instance="host.docker.internal:8200"}'
+        values: "0.5x19 0x40"
+      - series: 'mcp_cache_window_lookups{job="tripplanner-prodlike", instance="host.docker.internal:8200"}'
+        values: "300x19 4x40"
+      # the counter: 60 lookups a minute until the restart, then the new process's own four
+      - series: 'mcp_cache_lookups_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", cache="flights", result="miss"}'
+        values: "0+15x19 4x40"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: CacheHitRatioLow
+        exp_alerts: [] # with the counter for a floor: firing here, at 0% of four lookups
+
+  # ── ModelErrorRateHigh ────────────────────────────────────────────────────────────────────────
+  - name: more than ten failed model calls a minute fire, naming the agents and models that fail
+    interval: 1m
+    input_series:
+      - series: 'llm_calls_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", agent="intent_parsing", model="gemini-3.5-flash-lite", status="error"}'
+        values: "0+8x10"
+      - series: 'llm_calls_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", agent="intent_parsing", model="openai/gpt-oss-20b", status="error"}'
+        values: "0+4x10"
+      - series: 'llm_calls_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", agent="itinerary_builder", model="openai/gpt-oss-120b", status="ok"}'
+        values: "0+4x10"
+      - series: 'llm_calls_total{job="tripplanner-prodlike", instance="host.docker.internal:8200", agent="intent_parsing", model="gemini-3.5-flash-lite", status="ok"}'
+        values: "0x10"
+    alert_rule_test:
+      # A rate over five minutes of a counter that began failing at 0 is only whole once the five minutes
+      # have passed: at 12 failures a minute it is 2.4 after one minute, 9.6 after four — over 10 from about
+      # 4m15s, firing two minutes after that. How long it takes is five minutes × 10 ÷ the real rate: at 24 a
+      # minute, two (the drill's, at 20 a minute, fired 259 s after the models began refusing).
+      - eval_time: 4m
+        alertname: ModelErrorRateHigh
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: ModelErrorRateHigh
+        exp_alerts: [] # over the threshold, pending
+      - eval_time: 8m
+        alertname: ModelErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: tripplanner-prodlike
+              metric: llm_calls_total
+            exp_annotations:
+              summary: >-
+                12.0 model calls a minute are failing, over the last 5 minutes; the threshold is 10 a minute.
+              description: |-
+                Metric: llm_calls_total{status="error"}, a minute, over 5m — every agent and model.
+                Now: 12.0 a minute · threshold: 10 a minute · backend: tripplanner-prodlike.
+                Failed calls in the last 5 min, by agent and model: intent_parsing → gemini-3.5-flash-lite 40; intent_parsing → openai/gpt-oss-20b 20;
+                Of all calls: 75% failed.
+                Look first: the log lines with "Gemini unavailable" or the provider's status code; a 429 is a quota, read the provider's limits.
+              runbook_url: https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#modelerrorratehigh
+              dashboard: http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike
+
+  - name: ten failed calls a minute, or fewer, do not fire
+    interval: 1m
+    input_series:
+      - series: 'llm_calls_total{job="tripplanner-prodlike", agent="intent_parsing", model="gemini-3.5-flash-lite", status="error"}'
+        values: "0+10x15"
+      - series: 'llm_calls_total{job="tripplanner-dev", agent="intent_parsing", model="gemini-3.5-flash-lite", status="error"}'
+        values: "0+3x15"
+      - series: 'llm_calls_total{job="tripplanner-dev", agent="itinerary_builder", model="openai/gpt-oss-120b", status="error"}'
+        values: "0+6x15"
+      # plenty of calls that worked: they are not failures, however many
+      - series: 'llm_calls_total{job="tripplanner-prodlike", agent="itinerary_builder", model="openai/gpt-oss-120b", status="ok"}'
+        values: "0+50x15"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ModelErrorRateHigh
+        exp_alerts: [] # 10 a minute is the threshold, not over it; 9 on the other backend

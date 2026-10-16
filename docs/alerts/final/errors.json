@@ -1,0 +1,668 @@
+{
+ "drill": "errors",
+ "began": "2026-10-16T19:02:04+00:00",
+ "commit": "b312dffc885568800ce7028cd19607c8902b6762",
+ "alert": "EndpointErrorRateHigh",
+ "cause": "the database's pooler is stopped",
+ "threshold": 0.05,
+ "timeline_s": {
+  "broken": 92.28,
+  "pending": 103.47,
+  "firing": 219.89,
+  "delivered": 232.76,
+  "mended": 232.82,
+  "resolved": 523.19,
+  "delivered_at_utc": "2026-10-16T19:05:54+00:00"
+ },
+ "measure": {
+  "before": {
+   "value": null,
+   "threshold": 0.05
+  },
+  "while_broken": {
+   "value": 0.5909,
+   "threshold": 0.05
+  },
+  "after": {
+   "value": 0.5996,
+   "threshold": 0.05
+  }
+ },
+ "traffic": {
+  "before": {
+   "visits": 23,
+   "list": {
+    "200": 23
+   },
+   "create": {
+    "201": 23
+   },
+   "plan": {
+    "202": 21,
+    "503": 2
+   },
+   "outcome": {
+    "completed": 18,
+    "failed": 3
+   },
+   "plan_seconds": {
+    "min": 12.1,
+    "median": 12.1,
+    "max": 151.5
+   }
+  },
+  "while_broken": {
+   "visits": 35,
+   "list": {
+    "503": 35
+   },
+   "create": {
+    "503": 35
+   }
+  },
+  "after": {
+   "visits": 71,
+   "list": {
+    "200": 71
+   },
+   "create": {
+    "201": 71
+   },
+   "plan": {
+    "202": 71
+   },
+   "outcome": {
+    "completed": 71
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.1,
+    "max": 16.2
+   }
+  }
+ },
+ "health_deep_while_broken": {
+  "http": 503,
+  "status": "failing",
+  "checked_at": "2026-10-16T19:05:57+00:00",
+  "took_ms": 40.0,
+  "dependencies": {
+   "postgres": {
+    "status": "failing",
+    "required": true,
+    "latency_ms": 8.0,
+    "detail": "gaierror: [Errno -2] Name or service not known"
+   },
+   "redis": {
+    "status": "ok",
+    "required": true,
+    "latency_ms": 6.6,
+    "detail": "PING answered"
+   },
+   "tool_server": {
+    "status": "ok",
+    "required": true,
+    "latency_ms": 39.8,
+    "detail": "estimate_budget answered: ₹27,500 for the test trip"
+   },
+   "langsmith": {
+    "status": "off",
+    "required": false,
+    "latency_ms": null,
+    "detail": "no LANGCHAIN_API_KEY: traces are not sent"
+   }
+  }
+ },
+ "delivered": [
+  {
+   "receiver": "stand-in",
+   "status": "firing",
+   "alerts": [
+    {
+     "status": "firing",
+     "labels": {
+      "alertname": "EndpointErrorRateHigh",
+      "endpoint": "GET /trips/{trip_id}/status",
+      "handler": "/trips/{trip_id}/status",
+      "job": "tripplanner-prodlike",
+      "method": "GET",
+      "metric": "http_requests_total",
+      "severity": "critical"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: http_requests_total{status=\"5xx\"} ÷ all requests to GET /trips/{trip_id}/status, over 5m.\nNow: 56.73% · threshold: 5% · backend: tripplanner-prodlike.\nRequests in the last 5 min: 338, of which 5xx: 192.\nEvery endpoint failing now: GET /trips/{trip_id}/status 56.73%; GET /trips 53.13%; POST /trips 53.13%;\n503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with \"could not be served\".",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh",
+      "summary": "GET /trips/{trip_id}/status — 56.73% of its requests failed over the last 5 minutes; the threshold is 5%."
+     },
+     "startsAt": "2026-10-16T19:05:44.246Z",
+     "endsAt": "0001-01-01T00:00:00Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=%28sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%2Cstatus%3D%225xx%22%7D%5B5m%5D%29%29+%2F+sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%7D%5B5m%5D%29%29%29+%3E+0.05&g0.tab=1",
+     "fingerprint": "2b4c5fe9b334ab80"
+    }
+   ],
+   "notification_reason": "first notification",
+   "groupLabels": {
+    "alertname": "EndpointErrorRateHigh",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "EndpointErrorRateHigh",
+    "endpoint": "GET /trips/{trip_id}/status",
+    "handler": "/trips/{trip_id}/status",
+    "job": "tripplanner-prodlike",
+    "method": "GET",
+    "metric": "http_requests_total",
+    "severity": "critical"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: http_requests_total{status=\"5xx\"} ÷ all requests to GET /trips/{trip_id}/status, over 5m.\nNow: 56.73% · threshold: 5% · backend: tripplanner-prodlike.\nRequests in the last 5 min: 338, of which 5xx: 192.\nEvery endpoint failing now: GET /trips/{trip_id}/status 56.73%; GET /trips 53.13%; POST /trips 53.13%;\n503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with \"could not be served\".",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh",
+    "summary": "GET /trips/{trip_id}/status — 56.73% of its requests failed over the last 5 minutes; the threshold is 5%."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"EndpointErrorRateHigh\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T19:05:54+00:00"
+  }
+ ],
+ "resolved": [
+  {
+   "receiver": "stand-in",
+   "status": "resolved",
+   "alerts": [
+    {
+     "status": "resolved",
+     "labels": {
+      "alertname": "EndpointErrorRateHigh",
+      "endpoint": "GET /trips",
+      "handler": "/trips",
+      "job": "tripplanner-prodlike",
+      "method": "GET",
+      "metric": "http_requests_total",
+      "severity": "critical"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: http_requests_total{status=\"5xx\"} ÷ all requests to GET /trips, over 5m.\nNow: 8.219% · threshold: 5% · backend: tripplanner-prodlike.\nRequests in the last 5 min: 74, of which 5xx: 6.\nEvery endpoint failing now: GET /trips 8.219%; POST /trips 8.219%; GET /trips/{trip_id}/status 8.018%;\n503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with \"could not be served\".",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh",
+      "summary": "GET /trips — 8.219% of its requests failed over the last 5 minutes; the threshold is 5%."
+     },
+     "startsAt": "2026-10-16T19:05:59.246Z",
+     "endsAt": "2026-10-16T19:10:44.246Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=%28sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%2Cstatus%3D%225xx%22%7D%5B5m%5D%29%29+%2F+sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%7D%5B5m%5D%29%29%29+%3E+0.05&g0.tab=1",
+     "fingerprint": "9156eac720f8c4d2"
+    },
+    {
+     "status": "resolved",
+     "labels": {
+      "alertname": "EndpointErrorRateHigh",
+      "endpoint": "GET /trips/{trip_id}/status",
+      "handler": "/trips/{trip_id}/status",
+      "job": "tripplanner-prodlike",
+      "method": "GET",
+      "metric": "http_requests_total",
+      "severity": "critical"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: http_requests_total{status=\"5xx\"} ÷ all requests to GET /trips/{trip_id}/status, over 5m.\nNow: 8.018% · threshold: 5% · backend: tripplanner-prodlike.\nRequests in the last 5 min: 457, of which 5xx: 37.\nEvery endpoint failing now: GET /trips 8.219%; POST /trips 8.219%; GET /trips/{trip_id}/status 8.018%;\n503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with \"could not be served\".",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh",
+      "summary": "GET /trips/{trip_id}/status — 8.018% of its requests failed over the last 5 minutes; the threshold is 5%."
+     },
+     "startsAt": "2026-10-16T19:05:44.246Z",
+     "endsAt": "2026-10-16T19:10:44.246Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=%28sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%2Cstatus%3D%225xx%22%7D%5B5m%5D%29%29+%2F+sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%7D%5B5m%5D%29%29%29+%3E+0.05&g0.tab=1",
+     "fingerprint": "2b4c5fe9b334ab80"
+    },
+    {
+     "status": "resolved",
+     "labels": {
+      "alertname": "EndpointErrorRateHigh",
+      "endpoint": "POST /trips",
+      "handler": "/trips",
+      "job": "tripplanner-prodlike",
+      "method": "POST",
+      "metric": "http_requests_total",
+      "severity": "critical"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: http_requests_total{status=\"5xx\"} ÷ all requests to POST /trips, over 5m.\nNow: 8.219% · threshold: 5% · backend: tripplanner-prodlike.\nRequests in the last 5 min: 74, of which 5xx: 6.\nEvery endpoint failing now: GET /trips 8.219%; POST /trips 8.219%; GET /trips/{trip_id}/status 8.018%;\n503 = Postgres or Redis cannot be reached (the log says which); 500 = a bug, in Sentry. Look first: GET /admin/health-deep, then the log lines with \"could not be served\".",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh",
+      "summary": "POST /trips — 8.219% of its requests failed over the last 5 minutes; the threshold is 5%."
+     },
+     "startsAt": "2026-10-16T19:05:59.246Z",
+     "endsAt": "2026-10-16T19:10:44.246Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=%28sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%2Cstatus%3D%225xx%22%7D%5B5m%5D%29%29+%2F+sum+by+%28job%2C+method%2C+handler%29+%28rate%28http_requests_total%7Bhandler%21~%22%2Fping%7C%2Fready%7C%2Fversion%7C%2Fadmin%2Fhealth-deep%7Cnone%22%7D%5B5m%5D%29%29%29+%3E+0.05&g0.tab=1",
+     "fingerprint": "9ff62d48f739cab2"
+    }
+   ],
+   "notification_reason": "all alerts resolved",
+   "groupLabels": {
+    "alertname": "EndpointErrorRateHigh",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "EndpointErrorRateHigh",
+    "job": "tripplanner-prodlike",
+    "metric": "http_requests_total",
+    "severity": "critical"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#endpointerrorratehigh"
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"EndpointErrorRateHigh\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T19:10:54+00:00"
+  }
+ ],
+ "alert_changes": [
+  {
+   "t": 103.47,
+   "alert": "EndpointErrorRateHigh",
+   "about": "GET /trips/{trip_id}/status",
+   "state": "pending",
+   "value": "5.8385786000574355e-02",
+   "active_at": "2026-10-16T19:03:44.246542836Z"
+  },
+  {
+   "t": 118.67,
+   "alert": "EndpointErrorRateHigh",
+   "about": "GET /trips",
+   "state": "pending",
+   "value": "1.3788020214499597e-01",
+   "active_at": "2026-10-16T19:03:59.246542836Z"
+  },
+  {
+   "t": 118.67,
+   "alert": "EndpointErrorRateHigh",
+   "about": "POST /trips",
+   "state": "pending",
+   "value": "1.3788020214499597e-01",
+   "active_at": "2026-10-16T19:03:59.246542836Z"
+  },
+  {
+   "t": 219.89,
+   "alert": "EndpointErrorRateHigh",
+   "about": "GET /trips/{trip_id}/status",
+   "state": "firing",
+   "value": "5.673036165370641e-01",
+   "active_at": "2026-10-16T19:03:44.246542836Z"
+  },
+  {
+   "t": 235.05,
+   "alert": "EndpointErrorRateHigh",
+   "about": "GET /trips",
+   "state": "firing",
+   "value": "5.70605874466934e-01",
+   "active_at": "2026-10-16T19:03:59.246542836Z"
+  },
+  {
+   "t": 235.05,
+   "alert": "EndpointErrorRateHigh",
+   "about": "POST /trips",
+   "state": "firing",
+   "value": "5.70605874466934e-01",
+   "active_at": "2026-10-16T19:03:59.246542836Z"
+  },
+  {
+   "t": 250.2,
+   "alert": "PlanLatencyHigh",
+   "about": "POST /trips/{trip_id}/plan",
+   "state": "pending",
+   "value": "1.7236502444654005e+02",
+   "active_at": "2026-10-16T19:06:14.246542836Z"
+  },
+  {
+   "t": 523.19,
+   "alert": "EndpointErrorRateHigh",
+   "about": "GET /trips/{trip_id}/status",
+   "state": "inactive"
+  },
+  {
+   "t": 523.19,
+   "alert": "EndpointErrorRateHigh",
+   "about": "GET /trips",
+   "state": "inactive"
+  },
+  {
+   "t": 523.19,
+   "alert": "EndpointErrorRateHigh",
+   "about": "POST /trips",
+   "state": "inactive"
+  }
+ ],
+ "measures": [
+  {
+   "t": 2.3,
+   "PlanLatencyHigh": 14.9605,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": null,
+   "cache lookups in the ratio": null,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 17.45,
+   "PlanLatencyHigh": 14.9597,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.6667,
+   "cache lookups in the ratio": 9.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 32.63,
+   "PlanLatencyHigh": 14.9592,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7027,
+   "cache lookups in the ratio": 37.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 47.8,
+   "PlanLatencyHigh": 14.9614,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7206,
+   "cache lookups in the ratio": 68.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 62.97,
+   "PlanLatencyHigh": 14.9615,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7423,
+   "cache lookups in the ratio": 97.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 78.15,
+   "PlanLatencyHigh": 14.9625,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7627,
+   "cache lookups in the ratio": 118.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 93.32,
+   "PlanLatencyHigh": 18.925,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 108.51,
+   "PlanLatencyHigh": 18.95,
+   "EndpointErrorRateHigh": 0.1227,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 123.7,
+   "PlanLatencyHigh": 18.95,
+   "EndpointErrorRateHigh": 0.2212,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 138.88,
+   "PlanLatencyHigh": 18.975,
+   "EndpointErrorRateHigh": 0.2925,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 154.06,
+   "PlanLatencyHigh": 19.0,
+   "EndpointErrorRateHigh": 0.3566,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 169.24,
+   "PlanLatencyHigh": 19.025,
+   "EndpointErrorRateHigh": 0.4212,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 184.43,
+   "PlanLatencyHigh": 19.025,
+   "EndpointErrorRateHigh": 0.469,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 199.61,
+   "PlanLatencyHigh": 19.05,
+   "EndpointErrorRateHigh": 0.5146,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 214.79,
+   "PlanLatencyHigh": 19.075,
+   "EndpointErrorRateHigh": 0.5537,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 229.95,
+   "PlanLatencyHigh": 19.1,
+   "EndpointErrorRateHigh": 0.5909,
+   "CacheHitRatioLow": 0.7762,
+   "cache lookups in the ratio": 143.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 245.1,
+   "PlanLatencyHigh": 172.1676,
+   "EndpointErrorRateHigh": 0.5996,
+   "CacheHitRatioLow": 0.7748,
+   "cache lookups in the ratio": 151.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 260.27,
+   "PlanLatencyHigh": 172.1698,
+   "EndpointErrorRateHigh": 0.5812,
+   "CacheHitRatioLow": 0.7714,
+   "cache lookups in the ratio": 175.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 275.44,
+   "PlanLatencyHigh": 171.5693,
+   "EndpointErrorRateHigh": 0.5548,
+   "CacheHitRatioLow": 0.7614,
+   "cache lookups in the ratio": 197.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 290.61,
+   "PlanLatencyHigh": 171.1702,
+   "EndpointErrorRateHigh": 0.5266,
+   "CacheHitRatioLow": 0.7589,
+   "cache lookups in the ratio": 224.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 305.76,
+   "PlanLatencyHigh": 170.3696,
+   "EndpointErrorRateHigh": 0.4979,
+   "CacheHitRatioLow": 0.7541,
+   "cache lookups in the ratio": 244.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 320.93,
+   "PlanLatencyHigh": 169.7702,
+   "EndpointErrorRateHigh": 0.4801,
+   "CacheHitRatioLow": 0.7588,
+   "cache lookups in the ratio": 257.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 336.09,
+   "PlanLatencyHigh": 169.1711,
+   "EndpointErrorRateHigh": 0.4776,
+   "CacheHitRatioLow": 0.76,
+   "cache lookups in the ratio": 250.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 351.27,
+   "PlanLatencyHigh": 168.5726,
+   "EndpointErrorRateHigh": 0.4764,
+   "CacheHitRatioLow": 0.7589,
+   "cache lookups in the ratio": 253.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 366.43,
+   "PlanLatencyHigh": 167.7738,
+   "EndpointErrorRateHigh": 0.4762,
+   "CacheHitRatioLow": 0.752,
+   "cache lookups in the ratio": 246.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 381.62,
+   "PlanLatencyHigh": 167.3766,
+   "EndpointErrorRateHigh": 0.4783,
+   "CacheHitRatioLow": 0.736,
+   "cache lookups in the ratio": 250.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 396.79,
+   "PlanLatencyHigh": 166.7791,
+   "EndpointErrorRateHigh": 0.4595,
+   "CacheHitRatioLow": 0.7309,
+   "cache lookups in the ratio": 249.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 411.97,
+   "PlanLatencyHigh": 165.9819,
+   "EndpointErrorRateHigh": 0.4054,
+   "CacheHitRatioLow": 0.7309,
+   "cache lookups in the ratio": 275.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 427.14,
+   "PlanLatencyHigh": 165.5851,
+   "EndpointErrorRateHigh": 0.3562,
+   "CacheHitRatioLow": 0.7297,
+   "cache lookups in the ratio": 296.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 442.29,
+   "PlanLatencyHigh": 164.9878,
+   "EndpointErrorRateHigh": 0.3034,
+   "CacheHitRatioLow": 0.7267,
+   "cache lookups in the ratio": 322.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 457.43,
+   "PlanLatencyHigh": 164.3911,
+   "EndpointErrorRateHigh": 0.2568,
+   "CacheHitRatioLow": 0.732,
+   "cache lookups in the ratio": 347.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 472.58,
+   "PlanLatencyHigh": 163.7947,
+   "EndpointErrorRateHigh": 0.2027,
+   "CacheHitRatioLow": 0.7292,
+   "cache lookups in the ratio": 373.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 487.74,
+   "PlanLatencyHigh": 163.1987,
+   "EndpointErrorRateHigh": 0.1507,
+   "CacheHitRatioLow": 0.7305,
+   "cache lookups in the ratio": 397.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 502.91,
+   "PlanLatencyHigh": 162.2608,
+   "EndpointErrorRateHigh": 0.0822,
+   "CacheHitRatioLow": 0.716,
+   "cache lookups in the ratio": 426.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 518.09,
+   "PlanLatencyHigh": 161.6609,
+   "EndpointErrorRateHigh": 0.0331,
+   "CacheHitRatioLow": 0.7118,
+   "cache lookups in the ratio": 451.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 533.26,
+   "PlanLatencyHigh": 161.0615,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.7023,
+   "cache lookups in the ratio": 477.0,
+   "ModelErrorRateHigh": 0.0
+  }
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "90 s of travellers as usual: EndpointErrorRateHigh is quiet",
+   "detail": "{\"visits\": 18, \"list\": {\"200\": 18}, \"create\": {\"201\": 18}, \"plan\": {\"202\": 18}, \"outcome\": {\"completed\": 18}, \"plan_seconds\": {\"min\": 12.1, \"median\": 12.1, \"max\": 18.2}}"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: pending",
+   "detail": "11 s after"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: firing",
+   "detail": "128 s after"
+  },
+  {
+   "ok": true,
+   "what": "the receiver was sent it",
+   "detail": "1 notification(s), 1 alert(s), 140 s after it broke"
+  },
+  {
+   "ok": true,
+   "what": "its message says what to know GET /trips/{trip_id}/status",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "mended: resolved, and the receiver told",
+   "detail": "290 s after it was mended"
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

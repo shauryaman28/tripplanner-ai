@@ -74,8 +74,11 @@ def asked_for(panel: dict) -> list[str]:
 def test_five_programs_each_at_a_version_that_was_run():
     images = {name: service["image"] for name, service in COMPOSE["services"].items()}
 
-    assert set(images) == {"prometheus", "grafana", "jaeger", "loki", "alloy"}
+    # Phase 34 added two: Alertmanager, and the stand-in it sends alerts to (tests/unit/test_phase34_alerts.py)
+    assert set(images) == {"prometheus", "grafana", "jaeger", "loki", "alloy", "alertmanager", "alert-receiver"}
     for name, image in images.items():
+        if name == "alert-receiver":  # the app's own base image: test_phase34_alerts.py holds it to the Dockerfile
+            continue
         assert re.fullmatch(r"[a-z]+/[a-z]+:v?\d+\.\d+\.\d+", image), f"{name}: {image} is not a pinned release"
     assert images["jaeger"].startswith("jaegertracing/jaeger:2.")  # Jaeger 2: the check script speaks its /api/v3
 
@@ -86,6 +89,7 @@ def test_the_stack_is_reached_where_the_scripts_and_the_app_look_for_it():
     assert published("jaeger") == {16686: 16686, 4318: 4318}  # the UI and its API; OTLP over HTTP
     assert published("loki") == {3110: 3100}  # not 3100: the browser tests' web server is there
     assert published("alloy") == {}
+    assert published("alertmanager") == {9093: 9093} and published("alert-receiver") == {9011: 9011}  # Phase 34
     taken = {3000, 3100, 8000, 8100, 8200, 3200, 5432, 6379}  # the app's own, the tests', the production-like stack's
     assert not taken & {port for service in COMPOSE["services"] for port in published(service)}
 
@@ -95,6 +99,8 @@ def test_the_stack_is_reached_where_the_scripts_and_the_app_look_for_it():
         "Grafana": "http://localhost:3001/api/health",
         "Jaeger": "http://localhost:16686/",
         "Loki": "http://localhost:3110/ready",
+        "Alertmanager": "http://localhost:9093/-/ready",
+        "the alert receiver": "http://localhost:9011/",
     }
     check = script("observability_check")
     defaults = vars(_defaults(check))

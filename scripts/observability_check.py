@@ -19,8 +19,12 @@ What is asked, in the roadmap's words:
        Redis → MCP … no orphaned spans"
     6. "searching by trip_id in the logging UI returns log lines from every service touched"
     7. the Grafana dashboard is there, and every panel's query is answered
+    8. Phase 34: the four alerts are loaded and evaluated, Prometheus hands them to Alertmanager, the
+       receiver answers — and after a healthy plan none of them fires for this backend
+    9. Phase 34: GET /admin/health-deep says every dependency works — and answers only the operator
 
-Exit code 0 when every expectation held. `--skip-plan` asks 1, 2 and 7 only.
+Exit code 0 when every expectation held. `--skip-plan` asks 1, 2, 7, 8 and 9 only. That each alert
+fires when it should is scripts/alert_drill.py's to show: it breaks things on purpose.
 """
 
 from __future__ import annotations
@@ -99,6 +103,8 @@ def the_stack_answers(checks: Checks, where: argparse.Namespace) -> bool:
         ("Jaeger", f"{where.jaeger}/api/v3/services"),
         ("Loki", f"{where.loki}/ready"),
         ("Grafana", f"{where.grafana}/api/health"),
+        ("Alertmanager", f"{where.alertmanager}/-/ready"),  # Phase 34
+        ("the alert receiver", f"{where.receiver}/alerts"),
     ):
         ok, said = answers(url)
         up &= checks.expect(
@@ -568,7 +574,94 @@ MUST_SHOW = (  # panels that have something to show once a trip has been planned
     "Tool calls",
     "Cache hits by cache",
     "Log lines",
+    # Phase 34
+    "Alerts firing",
+    "Plans, p99 (10 min)",
+    "Model calls failing",
+    "Model cost, an hour",
+    "Embeddings owed",
+    "Embedding queue",
+    "Model cost",
 )
+ALERTS = ("PlanLatencyHigh", "EndpointErrorRateHigh", "CacheHitRatioLow", "ModelErrorRateHigh")
+
+
+# ── 8. The alerts (Phase 34) ───────────────────────────────────────────────
+
+
+def the_alerts_are_watched(checks: Checks, where: argparse.Namespace, instance: str | None, planned: bool) -> None:
+    print("\n8. Alerts: the four rules, evaluated, handed to Alertmanager — and quiet while nothing is wrong")
+    try:
+        groups = get_json(f"{where.prometheus}/api/v1/rules", params={"type": "alert"})["data"]["groups"]
+    except Exception as exc:
+        checks.expect(False, "Prometheus has the alert rules", f"{type(exc).__name__}: {exc}")
+        return
+    rules = {rule["name"]: rule for group in groups for rule in group["rules"]}
+    checks.expect(set(rules) == set(ALERTS), "Prometheus has the four alerts", ", ".join(sorted(rules)) or "none")
+    broken = {name: rule.get("lastError") for name, rule in rules.items() if rule.get("health") != "ok"}
+    checks.expect(not broken, "each is evaluated without an error", str(broken)[:160] if broken else "health ok")
+    managers = get_json(f"{where.prometheus}/api/v1/alertmanagers")["data"]["activeAlertmanagers"]
+    checks.expect(
+        bool(managers), "Prometheus sends what fires to Alertmanager", managers[0]["url"] if managers else "none"
+    )
+    try:
+        status = get_json(f"{where.alertmanager}/api/v2/status")
+        receivers = sorted(re.findall(r"^- name: (\S+)", status["config"]["original"], flags=re.M))
+        checks.expect(bool(receivers), "Alertmanager knows where to send it", ", ".join(receivers))
+    except Exception as exc:
+        checks.expect(False, "Alertmanager knows where to send it", f"{type(exc).__name__}: {exc}")
+    if instance is not None:
+        # an alert is about a backend by its job (several of them say nothing narrower)
+        up = get_json(f"{where.prometheus}/api/v1/query", params={"query": f'up{{instance="{instance}"}}'})
+        job = (up["data"]["result"] or [{"metric": {}}])[0]["metric"].get("job")
+        firing = [
+            alert["labels"]["alertname"]
+            for alert in get_json(f"{where.prometheus}/api/v1/alerts")["data"]["alerts"]
+            if alert["labels"].get("job") == job and alert["state"] == "firing"
+        ]
+        checks.expect(
+            job is not None and not firing,
+            "nothing fires for this backend" + (" — after a healthy plan" if planned else ""),
+            f"job {job}" + (f": {', '.join(firing)}" if firing else ""),
+        )
+
+
+# ── 9. GET /admin/health-deep (Phase 34) ───────────────────────────────────
+
+
+def the_deep_check_answers(checks: Checks, where: argparse.Namespace) -> None:
+    print(f"\n9. GET /admin/health-deep: every dependency asked to do its work  ({where.api})")
+    key = {"Authorization": f"Bearer {where.ops_token}"} if where.ops_token else {}
+    try:
+        answered = httpx.get(f"{where.api}/admin/health-deep", headers=key, timeout=30)
+        body = answered.json()
+    except Exception as exc:
+        checks.expect(False, "it answers", f"{type(exc).__name__}: {exc}")
+        return
+    found = body.get("dependencies") or {}
+    checks.expect(
+        answered.status_code == 200 and body.get("status") in ("ok", "degraded"),
+        "it answers, and says the app can work",
+        f"HTTP {answered.status_code}, {body.get('status')} in {body.get('took_ms')} ms",
+    )
+    for name in ("postgres", "redis", "tool_server"):
+        result = found.get(name) or {}
+        checks.expect(
+            result.get("status") == "ok",
+            f"{name}: {result.get('detail') or 'not reported'}",
+            f"{result.get('latency_ms')} ms" if result.get("status") == "ok" else str(result)[:160],
+        )
+    langsmith = found.get("langsmith") or {}
+    checks.expect(
+        langsmith.get("status") in ("ok", "off"),
+        f"langsmith: {langsmith.get('status')} — {langsmith.get('detail')}",
+        "",
+    )
+    if where.ops_token:
+        refused = httpx.get(f"{where.api}/admin/health-deep", timeout=30)
+        checks.expect(
+            refused.status_code == 404, "…and to nobody without the operations token", f"HTTP {refused.status_code}"
+        )
 
 
 def the_dashboard_shows_it(checks: Checks, grafana: str, trip: dict | None) -> None:
@@ -658,6 +751,8 @@ def main() -> int:
     parser.add_argument("--jaeger", default="http://localhost:16686")
     parser.add_argument("--loki", default="http://localhost:3110")
     parser.add_argument("--grafana", default="http://localhost:3001")
+    parser.add_argument("--alertmanager", default="http://localhost:9093")
+    parser.add_argument("--receiver", default="http://localhost:9011", help="the stand-in alerts are sent to")
     where = parser.parse_args()
     if where.prodlike:
         where.api, where.ops_token = "http://localhost:8200", where.ops_token or prodlike_token()
@@ -674,6 +769,8 @@ def main() -> int:
                 trace_id = the_trace_is_one(checks, where.jaeger, trip)
                 the_log_lines_are_found(checks, where.loki, trip, trace_id)
         the_dashboard_shows_it(checks, where.grafana, trip)
+        the_alerts_are_watched(checks, where, instance, planned=trip is not None)
+        the_deep_check_answers(checks, where)
 
     print(f"\n{checks.passed} passed, {checks.failed} failed")
     return 0 if checks.failed == 0 else 1
