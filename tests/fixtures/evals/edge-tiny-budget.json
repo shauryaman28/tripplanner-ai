@@ -1,0 +1,320 @@
+{
+ "scenario": "edge-tiny-budget",
+ "asked": {
+  "trip": {
+   "destination": "Goa",
+   "start_date": "2026-12-16",
+   "end_date": "2026-12-20",
+   "budget": 3000,
+   "group_size": 2,
+   "interests": [
+    "beach"
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "conflict",
+  "conflict"
+ ],
+ "outcome": "conflict",
+ "question": null,
+ "conflict": {
+  "reason": "No flights found within the budget — cannot proceed with planning.",
+  "options": [
+   {
+    "choice": "cheaper_flights",
+    "saving": null,
+    "description": "Search for cheaper connecting flights",
+    "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+   },
+   {
+    "budget": 3750.0,
+    "choice": "increase_budget",
+    "saving": null,
+    "description": "Increase total budget to ₹3,750",
+    "estimated_saving": "Additional ₹750"
+   }
+  ],
+  "estimate": null
+ },
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+ "trip": {
+  "id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+  "user_id": "825594fa-39f8-44f1-9b65-d95f1d715bed",
+  "destination": "Goa",
+  "start_date": "2026-12-16",
+  "end_date": "2026-12-20",
+  "budget": 3000.0,
+  "group_size": 2,
+  "interests": [
+   "beach"
+  ],
+  "group_members": null,
+  "status": "failed",
+  "created_at": "2026-10-14T04:18:28.310147Z"
+ },
+ "status": {
+  "status": "failed",
+  "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+  "progress": {
+   "agents_done": 0,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "failed",
+    "hotel_agent": "pending",
+    "activities_agent": "pending"
+   },
+   "errors": {
+    "flight_agent": "No flights from DEL to GOI within ₹3,000."
+   },
+   "retryable": {
+    "flight_agent": false
+   }
+  },
+  "run": null,
+  "budget_conflict": {
+   "reason": "No flights found within the budget — cannot proceed with planning.",
+   "options": [
+    {
+     "choice": "cheaper_flights",
+     "saving": null,
+     "description": "Search for cheaper connecting flights",
+     "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+    },
+    {
+     "budget": 3750.0,
+     "choice": "increase_budget",
+     "saving": null,
+     "description": "Increase total budget to ₹3,750",
+     "estimated_saving": "Additional ₹750"
+    }
+   ],
+   "estimate": null
+  },
+  "failure_reason": null
+ },
+ "itineraries": [],
+ "runs": [
+  {
+   "id": "1d58feba-f332-47e3-a403-dd9904ab221b",
+   "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:18:28.354189Z"
+  },
+  {
+   "id": "991e8d67-4de9-49ff-84ae-a08efc5f429b",
+   "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "825594fa-39f8-44f1-9b65-d95f1d715bed"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:18:28.364279Z"
+  },
+  {
+   "id": "694cf0ad-1ffb-4c8f-a233-405fa0d70a6b",
+   "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+   "agent_name": "flight_agent",
+   "status": "failed",
+   "input": {
+    "date": "2026-12-16",
+    "budget": 3000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Goa",
+    "return_date": "2026-12-20",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": {
+     "code": "NO_RESULTS",
+     "error": "No flights from DEL to GOI within ₹3,000."
+    },
+    "flights": []
+   },
+   "duration_ms": 5842,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:18:34.209880Z"
+  },
+  {
+   "id": "d35bef80-0aac-4c01-9072-dfcc19651193",
+   "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 3000.0,
+    "cheapest_flight": 0.0,
+    "replan_attempts": 0,
+    "flights_evaluated": 0
+   },
+   "output": {
+    "reason": "No flights found within the budget — cannot proceed with planning.",
+    "decision": "escalate",
+    "flight_cost": 0.0,
+    "total_budget": 3000.0,
+    "remaining_budget": 0.0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:18:34.215757Z"
+  },
+  {
+   "id": "abd9f258-7ca8-485c-b4bf-0f20ebfc0e97",
+   "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+   "agent_name": "escalate",
+   "status": "completed",
+   "input": {
+    "flight_cost": 0.0,
+    "total_budget": 3000.0,
+    "remaining_budget": 0.0
+   },
+   "output": {
+    "reason": "No flights found within the budget — cannot proceed with planning.",
+    "options": [
+     {
+      "choice": "cheaper_flights",
+      "saving": null,
+      "description": "Search for cheaper connecting flights",
+      "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+     },
+     {
+      "budget": 3750.0,
+      "choice": "increase_budget",
+      "saving": null,
+      "description": "Increase total budget to ₹3,750",
+      "estimated_saving": "Additional ₹750"
+     }
+    ],
+    "estimate": null,
+    "trip_status": "failed"
+   },
+   "duration_ms": 3,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:18:34.223983Z"
+  },
+  {
+   "id": "861ae1fb-e427-4204-b1db-c4a6ddc612df",
+   "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+   "agent_name": "orchestrator",
+   "status": "failed",
+   "input": {
+    "budget": 3000.0,
+    "end_date": "2026-12-20",
+    "interests": [
+     "beach"
+    ],
+    "group_size": 2,
+    "start_date": "2026-12-16",
+    "destination": "Goa"
+   },
+   "output": {
+    "local_tips": false,
+    "hotel_status": "skipped",
+    "hotels_count": 0,
+    "itinerary_id": null,
+    "flight_status": "failed",
+    "flights_count": 0,
+    "budget_decision": {
+     "reason": "No flights found within the budget — cannot proceed with planning.",
+     "decision": "escalate",
+     "flight_cost": 0.0,
+     "total_budget": 3000.0,
+     "remaining_budget": 0.0
+    },
+    "replan_attempts": 0,
+    "activities_status": "skipped",
+    "attractions_count": 0,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 5874,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:18:34.227657Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": false,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-d34c7a5e83@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Goa",
+    "start_date": "2026-12-16",
+    "end_date": "2026-12-20",
+    "budget": 3000,
+    "group_size": 2,
+    "interests": [
+     "beach"
+    ]
+   },
+   "status": 201,
+   "seconds": 0.03,
+   "answer": {
+    "id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7",
+    "user_id": "825594fa-39f8-44f1-9b65-d95f1d715bed",
+    "destination": "Goa",
+    "start_date": "2026-12-16",
+    "end_date": "2026-12-20",
+    "budget": 3000.0,
+    "group_size": 2,
+    "interests": [
+     "beach"
+    ],
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-14T04:18:28.310147Z"
+   }
+  },
+  {
+   "request": "POST /trips/fdd1e6ed-e982-4469-846d-3c546ba3b1e7/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.01,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "fdd1e6ed-e982-4469-846d-3c546ba3b1e7"
+   }
+  }
+ ],
+ "seconds": 6.7
+}

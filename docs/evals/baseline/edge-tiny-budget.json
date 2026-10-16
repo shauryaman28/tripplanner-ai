@@ -1,0 +1,417 @@
+{
+ "scenario": "edge-tiny-budget",
+ "asked": {
+  "trip": {
+   "destination": "Goa",
+   "start_date": "2026-12-17",
+   "end_date": "2026-12-21",
+   "budget": 3000,
+   "group_size": 2,
+   "interests": [
+    "beach"
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "conflict"
+ ],
+ "outcome": "conflict",
+ "question": null,
+ "conflict": {
+  "reason": "The cheapest flight costs ₹24,252 — more than the whole budget of ₹3,000.",
+  "options": [
+   {
+    "fits": false,
+    "tier": "budget",
+    "total": 38000,
+    "choice": "cheaper_hotel",
+    "saving": 18500,
+    "nightly": 1700,
+    "description": "Stay at a budget hotel",
+    "estimated_saving": "About ₹18,500 less — ₹38,000 in all, ₹35,000 over budget"
+   },
+   {
+    "fits": false,
+    "month": 6,
+    "total": 40300,
+    "choice": "off_peak",
+    "saving": 16200,
+    "end_date": "2027-06-21",
+    "start_date": "2027-06-17",
+    "description": "Go in June instead — the monsoon",
+    "flight_saving": 6900,
+    "estimated_saving": "Flights about ₹6,900 less — ₹40,300 in all, ₹37,300 over budget"
+   },
+   {
+    "choice": "cheaper_flights",
+    "saving": null,
+    "description": "Search for cheaper connecting flights",
+    "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+   },
+   {
+    "budget": 49000,
+    "choice": "increase_budget",
+    "saving": null,
+    "description": "Increase total budget to ₹49,000",
+    "estimated_saving": "Additional ₹46,000"
+   }
+  ],
+  "estimate": {
+   "stay": "a 4-star hotel",
+   "about": "December is peak season in Goa: prices run about 40% above the off-season.",
+   "month": 12,
+   "total": 56500,
+   "budget": 3000,
+   "season": "peak",
+   "total_max": 67700,
+   "total_min": 45200,
+   "multiplier": 1.4
+  }
+ },
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+ "trip": {
+  "id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+  "user_id": "ef17192d-e551-4aa8-8ec9-bfa096361d11",
+  "destination": "Goa",
+  "start_date": "2026-12-17",
+  "end_date": "2026-12-21",
+  "budget": 3000.0,
+  "group_size": 2,
+  "interests": [
+   "beach"
+  ],
+  "group_members": null,
+  "status": "failed",
+  "created_at": "2026-10-15T12:28:56.306509Z"
+ },
+ "status": {
+  "status": "failed",
+  "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+  "progress": {
+   "agents_done": 0,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "failed",
+    "hotel_agent": "pending",
+    "activities_agent": "pending"
+   },
+   "errors": {
+    "flight_agent": "No flights from DEL to GOI within ₹3,000 — the cheapest is ₹24,252."
+   },
+   "retryable": {
+    "flight_agent": false
+   }
+  },
+  "run": null,
+  "budget_conflict": {
+   "reason": "The cheapest flight costs ₹24,252 — more than the whole budget of ₹3,000.",
+   "options": [
+    {
+     "fits": false,
+     "tier": "budget",
+     "total": 38000,
+     "choice": "cheaper_hotel",
+     "saving": 18500,
+     "nightly": 1700,
+     "description": "Stay at a budget hotel",
+     "estimated_saving": "About ₹18,500 less — ₹38,000 in all, ₹35,000 over budget"
+    },
+    {
+     "fits": false,
+     "month": 6,
+     "total": 40300,
+     "choice": "off_peak",
+     "saving": 16200,
+     "end_date": "2027-06-21",
+     "start_date": "2027-06-17",
+     "description": "Go in June instead — the monsoon",
+     "flight_saving": 6900,
+     "estimated_saving": "Flights about ₹6,900 less — ₹40,300 in all, ₹37,300 over budget"
+    },
+    {
+     "choice": "cheaper_flights",
+     "saving": null,
+     "description": "Search for cheaper connecting flights",
+     "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+    },
+    {
+     "budget": 49000,
+     "choice": "increase_budget",
+     "saving": null,
+     "description": "Increase total budget to ₹49,000",
+     "estimated_saving": "Additional ₹46,000"
+    }
+   ],
+   "estimate": {
+    "stay": "a 4-star hotel",
+    "about": "December is peak season in Goa: prices run about 40% above the off-season.",
+    "month": 12,
+    "total": 56500,
+    "budget": 3000,
+    "season": "peak",
+    "total_max": 67700,
+    "total_min": 45200,
+    "multiplier": 1.4
+   }
+  },
+  "failure_reason": null
+ },
+ "itineraries": [],
+ "runs": [
+  {
+   "id": "5efc64ab-6c9a-4aa0-a218-084cdc2b2a7f",
+   "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:56.331259Z"
+  },
+  {
+   "id": "a91310f5-747f-42c2-af74-591b22dc593d",
+   "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "ef17192d-e551-4aa8-8ec9-bfa096361d11"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:56.339505Z"
+  },
+  {
+   "id": "9efb7f9b-ed7b-4790-b277-a47baf20c373",
+   "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+   "agent_name": "flight_agent",
+   "status": "failed",
+   "input": {
+    "date": "2026-12-17",
+    "budget": 3000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Goa",
+    "return_date": "2026-12-21",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": {
+     "code": "NO_RESULTS",
+     "error": "No flights from DEL to GOI within ₹3,000 — the cheapest is ₹24,252.",
+     "cheapest_inr": 24251.5
+    },
+    "flights": []
+   },
+   "duration_ms": 1823,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:58.165400Z"
+  },
+  {
+   "id": "823a5e62-73ed-4e39-93be-3fe1685f828c",
+   "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 3000.0,
+    "cheapest_flight": 24251.5,
+    "replan_attempts": 0,
+    "flights_evaluated": 0
+   },
+   "output": {
+    "reason": "The cheapest flight costs ₹24,252 — more than the whole budget of ₹3,000.",
+    "decision": "escalate",
+    "flight_cost": 24251.5,
+    "total_budget": 3000.0,
+    "remaining_budget": 0.0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:58.174894Z"
+  },
+  {
+   "id": "ef786daa-6fec-43a9-9c43-b7da246055b4",
+   "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+   "agent_name": "escalate",
+   "status": "completed",
+   "input": {
+    "flight_cost": 24251.5,
+    "total_budget": 3000.0,
+    "remaining_budget": 0.0
+   },
+   "output": {
+    "reason": "The cheapest flight costs ₹24,252 — more than the whole budget of ₹3,000.",
+    "options": [
+     {
+      "fits": false,
+      "tier": "budget",
+      "total": 38000,
+      "choice": "cheaper_hotel",
+      "saving": 18500,
+      "nightly": 1700,
+      "description": "Stay at a budget hotel",
+      "estimated_saving": "About ₹18,500 less — ₹38,000 in all, ₹35,000 over budget"
+     },
+     {
+      "fits": false,
+      "month": 6,
+      "total": 40300,
+      "choice": "off_peak",
+      "saving": 16200,
+      "end_date": "2027-06-21",
+      "start_date": "2027-06-17",
+      "description": "Go in June instead — the monsoon",
+      "flight_saving": 6900,
+      "estimated_saving": "Flights about ₹6,900 less — ₹40,300 in all, ₹37,300 over budget"
+     },
+     {
+      "choice": "cheaper_flights",
+      "saving": null,
+      "description": "Search for cheaper connecting flights",
+      "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+     },
+     {
+      "budget": 49000,
+      "choice": "increase_budget",
+      "saving": null,
+      "description": "Increase total budget to ₹49,000",
+      "estimated_saving": "Additional ₹46,000"
+     }
+    ],
+    "estimate": {
+     "stay": "a 4-star hotel",
+     "about": "December is peak season in Goa: prices run about 40% above the off-season.",
+     "month": 12,
+     "total": 56500,
+     "budget": 3000,
+     "season": "peak",
+     "total_max": 67700,
+     "total_min": 45200,
+     "multiplier": 1.4
+    },
+    "trip_status": "failed"
+   },
+   "duration_ms": 6,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:58.186734Z"
+  },
+  {
+   "id": "b06f6f1b-0513-4c24-878a-3f3fb4581004",
+   "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+   "agent_name": "orchestrator",
+   "status": "failed",
+   "input": {
+    "budget": 3000.0,
+    "end_date": "2026-12-21",
+    "interests": [
+     "beach"
+    ],
+    "group_size": 2,
+    "start_date": "2026-12-17",
+    "destination": "Goa"
+   },
+   "output": {
+    "local_tips": false,
+    "hotel_status": "skipped",
+    "hotels_count": 0,
+    "itinerary_id": null,
+    "flight_status": "failed",
+    "flights_count": 0,
+    "budget_decision": {
+     "reason": "The cheapest flight costs ₹24,252 — more than the whole budget of ₹3,000.",
+     "decision": "escalate",
+     "flight_cost": 24251.5,
+     "total_budget": 3000.0,
+     "remaining_budget": 0.0
+    },
+    "replan_attempts": 0,
+    "activities_status": "skipped",
+    "attractions_count": 0,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 1861,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:58.192479Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": false,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-8dfeaa051c@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Goa",
+    "start_date": "2026-12-17",
+    "end_date": "2026-12-21",
+    "budget": 3000,
+    "group_size": 2,
+    "interests": [
+     "beach"
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1",
+    "user_id": "ef17192d-e551-4aa8-8ec9-bfa096361d11",
+    "destination": "Goa",
+    "start_date": "2026-12-17",
+    "end_date": "2026-12-21",
+    "budget": 3000.0,
+    "group_size": 2,
+    "interests": [
+     "beach"
+    ],
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-15T12:28:56.306509Z"
+   }
+  },
+  {
+   "request": "POST /trips/2f97b094-b0d7-4bc0-b293-e0a373e17ee1/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.01,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "2f97b094-b0d7-4bc0-b293-e0a373e17ee1"
+   }
+  }
+ ],
+ "seconds": 3.5,
+ "asleep_s": 0.0
+}

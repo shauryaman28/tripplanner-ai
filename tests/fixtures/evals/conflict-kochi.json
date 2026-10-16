@@ -1,0 +1,510 @@
+{
+ "scenario": "conflict-kochi",
+ "asked": {
+  "trip": {
+   "destination": "Kochi",
+   "start_date": "2026-12-04",
+   "end_date": "2026-12-07",
+   "budget": 12000,
+   "group_size": 2,
+   "interests": [
+    "food",
+    "culture"
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": [
+   "increase_budget"
+  ]
+ },
+ "events": [
+  "created",
+  "conflict",
+  "chose increase_budget",
+  "conflict"
+ ],
+ "outcome": "conflict",
+ "question": null,
+ "conflict": {
+  "reason": "No flights found within the budget — cannot proceed with planning.",
+  "options": [
+   {
+    "choice": "cheaper_flights",
+    "saving": null,
+    "description": "Search for cheaper connecting flights",
+    "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+   },
+   {
+    "budget": 15000.0,
+    "choice": "increase_budget",
+    "saving": null,
+    "description": "Increase total budget to ₹15,000",
+    "estimated_saving": "Additional ₹3,000"
+   }
+  ],
+  "estimate": null
+ },
+ "choice_taken": "increase_budget",
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+ "trip": {
+  "id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+  "user_id": "e0405cba-4da5-4df1-ba30-2959485b909f",
+  "destination": "Kochi",
+  "start_date": "2026-12-04",
+  "end_date": "2026-12-07",
+  "budget": 15000.0,
+  "group_size": 2,
+  "interests": [
+   "food",
+   "culture"
+  ],
+  "group_members": null,
+  "status": "failed",
+  "created_at": "2026-10-14T04:51:23.255586Z"
+ },
+ "status": {
+  "status": "failed",
+  "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+  "progress": {
+   "agents_done": 0,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "failed",
+    "hotel_agent": "pending",
+    "activities_agent": "pending"
+   },
+   "errors": {
+    "flight_agent": "No flights from DEL to COK within ₹15,000."
+   },
+   "retryable": {
+    "flight_agent": false
+   }
+  },
+  "run": null,
+  "budget_conflict": {
+   "reason": "No flights found within the budget — cannot proceed with planning.",
+   "options": [
+    {
+     "choice": "cheaper_flights",
+     "saving": null,
+     "description": "Search for cheaper connecting flights",
+     "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+    },
+    {
+     "budget": 18750.0,
+     "choice": "increase_budget",
+     "saving": null,
+     "description": "Increase total budget to ₹18,750",
+     "estimated_saving": "Additional ₹3,750"
+    }
+   ],
+   "estimate": null
+  },
+  "failure_reason": null
+ },
+ "itineraries": [],
+ "runs": [
+  {
+   "id": "24a35b46-dcb6-43a5-bb2f-6e9a1cc31cdb",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:51:58.573021Z"
+  },
+  {
+   "id": "04e91a9f-fbd6-427f-9cf3-c1087df87293",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "e0405cba-4da5-4df1-ba30-2959485b909f"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:51:58.587523Z"
+  },
+  {
+   "id": "babcb30f-78cd-43e5-bc70-dbea8b3efcca",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "flight_agent",
+   "status": "failed",
+   "input": {
+    "date": "2026-12-04",
+    "budget": 12000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Kochi",
+    "return_date": "2026-12-07",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": {
+     "code": "NO_RESULTS",
+     "error": "No flights from DEL to COK within ₹12,000."
+    },
+    "flights": []
+   },
+   "duration_ms": 19,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:51:58.612510Z"
+  },
+  {
+   "id": "486d46b5-3684-4e5f-bf82-e22575767bab",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 12000.0,
+    "cheapest_flight": 0.0,
+    "replan_attempts": 0,
+    "flights_evaluated": 0
+   },
+   "output": {
+    "reason": "No flights found within the budget — cannot proceed with planning.",
+    "decision": "escalate",
+    "flight_cost": 0.0,
+    "total_budget": 12000.0,
+    "remaining_budget": 0.0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:51:58.617841Z"
+  },
+  {
+   "id": "30378a2c-1411-4e2b-b1ee-30dfeba1dd60",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "escalate",
+   "status": "completed",
+   "input": {
+    "flight_cost": 0.0,
+    "total_budget": 12000.0,
+    "remaining_budget": 0.0
+   },
+   "output": {
+    "reason": "No flights found within the budget — cannot proceed with planning.",
+    "options": [
+     {
+      "choice": "cheaper_flights",
+      "saving": null,
+      "description": "Search for cheaper connecting flights",
+      "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+     },
+     {
+      "budget": 15000.0,
+      "choice": "increase_budget",
+      "saving": null,
+      "description": "Increase total budget to ₹15,000",
+      "estimated_saving": "Additional ₹3,000"
+     }
+    ],
+    "estimate": null,
+    "trip_status": "failed"
+   },
+   "duration_ms": 6,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:51:58.628608Z"
+  },
+  {
+   "id": "7319ff58-8078-4920-91f0-87b02e5d61dd",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "orchestrator",
+   "status": "failed",
+   "input": {
+    "budget": 12000.0,
+    "end_date": "2026-12-07",
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "group_size": 2,
+    "start_date": "2026-12-04",
+    "destination": "Kochi"
+   },
+   "output": {
+    "local_tips": false,
+    "hotel_status": "skipped",
+    "hotels_count": 0,
+    "itinerary_id": null,
+    "flight_status": "failed",
+    "flights_count": 0,
+    "budget_decision": {
+     "reason": "No flights found within the budget — cannot proceed with planning.",
+     "decision": "escalate",
+     "flight_cost": 0.0,
+     "total_budget": 12000.0,
+     "remaining_budget": 0.0
+    },
+    "replan_attempts": 0,
+    "activities_status": "skipped",
+    "attractions_count": 0,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 62,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:51:58.634022Z"
+  },
+  {
+   "id": "2b126ea9-1e4a-46c9-9cf2-27b584a52123",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:52:00.164015Z"
+  },
+  {
+   "id": "2f3ceb80-b42c-4aa9-9d67-205a00aeaf98",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "e0405cba-4da5-4df1-ba30-2959485b909f"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:52:00.178704Z"
+  },
+  {
+   "id": "014f8580-8057-4c7b-8d1a-ee10168a3551",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "flight_agent",
+   "status": "failed",
+   "input": {
+    "date": "2026-12-04",
+    "budget": 15000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Kochi",
+    "return_date": "2026-12-07",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": {
+     "code": "NO_RESULTS",
+     "error": "No flights from DEL to COK within ₹15,000."
+    },
+    "flights": []
+   },
+   "duration_ms": 16,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:52:00.200837Z"
+  },
+  {
+   "id": "ccf70dd0-b061-4932-9283-71fcbe6b6573",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 15000.0,
+    "cheapest_flight": 0.0,
+    "replan_attempts": 0,
+    "flights_evaluated": 0
+   },
+   "output": {
+    "reason": "No flights found within the budget — cannot proceed with planning.",
+    "decision": "escalate",
+    "flight_cost": 0.0,
+    "total_budget": 15000.0,
+    "remaining_budget": 0.0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:52:00.206500Z"
+  },
+  {
+   "id": "18f93c20-55ea-423c-818c-1c54a4aae973",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "escalate",
+   "status": "completed",
+   "input": {
+    "flight_cost": 0.0,
+    "total_budget": 15000.0,
+    "remaining_budget": 0.0
+   },
+   "output": {
+    "reason": "No flights found within the budget — cannot proceed with planning.",
+    "options": [
+     {
+      "choice": "cheaper_flights",
+      "saving": null,
+      "description": "Search for cheaper connecting flights",
+      "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+     },
+     {
+      "budget": 18750.0,
+      "choice": "increase_budget",
+      "saving": null,
+      "description": "Increase total budget to ₹18,750",
+      "estimated_saving": "Additional ₹3,750"
+     }
+    ],
+    "estimate": null,
+    "trip_status": "failed"
+   },
+   "duration_ms": 6,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:52:00.218151Z"
+  },
+  {
+   "id": "e0647101-cf18-45d2-95e6-cf1fa9b7dd11",
+   "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+   "agent_name": "orchestrator",
+   "status": "failed",
+   "input": {
+    "budget": 15000.0,
+    "end_date": "2026-12-07",
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "group_size": 2,
+    "start_date": "2026-12-04",
+    "destination": "Kochi",
+    "budget_choice": null,
+    "replan_attempts": 0
+   },
+   "output": {
+    "local_tips": false,
+    "hotel_status": "skipped",
+    "hotels_count": 0,
+    "itinerary_id": null,
+    "flight_status": "failed",
+    "flights_count": 0,
+    "budget_decision": {
+     "reason": "No flights found within the budget — cannot proceed with planning.",
+     "decision": "escalate",
+     "flight_cost": 0.0,
+     "total_budget": 15000.0,
+     "remaining_budget": 0.0
+    },
+    "replan_attempts": 0,
+    "activities_status": "skipped",
+    "attractions_count": 0,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 60,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-14T04:52:00.223429Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": false,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-f70dbfd7d9@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Kochi",
+    "start_date": "2026-12-04",
+    "end_date": "2026-12-07",
+    "budget": 12000,
+    "group_size": 2,
+    "interests": [
+     "food",
+     "culture"
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+    "user_id": "e0405cba-4da5-4df1-ba30-2959485b909f",
+    "destination": "Kochi",
+    "start_date": "2026-12-04",
+    "end_date": "2026-12-07",
+    "budget": 12000.0,
+    "group_size": 2,
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-14T04:51:23.255586Z"
+   }
+  },
+  {
+   "request": "POST /trips/863cb94b-b342-47a6-a98d-ae5ede256fbe/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.02,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe"
+   }
+  },
+  {
+   "request": "POST /trips/863cb94b-b342-47a6-a98d-ae5ede256fbe/replan",
+   "sent": {
+    "choice": "increase_budget"
+   },
+   "status": 200,
+   "seconds": 0.01,
+   "answer": {
+    "status": "replanning_started",
+    "trip_id": "863cb94b-b342-47a6-a98d-ae5ede256fbe",
+    "choice": "increase_budget"
+   }
+  }
+ ],
+ "seconds": 38.9
+}

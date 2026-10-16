@@ -78,6 +78,18 @@ def make_budget_decision(
         )
 
     if not flights or total_budget <= 0:
+        # Phase 33: a search that found flights, all over the budget, says what the cheapest cost — and that
+        # is the fare the ways out are priced from. Without it, "raise the budget" was 25% more, whatever the
+        # fares: a way out that led back into the same conflict.
+        fare = float((flight_error or {}).get("cheapest_inr") or 0.0)
+        if fare > 0 and total_budget > 0:
+            return BudgetDecision(
+                decision="escalate",
+                reason=f"The cheapest flight costs ₹{fare:,.0f} — more than the whole budget of ₹{total_budget:,.0f}.",
+                remaining_budget=0.0,
+                flight_cost=fare,
+                total_budget=total_budget,
+            )
         return BudgetDecision(
             decision="escalate",
             reason="No flights found within the budget — cannot proceed with planning.",

@@ -539,9 +539,12 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
     # --- this traveller's budget and airlines, applied to the shared answer ---
     flights = [f for f in on_offer if f.price_inr <= input.budget]
     if not flights:
+        cheapest = min((f.price_inr for f in on_offer), default=None)  # Phase 33: what it would take
         return ToolError(
-            error=f"No flights from {origin} to {destination} within ₹{input.budget:,.0f}.",
+            error=f"No flights from {origin} to {destination} within ₹{input.budget:,.0f}"
+            + (f" — the cheapest is ₹{cheapest:,.0f}." if cheapest is not None else "."),
             code="NO_RESULTS",
+            cheapest_inr=cheapest,
         )
     if input.preferred_airlines:
         preferred = {code.strip().upper() for code in input.preferred_airlines}

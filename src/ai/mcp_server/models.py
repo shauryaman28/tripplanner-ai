@@ -135,6 +135,10 @@ class BudgetEstimate(BaseModel):
 class ToolError(BaseModel):
     error: str
     code: str
+    # Phase 33: a flight search with nothing within the budget says what the cheapest flight did cost. Without
+    # it the budget check knew no fare, and offered to raise the budget by a blind 25% — a way out that
+    # led back into the same conflict (the eval suite's conflict-kochi, docs/phase33_build_log.md).
+    cheapest_inr: float | None = None
 
 
 # Phase 29 — besides its answer, the tool server tells its caller what its cache did for the call:

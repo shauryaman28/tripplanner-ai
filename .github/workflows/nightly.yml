@@ -1,7 +1,8 @@
 # Every night (Phase 28): the tests that need real services, and one comment that says how it went.
 #
 #   02:00 UTC   the integration tests, on a real Postgres (with pgvector) and a real Redis;
-#               the eval suite, once there is one (Phase 33);
+#               the eval suite (Phase 33): fifteen real plans, graded by Claude Haiku 4.5 — skipped,
+#               not failed, until the keys it needs are repository secrets;
 #               the result, as a comment on the issue labelled "nightly" — made the first night.
 #
 # Also startable by hand (Actions → Nightly → Run workflow), and by pushing a branch named
@@ -28,7 +29,7 @@ jobs:
   tests:
     name: integration tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35 # the eval suite is about 11 minutes on the providers' free tiers, and has 25 at most
 
     services:
       postgres:
@@ -82,14 +83,25 @@ jobs:
         continue-on-error: true
         run: pytest tests/integration/ -v --junitxml=reports/integration.xml
 
-      - name: Eval suite (Phase 33 — runs once there is one)
+      - name: Eval suite (Phase 33)
         continue-on-error: true
+        timeout-minutes: 25
+        # The plans are real, and so is the grader. Without these secrets the suite writes a report that
+        # says it was not run, and the summary shows it skipped. Exit 1 is an average below 3.5.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          DUFFEL_ACCESS_TOKEN: ${{ secrets.DUFFEL_ACCESS_TOKEN }}
+          LITEAPI_API_KEY: ${{ secrets.LITEAPI_API_KEY }}
+          OPENTRIPMAP_API_KEY: ${{ secrets.OPENTRIPMAP_API_KEY }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
         run: |
-          if [ -d tests/eval ]; then
-            pytest tests/eval/ -v --junitxml=reports/evals.xml
-          else
-            echo "No eval suite yet (tests/eval does not exist): Phase 33."
-          fi
+          verdict=0
+          python scripts/run_eval.py --assert-min-score 3.5 \
+            --junit reports/evals.xml --results reports/ --evidence reports/eval-evidence --no-history || verdict=$?
+          cat reports/eval-results-*.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          exit $verdict
 
       - name: Write the night's summary
         id: summary
@@ -100,7 +112,7 @@ jobs:
           verdict=0
           python scripts/nightly_summary.py reports/ \
             --require integration \
-            --absent evals="no eval suite yet (Phase 33)" \
+            --require evals \
             --commit "$GITHUB_SHA" \
             --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > summary.md || verdict=$?
           cat summary.md >> "$GITHUB_STEP_SUMMARY"

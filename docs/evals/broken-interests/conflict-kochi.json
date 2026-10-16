@@ -1,0 +1,1437 @@
+{
+ "scenario": "conflict-kochi",
+ "asked": {
+  "trip": {
+   "destination": "Kochi",
+   "start_date": "2026-12-05",
+   "end_date": "2026-12-08",
+   "budget": 12000,
+   "group_size": 2,
+   "interests": [
+    "food",
+    "culture"
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": [
+   "increase_budget"
+  ]
+ },
+ "events": [
+  "created",
+  "conflict",
+  "chose increase_budget",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": null,
+ "conflict": {
+  "reason": "The cheapest flight costs ₹30,767 — more than the whole budget of ₹12,000.",
+  "options": [
+   {
+    "fits": false,
+    "tier": "budget",
+    "total": 41400,
+    "choice": "cheaper_hotel",
+    "saving": 13900,
+    "nightly": 1700,
+    "description": "Stay at a budget hotel",
+    "estimated_saving": "About ₹13,900 less — ₹41,400 in all, ₹29,400 over budget"
+   },
+   {
+    "fits": false,
+    "month": 6,
+    "total": 39500,
+    "choice": "off_peak",
+    "saving": 15800,
+    "end_date": "2027-06-08",
+    "start_date": "2027-06-05",
+    "description": "Go in June instead — the monsoon",
+    "flight_saving": 8800,
+    "estimated_saving": "Flights about ₹8,800 less — ₹39,500 in all, ₹27,500 over budget"
+   },
+   {
+    "choice": "cheaper_flights",
+    "saving": null,
+    "description": "Search for cheaper connecting flights",
+    "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+   },
+   {
+    "budget": 62000,
+    "choice": "increase_budget",
+    "saving": null,
+    "description": "Increase total budget to ₹62,000",
+    "estimated_saving": "Additional ₹50,000"
+   }
+  ],
+  "estimate": {
+   "stay": "a 4-star hotel",
+   "about": "December is peak season in Kochi: prices run about 40% above the off-season.",
+   "month": 12,
+   "total": 55300,
+   "budget": 12000,
+   "season": "peak",
+   "total_max": 66300,
+   "total_min": 44200,
+   "multiplier": 1.4
+  }
+ },
+ "choice_taken": "increase_budget",
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+ "trip": {
+  "id": "7ac72605-c6a5-4949-b49b-d22718989964",
+  "user_id": "f008d062-a4f8-48ee-a72f-4cebee54bd09",
+  "destination": "Kochi",
+  "start_date": "2026-12-05",
+  "end_date": "2026-12-08",
+  "budget": 62000.0,
+  "group_size": 2,
+  "interests": [
+   "food",
+   "culture"
+  ],
+  "group_members": null,
+  "status": "completed",
+  "created_at": "2026-10-15T12:38:09.501675Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "31695e16-b654-4749-9fd7-96e8859e8948",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-05",
+      "hotel": {
+       "lat": 9.961188,
+       "lng": 76.245136,
+       "name": "Elim Homestay",
+       "stars": 3,
+       "rating": 8.4,
+       "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+       "cost_per_night": 2071.07
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "AA",
+       "arrival": "2026-12-05T06:23:00",
+       "departure": "2026-12-05T03:05:00",
+       "price_inr": 30767.1,
+       "destination": {
+        "lat": 10.151891,
+        "lng": 76.397429,
+        "code": "COK",
+        "name": "Cochin International Airport"
+       },
+       "duration_mins": 198,
+       "flight_number": "AA-1274"
+      },
+      "evening": {
+       "lat": 9.964810371398926,
+       "lng": 76.24276733398438,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Santa Cruz Basilica",
+       "category": "spiritual"
+      },
+      "morning": {
+       "lat": 9.968191146850586,
+       "lng": 76.2421646118164,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Chinese Fishing Nets",
+       "category": "sightseeing"
+      },
+      "afternoon": {
+       "lat": 9.96484088897705,
+       "lng": 76.24275970458984,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Santa Cruz Cathedral Basilica",
+       "category": "spiritual"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-12-06",
+      "hotel": {
+       "lat": 9.961188,
+       "lng": 76.245136,
+       "name": "Elim Homestay",
+       "stars": 3,
+       "rating": 8.4,
+       "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+       "cost_per_night": 2071.07
+      },
+      "flight": null,
+      "evening": {
+       "lat": 9.965957641601562,
+       "lng": 76.24102783203125,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Saint Francis CSI Church",
+       "category": "spiritual"
+      },
+      "morning": {
+       "lat": 9.964774131774902,
+       "lng": 76.24273681640625,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Roman Catholic Diocese of Cochin",
+       "category": "spiritual"
+      },
+      "afternoon": {
+       "lat": 9.965947151184082,
+       "lng": 76.2410659790039,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "St. Francis Church",
+       "category": "spiritual"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-12-07",
+      "hotel": {
+       "lat": 9.961188,
+       "lng": 76.245136,
+       "name": "Elim Homestay",
+       "stars": 3,
+       "rating": 8.4,
+       "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+       "cost_per_night": 2071.07
+      },
+      "flight": null,
+      "evening": {
+       "lat": 9.973475456237793,
+       "lng": 76.2433090209961,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Our Lady of Hope Church",
+       "category": "spiritual"
+      },
+      "morning": {
+       "lat": 9.967170715332031,
+       "lng": 76.23998260498047,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Mahatma Gandhi Beach",
+       "category": "beach"
+      },
+      "afternoon": {
+       "lat": 9.966316223144531,
+       "lng": 76.239013671875,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 7.0,
+       "activity": "Fort Immanuel,Fort Kochi",
+       "category": "history"
+      }
+     },
+     {
+      "day": 4,
+      "date": "2026-12-08",
+      "hotel": null,
+      "flight": null,
+      "evening": null,
+      "morning": {
+       "lat": 9.96231460571289,
+       "lng": 76.24027252197266,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Indo-Portuguese Museum",
+       "category": "museum"
+      },
+      "afternoon": null
+     }
+    ],
+    "group": null,
+    "missing": null,
+    "currency": "INR",
+    "total_cost": 36980.31,
+    "per_person_cost": 18490.15,
+    "local_intelligence": {
+     "best_times": {
+      "Fort Kochi Beach": "Early morning, 6-8 am, for cool breezes and sunrise photography without crowds.",
+      "Jewish Synagogue": "Mid-day, 12-1 pm, to catch guided tours that run on the hour and avoid long lines.",
+      "Mattancherry Palace": "Late afternoon, 4-5 pm, when light highlights the murals and the palace is less busy.",
+      "Kerala Folklore Museum": "Morning, 9-11 am, when the museum is quiet and you can fully appreciate the artifacts.",
+      "Marine Drive promenade": "Evening, 7-9 pm, for a lively street-food scene and sea-view sunset."
+     },
+     "safety_tips": [
+      "December evenings can be damp; keep your footwear waterproof to avoid slipping on wet pavements.",
+      "Pickpocketing occurs in crowded markets; keep wallets in front pockets and use a zippered bag.",
+      "Auto-rickshaw drivers may overcharge tourists; always confirm the fare or ask for the meter before starting.",
+      "Be cautious of stray dogs near backwater docks; avoid feeding them and keep a safe distance."
+     ],
+     "tourist_traps": [
+      "Avoid overpriced seafood at waterfront restaurants that cater to tourists; head to local stalls in Fort Kochi for authentic flavors.",
+      "Skip the heavily marketed spice market tours that charge high fees; explore the bustling Broadway market yourself for cheaper spices.",
+      "Don’t rely on unlicensed boat operators for backwater trips; book through reputable agencies or the state tourism office.",
+      "Beware of souvenir shops selling fake ivory; purchase handcrafted items from certified cooperatives instead."
+     ],
+     "cultural_norms": [
+      "Remove shoes before entering temples and traditional homes; a small donation is appreciated.",
+      "Dress modestly at religious sites—cover shoulders and knees.",
+      "When offered tea or snacks, accept politely; refusing may be seen as rude.",
+      "Handshake is common, but older locals may prefer a slight bow or namaste."
+     ],
+     "local_transport": "Use auto-rickshaws with meter for short trips and the Kochi Metro for traffic-free rides across the city."
+    },
+    "per_person_breakdown": {
+     "stay": 3106.61,
+     "total": 18490.15,
+     "shares": [
+      {
+       "name": "Traveller 1",
+       "amount": 18490
+      },
+      {
+       "name": "Traveller 2",
+       "amount": 18490
+      }
+     ],
+     "flights": 15383.55,
+     "activities": 0.0,
+     "travellers": 2
+    }
+   },
+   "total_cost": 36980.31,
+   "created_at": "2026-10-15T12:38:52.492285Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "12a29d4b-ff68-4aca-8cf1-1e6293cf410a",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:43.404475Z"
+  },
+  {
+   "id": "3b9bdf94-0d4e-4271-9969-f7090a072af3",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "f008d062-a4f8-48ee-a72f-4cebee54bd09"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:43.415683Z"
+  },
+  {
+   "id": "9019f889-a215-41a5-b707-7f9c934e2028",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "flight_agent",
+   "status": "failed",
+   "input": {
+    "date": "2026-12-05",
+    "budget": 12000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Kochi",
+    "return_date": "2026-12-08",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": {
+     "code": "NO_RESULTS",
+     "error": "No flights from DEL to COK within ₹12,000 — the cheapest is ₹30,767.",
+     "cheapest_inr": 30767.1
+    },
+    "flights": []
+   },
+   "duration_ms": 16,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:43.436283Z"
+  },
+  {
+   "id": "9476e447-4bbb-46f7-bd78-df1cb07ca1b6",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 12000.0,
+    "cheapest_flight": 30767.1,
+    "replan_attempts": 0,
+    "flights_evaluated": 0
+   },
+   "output": {
+    "reason": "The cheapest flight costs ₹30,767 — more than the whole budget of ₹12,000.",
+    "decision": "escalate",
+    "flight_cost": 30767.1,
+    "total_budget": 12000.0,
+    "remaining_budget": 0.0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:43.440065Z"
+  },
+  {
+   "id": "ee6349e6-8b67-479c-a445-7c18b6e158a6",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "escalate",
+   "status": "completed",
+   "input": {
+    "flight_cost": 30767.1,
+    "total_budget": 12000.0,
+    "remaining_budget": 0.0
+   },
+   "output": {
+    "reason": "The cheapest flight costs ₹30,767 — more than the whole budget of ₹12,000.",
+    "options": [
+     {
+      "fits": false,
+      "tier": "budget",
+      "total": 41400,
+      "choice": "cheaper_hotel",
+      "saving": 13900,
+      "nightly": 1700,
+      "description": "Stay at a budget hotel",
+      "estimated_saving": "About ₹13,900 less — ₹41,400 in all, ₹29,400 over budget"
+     },
+     {
+      "fits": false,
+      "month": 6,
+      "total": 39500,
+      "choice": "off_peak",
+      "saving": 15800,
+      "end_date": "2027-06-08",
+      "start_date": "2027-06-05",
+      "description": "Go in June instead — the monsoon",
+      "flight_saving": 8800,
+      "estimated_saving": "Flights about ₹8,800 less — ₹39,500 in all, ₹27,500 over budget"
+     },
+     {
+      "choice": "cheaper_flights",
+      "saving": null,
+      "description": "Search for cheaper connecting flights",
+      "estimated_saving": "Flights with up to two stops, searched again before anything is planned"
+     },
+     {
+      "budget": 62000,
+      "choice": "increase_budget",
+      "saving": null,
+      "description": "Increase total budget to ₹62,000",
+      "estimated_saving": "Additional ₹50,000"
+     }
+    ],
+    "estimate": {
+     "stay": "a 4-star hotel",
+     "about": "December is peak season in Kochi: prices run about 40% above the off-season.",
+     "month": 12,
+     "total": 55300,
+     "budget": 12000,
+     "season": "peak",
+     "total_max": 66300,
+     "total_min": 44200,
+     "multiplier": 1.4
+    },
+    "trip_status": "failed"
+   },
+   "duration_ms": 3,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:43.448060Z"
+  },
+  {
+   "id": "7bbad394-76c6-45c2-8f9d-8c6aea0b96b9",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "orchestrator",
+   "status": "failed",
+   "input": {
+    "budget": 12000.0,
+    "end_date": "2026-12-08",
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "group_size": 2,
+    "start_date": "2026-12-05",
+    "destination": "Kochi"
+   },
+   "output": {
+    "local_tips": false,
+    "hotel_status": "skipped",
+    "hotels_count": 0,
+    "itinerary_id": null,
+    "flight_status": "failed",
+    "flights_count": 0,
+    "budget_decision": {
+     "reason": "The cheapest flight costs ₹30,767 — more than the whole budget of ₹12,000.",
+     "decision": "escalate",
+     "flight_cost": 30767.1,
+     "total_budget": 12000.0,
+     "remaining_budget": 0.0
+    },
+    "replan_attempts": 0,
+    "activities_status": "skipped",
+    "attractions_count": 0,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 48,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:43.451530Z"
+  },
+  {
+   "id": "68f12cd7-bd55-4e18-a9f3-3b6ffc6f3c28",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:45.005106Z"
+  },
+  {
+   "id": "8b0098d1-11cf-4c34-a42b-77d29d4b0040",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "f008d062-a4f8-48ee-a72f-4cebee54bd09"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:45.016713Z"
+  },
+  {
+   "id": "f67a42a8-bc2d-42ec-8741-6b5f5c64dcdb",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-05",
+    "budget": 62000,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 2,
+    "destination": "Kochi",
+    "return_date": "2026-12-08",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-05T06:23:00",
+      "departure": "2026-12-05T03:05:00",
+      "price_inr": 30767.1,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-05T06:23:00",
+      "departure": "2026-12-05T03:05:00",
+      "price_inr": 32234.02,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "ZZ-3744"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-05T18:35:00",
+      "departure": "2026-12-05T15:25:00",
+      "price_inr": 57853.25,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 190,
+      "flight_number": "AI-2473"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-05T18:35:00",
+      "departure": "2026-12-05T15:25:00",
+      "price_inr": 58193.59,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 190,
+      "flight_number": "AI-2473"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-05T18:35:00",
+      "departure": "2026-12-05T15:25:00",
+      "price_inr": 60579.61,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 190,
+      "flight_number": "AI-2473"
+     }
+    ]
+   },
+   "duration_ms": 15,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:45.037091Z"
+  },
+  {
+   "id": "55054b27-716c-4c49-9154-35966361712e",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 62000,
+    "cheapest_flight": 30767.1,
+    "replan_attempts": 0,
+    "flights_evaluated": 5
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹30,767; ₹31,233 (50%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 30767.1,
+    "total_budget": 62000.0,
+    "remaining_budget": 31232.9
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:45.042711Z"
+  },
+  {
+   "id": "b31b70b8-aecb-4f56-9639-d59bef4e77e6",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 2,
+    "check_in": "2026-12-05",
+    "check_out": "2026-12-08",
+    "destination": "Kochi",
+    "budget_per_night": 10410.97
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 9.961188,
+      "lng": 76.245136,
+      "name": "Elim Homestay",
+      "stars": 3,
+      "rating": 8.4,
+      "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+      "price_per_night_inr": 2071.07
+     },
+     {
+      "lat": 9.95212,
+      "lng": 76.248764,
+      "name": "Hotel Fort Queen",
+      "stars": 3,
+      "rating": 8.2,
+      "address": "Manthra Road, Pandikkudy, Fort Kochi, Kochi, Kerala, 682 002, Kochi",
+      "price_per_night_inr": 2914.62
+     },
+     {
+      "lat": 9.959546,
+      "lng": 76.239776,
+      "name": "Nathan's Holiday Home",
+      "stars": 2,
+      "rating": 9.0,
+      "address": "11/637-A, MacKenzie Garden, Pattalam, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+      "price_per_night_inr": 2922.81
+     },
+     {
+      "lat": 10.140974,
+      "lng": 76.19395,
+      "name": "V K G Group Holiday Hotel",
+      "stars": 4,
+      "rating": 10.0,
+      "address": "Munambam Road, Cherai, Kochi, Kerala, 683514, Kochi",
+      "price_per_night_inr": 2957.27
+     },
+     {
+      "lat": 9.959357,
+      "lng": 76.268873,
+      "name": "The Fern Kochi, Series by Marriott",
+      "stars": 4,
+      "rating": 8.6,
+      "address": "Bristow Road Willingdon Island, Kochi, Kerala, 682003, Kochi",
+      "price_per_night_inr": 8665.78
+     }
+    ]
+   },
+   "duration_ms": 31,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:45.079441Z"
+  },
+  {
+   "id": "e7a6d851-2900-48f9-9459-399be4644c1b",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "limit": 10,
+    "interests": [
+     "sightseeing"
+    ],
+    "destination": "Kochi"
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 9.968191146850586,
+      "lng": 76.2421646118164,
+      "name": "Chinese Fishing Nets",
+      "rating": 3.0,
+      "category": "sightseeing",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular sightseeing attraction in Kochi."
+     },
+     {
+      "lat": 9.96484088897705,
+      "lng": 76.24275970458984,
+      "name": "Santa Cruz Cathedral Basilica",
+      "rating": 7.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Kochi."
+     },
+     {
+      "lat": 9.964810371398926,
+      "lng": 76.24276733398438,
+      "name": "Santa Cruz Basilica",
+      "rating": 7.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Kochi."
+     },
+     {
+      "lat": 9.964774131774902,
+      "lng": 76.24273681640625,
+      "name": "Roman Catholic Diocese of Cochin",
+      "rating": 3.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Kochi."
+     },
+     {
+      "lat": 9.965947151184082,
+      "lng": 76.2410659790039,
+      "name": "St. Francis Church",
+      "rating": 7.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Kochi."
+     },
+     {
+      "lat": 9.965957641601562,
+      "lng": 76.24102783203125,
+      "name": "Saint Francis CSI Church",
+      "rating": 7.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Kochi."
+     },
+     {
+      "lat": 9.967170715332031,
+      "lng": 76.23998260498047,
+      "name": "Mahatma Gandhi Beach",
+      "rating": 2.0,
+      "category": "beach",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular beach attraction in Kochi."
+     },
+     {
+      "lat": 9.966316223144531,
+      "lng": 76.239013671875,
+      "name": "Fort Immanuel,Fort Kochi",
+      "rating": 7.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Kochi."
+     },
+     {
+      "lat": 9.973475456237793,
+      "lng": 76.2433090209961,
+      "name": "Our Lady of Hope Church",
+      "rating": 2.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Kochi."
+     },
+     {
+      "lat": 9.96231460571289,
+      "lng": 76.24027252197266,
+      "name": "Indo-Portuguese Museum",
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular museum attraction in Kochi."
+     }
+    ]
+   },
+   "duration_ms": 32,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:45.082496Z"
+  },
+  {
+   "id": "a0110030-bc02-4b05-94e7-a3ce22a4e9d8",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 4,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "travellers": 2,
+    "destination": "Kochi"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Fort Kochi Beach": "Early morning, 6-8 am, for cool breezes and sunrise photography without crowds.",
+      "Jewish Synagogue": "Mid-day, 12-1 pm, to catch guided tours that run on the hour and avoid long lines.",
+      "Mattancherry Palace": "Late afternoon, 4-5 pm, when light highlights the murals and the palace is less busy.",
+      "Kerala Folklore Museum": "Morning, 9-11 am, when the museum is quiet and you can fully appreciate the artifacts.",
+      "Marine Drive promenade": "Evening, 7-9 pm, for a lively street-food scene and sea-view sunset."
+     },
+     "safety_tips": [
+      "December evenings can be damp; keep your footwear waterproof to avoid slipping on wet pavements.",
+      "Pickpocketing occurs in crowded markets; keep wallets in front pockets and use a zippered bag.",
+      "Auto-rickshaw drivers may overcharge tourists; always confirm the fare or ask for the meter before starting.",
+      "Be cautious of stray dogs near backwater docks; avoid feeding them and keep a safe distance."
+     ],
+     "tourist_traps": [
+      "Avoid overpriced seafood at waterfront restaurants that cater to tourists; head to local stalls in Fort Kochi for authentic flavors.",
+      "Skip the heavily marketed spice market tours that charge high fees; explore the bustling Broadway market yourself for cheaper spices.",
+      "Don’t rely on unlicensed boat operators for backwater trips; book through reputable agencies or the state tourism office.",
+      "Beware of souvenir shops selling fake ivory; purchase handcrafted items from certified cooperatives instead."
+     ],
+     "cultural_norms": [
+      "Remove shoes before entering temples and traditional homes; a small donation is appreciated.",
+      "Dress modestly at religious sites—cover shoulders and knees.",
+      "When offered tea or snacks, accept politely; refusing may be seen as rude.",
+      "Handshake is common, but older locals may prefer a slight bow or namaste."
+     ],
+     "local_transport": "Use auto-rickshaws with meter for short trips and the Kochi Metro for traffic-free rides across the city."
+    }
+   },
+   "duration_ms": 1517,
+   "turn": 1,
+   "token_count": 978,
+   "cost_usd": 0.0003861,
+   "created_at": "2026-10-15T12:38:46.567164Z"
+  },
+  {
+   "id": "e4163df4-8ba8-4d5a-8130-cad719d67fc5",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-08",
+     "group_size": 2,
+     "start_date": "2026-12-05",
+     "destination": "Kochi"
+    },
+    "hotels_count": 5,
+    "flights_count": 5,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-05",
+       "hotel": {
+        "lat": 9.961188,
+        "lng": 76.245136,
+        "name": "Elim Homestay",
+        "stars": 3,
+        "rating": 8.4,
+        "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+        "cost_per_night": 2071.07
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "AA",
+        "arrival": "2026-12-05T06:23:00",
+        "departure": "2026-12-05T03:05:00",
+        "price_inr": 30767.1,
+        "destination": {
+         "lat": 10.151891,
+         "lng": 76.397429,
+         "code": "COK",
+         "name": "Cochin International Airport"
+        },
+        "duration_mins": 198,
+        "flight_number": "AA-1274"
+       },
+       "evening": {
+        "lat": 9.964810371398926,
+        "lng": 76.24276733398438,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Santa Cruz Basilica",
+        "category": "spiritual"
+       },
+       "morning": {
+        "lat": 9.968191146850586,
+        "lng": 76.2421646118164,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Chinese Fishing Nets",
+        "category": "sightseeing"
+       },
+       "afternoon": {
+        "lat": 9.96484088897705,
+        "lng": 76.24275970458984,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Santa Cruz Cathedral Basilica",
+        "category": "spiritual"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-12-06",
+       "hotel": {
+        "lat": 9.961188,
+        "lng": 76.245136,
+        "name": "Elim Homestay",
+        "stars": 3,
+        "rating": 8.4,
+        "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+        "cost_per_night": 2071.07
+       },
+       "flight": null,
+       "evening": {
+        "lat": 9.965957641601562,
+        "lng": 76.24102783203125,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Saint Francis CSI Church",
+        "category": "spiritual"
+       },
+       "morning": {
+        "lat": 9.964774131774902,
+        "lng": 76.24273681640625,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Roman Catholic Diocese of Cochin",
+        "category": "spiritual"
+       },
+       "afternoon": {
+        "lat": 9.965947151184082,
+        "lng": 76.2410659790039,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "St. Francis Church",
+        "category": "spiritual"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-12-07",
+       "hotel": {
+        "lat": 9.961188,
+        "lng": 76.245136,
+        "name": "Elim Homestay",
+        "stars": 3,
+        "rating": 8.4,
+        "address": "Chirattapalam, Near Bus Stop, Fort Kochi, Kochi, Kerala, 682001, Kochi",
+        "cost_per_night": 2071.07
+       },
+       "flight": null,
+       "evening": {
+        "lat": 9.973475456237793,
+        "lng": 76.2433090209961,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Our Lady of Hope Church",
+        "category": "spiritual"
+       },
+       "morning": {
+        "lat": 9.967170715332031,
+        "lng": 76.23998260498047,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Mahatma Gandhi Beach",
+        "category": "beach"
+       },
+       "afternoon": {
+        "lat": 9.966316223144531,
+        "lng": 76.239013671875,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 7.0,
+        "activity": "Fort Immanuel,Fort Kochi",
+        "category": "history"
+       }
+      },
+      {
+       "day": 4,
+       "date": "2026-12-08",
+       "hotel": null,
+       "flight": null,
+       "evening": null,
+       "morning": {
+        "lat": 9.96231460571289,
+        "lng": 76.24027252197266,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Indo-Portuguese Museum",
+        "category": "museum"
+       },
+       "afternoon": null
+      }
+     ],
+     "group": null,
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 36980.31,
+     "per_person_cost": 18490.15,
+     "local_intelligence": {
+      "best_times": {
+       "Fort Kochi Beach": "Early morning, 6-8 am, for cool breezes and sunrise photography without crowds.",
+       "Jewish Synagogue": "Mid-day, 12-1 pm, to catch guided tours that run on the hour and avoid long lines.",
+       "Mattancherry Palace": "Late afternoon, 4-5 pm, when light highlights the murals and the palace is less busy.",
+       "Kerala Folklore Museum": "Morning, 9-11 am, when the museum is quiet and you can fully appreciate the artifacts.",
+       "Marine Drive promenade": "Evening, 7-9 pm, for a lively street-food scene and sea-view sunset."
+      },
+      "safety_tips": [
+       "December evenings can be damp; keep your footwear waterproof to avoid slipping on wet pavements.",
+       "Pickpocketing occurs in crowded markets; keep wallets in front pockets and use a zippered bag.",
+       "Auto-rickshaw drivers may overcharge tourists; always confirm the fare or ask for the meter before starting.",
+       "Be cautious of stray dogs near backwater docks; avoid feeding them and keep a safe distance."
+      ],
+      "tourist_traps": [
+       "Avoid overpriced seafood at waterfront restaurants that cater to tourists; head to local stalls in Fort Kochi for authentic flavors.",
+       "Skip the heavily marketed spice market tours that charge high fees; explore the bustling Broadway market yourself for cheaper spices.",
+       "Don’t rely on unlicensed boat operators for backwater trips; book through reputable agencies or the state tourism office.",
+       "Beware of souvenir shops selling fake ivory; purchase handcrafted items from certified cooperatives instead."
+      ],
+      "cultural_norms": [
+       "Remove shoes before entering temples and traditional homes; a small donation is appreciated.",
+       "Dress modestly at religious sites—cover shoulders and knees.",
+       "When offered tea or snacks, accept politely; refusing may be seen as rude.",
+       "Handshake is common, but older locals may prefer a slight bow or namaste."
+      ],
+      "local_transport": "Use auto-rickshaws with meter for short trips and the Kochi Metro for traffic-free rides across the city."
+     },
+     "per_person_breakdown": {
+      "stay": 3106.61,
+      "total": 18490.15,
+      "shares": [
+       {
+        "name": "Traveller 1",
+        "amount": 18490
+       },
+       {
+        "name": "Traveller 2",
+        "amount": 18490
+       }
+      ],
+      "flights": 15383.55,
+      "activities": 0.0,
+      "travellers": 2
+     }
+    },
+    "error": null
+   },
+   "duration_ms": 5890,
+   "turn": 1,
+   "token_count": 4722,
+   "cost_usd": 0.00166545,
+   "created_at": "2026-10-15T12:38:52.473042Z"
+  },
+  {
+   "id": "516e9329-6357-4bb4-9bbd-3a0e3440335a",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-08",
+    "trip_start": "2026-12-05",
+    "retry_count": 0,
+    "budget_range": [
+     29584.248,
+     44376.371999999996
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 36980.31
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:52.486198Z"
+  },
+  {
+   "id": "406fc926-0bfb-491f-967e-175c78112729",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 4,
+    "total_cost": 36980.31
+   },
+   "output": {
+    "missing": [],
+    "trip_status": "completed",
+    "itinerary_id": "31695e16-b654-4749-9fd7-96e8859e8948",
+    "unmapped_activities": []
+   },
+   "duration_ms": 12,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:52.504655Z"
+  },
+  {
+   "id": "28b58045-81b4-462e-8990-435a256d3a15",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Elim Homestay"
+     ],
+     "nights": 3,
+     "interests": [
+      "food",
+      "culture"
+     ],
+     "group_size": 2,
+     "destination": "Kochi",
+     "user_message": null,
+     "top_activities": [
+      "Chinese Fishing Nets",
+      "Santa Cruz Cathedral Basilica",
+      "Santa Cruz Basilica",
+      "Roman Catholic Diocese of Cochin",
+      "St. Francis Church",
+      "Saint Francis CSI Church",
+      "Mahatma Gandhi Beach",
+      "Fort Immanuel,Fort Kochi"
+     ],
+     "total_cost_inr": 36980.31,
+     "avg_hotel_stars": 3.0,
+     "per_person_per_night_inr": 6163
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "mid-range"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 952,
+   "turn": 1,
+   "token_count": 769,
+   "cost_usd": 0.00019995,
+   "created_at": "2026-10-15T12:38:53.477014Z"
+  },
+  {
+   "id": "cdb1ea47-8e49-437b-b355-ff7500705906",
+   "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 62000,
+    "end_date": "2026-12-08",
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "group_size": 2,
+    "start_date": "2026-12-05",
+    "destination": "Kochi",
+    "budget_choice": null,
+    "replan_attempts": 0
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "31695e16-b654-4749-9fd7-96e8859e8948",
+    "flight_status": "completed",
+    "flights_count": 5,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹30,767; ₹31,233 (50%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 30767.1,
+     "total_budget": 62000.0,
+     "remaining_budget": 31232.9
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 8481,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:38:53.485444Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-c7013f5b47@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Kochi",
+    "start_date": "2026-12-05",
+    "end_date": "2026-12-08",
+    "budget": 12000,
+    "group_size": 2,
+    "interests": [
+     "food",
+     "culture"
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "7ac72605-c6a5-4949-b49b-d22718989964",
+    "user_id": "f008d062-a4f8-48ee-a72f-4cebee54bd09",
+    "destination": "Kochi",
+    "start_date": "2026-12-05",
+    "end_date": "2026-12-08",
+    "budget": 12000.0,
+    "group_size": 2,
+    "interests": [
+     "food",
+     "culture"
+    ],
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-15T12:38:09.501675Z"
+   }
+  },
+  {
+   "request": "POST /trips/7ac72605-c6a5-4949-b49b-d22718989964/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.02,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964"
+   }
+  },
+  {
+   "request": "POST /trips/7ac72605-c6a5-4949-b49b-d22718989964/replan",
+   "sent": {
+    "choice": "increase_budget"
+   },
+   "status": 200,
+   "seconds": 0.06,
+   "answer": {
+    "status": "replanning_started",
+    "trip_id": "7ac72605-c6a5-4949-b49b-d22718989964",
+    "choice": "increase_budget"
+   }
+  }
+ ],
+ "seconds": 45.1,
+ "asleep_s": 0.0
+}

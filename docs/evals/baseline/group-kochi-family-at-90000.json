@@ -1,0 +1,741 @@
+{
+ "scenario": "group-kochi-family",
+ "asked": {
+  "trip": {
+   "destination": "Kochi",
+   "start_date": "2026-12-15",
+   "end_date": "2026-12-18",
+   "budget": 90000,
+   "group_members": [
+    {
+     "name": "Asha",
+     "interests": [
+      "museums"
+     ]
+    },
+    {
+     "name": "Ravi",
+     "interests": [
+      "food"
+     ]
+    },
+    {
+     "name": "Mira",
+     "interests": [
+      "nature"
+     ]
+    }
+   ]
+  },
+  "message": null,
+  "answer": null,
+  "choice": []
+ },
+ "events": [
+  "created",
+  "conflict"
+ ],
+ "outcome": "conflict",
+ "question": null,
+ "conflict": {
+  "reason": "Flights cost ₹47,917 (₹42,083 = 47% remaining). Maximum re-planning attempts (2) reached.",
+  "options": [
+   {
+    "fits": true,
+    "tier": "standard",
+    "total": 77300,
+    "choice": "cheaper_hotel",
+    "saving": 16800,
+    "nightly": 7000,
+    "description": "Stay at a 3-star hotel",
+    "estimated_saving": "About ₹16,800 less — ₹77,300 in all, within budget"
+   },
+   {
+    "days": 3,
+    "fits": true,
+    "total": 79400,
+    "choice": "reduce_days",
+    "saving": 14700,
+    "description": "Make it 3 days instead of 4",
+    "estimated_saving": "About ₹14,700 less — ₹79,400 in all, within budget"
+   },
+   {
+    "fits": true,
+    "month": 6,
+    "total": 67200,
+    "choice": "off_peak",
+    "saving": 26900,
+    "end_date": "2027-06-18",
+    "start_date": "2027-06-15",
+    "description": "Go in June instead — the monsoon",
+    "flight_saving": 13700,
+    "estimated_saving": "Flights about ₹13,700 less — ₹67,200 in all, within budget"
+   },
+   {
+    "budget": 112500.0,
+    "choice": "increase_budget",
+    "saving": null,
+    "description": "Increase total budget to ₹112,500",
+    "estimated_saving": "Additional ₹22,500"
+   }
+  ],
+  "estimate": {
+   "stay": "a 4-star hotel",
+   "about": "December is peak season in Kochi: prices run about 40% above the off-season.",
+   "month": 12,
+   "total": 94100,
+   "budget": 90000,
+   "season": "peak",
+   "total_max": 112900,
+   "total_min": 75300,
+   "multiplier": 1.4
+  }
+ },
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+ "trip": {
+  "id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+  "user_id": "e42aff79-1d1c-4b22-ab2c-13c2c86939fa",
+  "destination": "Kochi",
+  "start_date": "2026-12-15",
+  "end_date": "2026-12-18",
+  "budget": 90000.0,
+  "group_size": 3,
+  "interests": [
+   "museums",
+   "food",
+   "nature"
+  ],
+  "group_members": [
+   {
+    "name": "Asha",
+    "interests": [
+     "museums"
+    ]
+   },
+   {
+    "name": "Ravi",
+    "interests": [
+     "food"
+    ]
+   },
+   {
+    "name": "Mira",
+    "interests": [
+     "nature"
+    ]
+   }
+  ],
+  "status": "failed",
+  "created_at": "2026-10-15T12:28:15.870136Z"
+ },
+ "status": {
+  "status": "failed",
+  "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+  "progress": {
+   "agents_done": 1,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "pending",
+    "activities_agent": "pending"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": {
+   "reason": "Flights cost ₹47,917 (₹42,083 = 47% remaining). Maximum re-planning attempts (2) reached.",
+   "options": [
+    {
+     "fits": true,
+     "tier": "standard",
+     "total": 77300,
+     "choice": "cheaper_hotel",
+     "saving": 16800,
+     "nightly": 7000,
+     "description": "Stay at a 3-star hotel",
+     "estimated_saving": "About ₹16,800 less — ₹77,300 in all, within budget"
+    },
+    {
+     "days": 3,
+     "fits": true,
+     "total": 79400,
+     "choice": "reduce_days",
+     "saving": 14700,
+     "description": "Make it 3 days instead of 4",
+     "estimated_saving": "About ₹14,700 less — ₹79,400 in all, within budget"
+    },
+    {
+     "fits": true,
+     "month": 6,
+     "total": 67200,
+     "choice": "off_peak",
+     "saving": 26900,
+     "end_date": "2027-06-18",
+     "start_date": "2027-06-15",
+     "description": "Go in June instead — the monsoon",
+     "flight_saving": 13700,
+     "estimated_saving": "Flights about ₹13,700 less — ₹67,200 in all, within budget"
+    },
+    {
+     "budget": 112500.0,
+     "choice": "increase_budget",
+     "saving": null,
+     "description": "Increase total budget to ₹112,500",
+     "estimated_saving": "Additional ₹22,500"
+    }
+   ],
+   "estimate": {
+    "stay": "a 4-star hotel",
+    "about": "December is peak season in Kochi: prices run about 40% above the off-season.",
+    "month": 12,
+    "total": 94100,
+    "budget": 90000,
+    "season": "peak",
+    "total_max": 112900,
+    "total_min": 75300,
+    "multiplier": 1.4
+   }
+  },
+  "failure_reason": null
+ },
+ "itineraries": [],
+ "runs": [
+  {
+   "id": "492d2a2c-96f2-4455-aea8-b6d05b036803",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": null,
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": true,
+    "extracted_fields": {}
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:49.771854Z"
+  },
+  {
+   "id": "ea416933-316a-4eda-ae65-191c98de9e10",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "e42aff79-1d1c-4b22-ab2c-13c2c86939fa"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 1,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:49.782988Z"
+  },
+  {
+   "id": "616758eb-b782-42d3-9133-0aa2d30f3a21",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-15",
+    "budget": 90000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 3,
+    "destination": "Kochi",
+    "return_date": "2026-12-18",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 46442.76,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 48004.32,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "ZZ-3744"
+     }
+    ]
+   },
+   "duration_ms": 17,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:49.805093Z"
+  },
+  {
+   "id": "78cd7468-5322-4587-9ab6-1d504ccbdde8",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 90000.0,
+    "cheapest_flight": 46442.76,
+    "replan_attempts": 0,
+    "flights_evaluated": 2
+   },
+   "output": {
+    "reason": "Flights cost ₹46,443 leaving ₹43,557 (48% of budget). Searching for cheaper options (attempt 1/2).",
+    "decision": "replan",
+    "flight_cost": 46442.76,
+    "total_budget": 90000.0,
+    "remaining_budget": 43557.24
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:49.810930Z"
+  },
+  {
+   "id": "fb99162e-cdff-4c08-af14-1ec33770fcde",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-15",
+    "budget": 58500.0,
+    "origin": "DEL",
+    "max_stops": 2,
+    "passengers": 3,
+    "destination": "Kochi",
+    "return_date": "2026-12-18",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 47916.96,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 49033.53,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "ZZ-3744"
+     }
+    ]
+   },
+   "duration_ms": 5982,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:55.798872Z"
+  },
+  {
+   "id": "ae00c887-8a58-4140-ae2d-72141814822c",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 90000.0,
+    "cheapest_flight": 47916.96,
+    "replan_attempts": 1,
+    "flights_evaluated": 2
+   },
+   "output": {
+    "reason": "Flights cost ₹47,917 leaving ₹42,083 (47% of budget). Searching for cheaper options (attempt 2/2).",
+    "decision": "replan",
+    "flight_cost": 47916.96,
+    "total_budget": 90000.0,
+    "remaining_budget": 42083.04
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:55.809845Z"
+  },
+  {
+   "id": "1b9b93fc-cf27-43c6-bcc0-8a6a856a0845",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-15",
+    "budget": 49500.00000000001,
+    "origin": "DEL",
+    "max_stops": 2,
+    "passengers": 3,
+    "destination": "Kochi",
+    "return_date": "2026-12-18",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 47916.96,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-15T14:08:00",
+      "departure": "2026-12-15T10:50:00",
+      "price_inr": 49033.53,
+      "destination": {
+       "lat": 10.151891,
+       "lng": 76.397429,
+       "code": "COK",
+       "name": "Cochin International Airport"
+      },
+      "duration_mins": 198,
+      "flight_number": "ZZ-3744"
+     }
+    ]
+   },
+   "duration_ms": 18,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:55.836189Z"
+  },
+  {
+   "id": "e6e0c4e7-da67-4523-8926-637b1774320a",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 90000.0,
+    "cheapest_flight": 47916.96,
+    "replan_attempts": 2,
+    "flights_evaluated": 2
+   },
+   "output": {
+    "reason": "Flights cost ₹47,917 (₹42,083 = 47% remaining). Maximum re-planning attempts (2) reached.",
+    "decision": "escalate",
+    "flight_cost": 47916.96,
+    "total_budget": 90000.0,
+    "remaining_budget": 42083.04
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:55.842451Z"
+  },
+  {
+   "id": "293e5013-2c2b-49f5-9708-58eea5b6fd55",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "escalate",
+   "status": "completed",
+   "input": {
+    "flight_cost": 47916.96,
+    "total_budget": 90000.0,
+    "remaining_budget": 42083.04
+   },
+   "output": {
+    "reason": "Flights cost ₹47,917 (₹42,083 = 47% remaining). Maximum re-planning attempts (2) reached.",
+    "options": [
+     {
+      "fits": true,
+      "tier": "standard",
+      "total": 77300,
+      "choice": "cheaper_hotel",
+      "saving": 16800,
+      "nightly": 7000,
+      "description": "Stay at a 3-star hotel",
+      "estimated_saving": "About ₹16,800 less — ₹77,300 in all, within budget"
+     },
+     {
+      "days": 3,
+      "fits": true,
+      "total": 79400,
+      "choice": "reduce_days",
+      "saving": 14700,
+      "description": "Make it 3 days instead of 4",
+      "estimated_saving": "About ₹14,700 less — ₹79,400 in all, within budget"
+     },
+     {
+      "fits": true,
+      "month": 6,
+      "total": 67200,
+      "choice": "off_peak",
+      "saving": 26900,
+      "end_date": "2027-06-18",
+      "start_date": "2027-06-15",
+      "description": "Go in June instead — the monsoon",
+      "flight_saving": 13700,
+      "estimated_saving": "Flights about ₹13,700 less — ₹67,200 in all, within budget"
+     },
+     {
+      "budget": 112500.0,
+      "choice": "increase_budget",
+      "saving": null,
+      "description": "Increase total budget to ₹112,500",
+      "estimated_saving": "Additional ₹22,500"
+     }
+    ],
+    "estimate": {
+     "stay": "a 4-star hotel",
+     "about": "December is peak season in Kochi: prices run about 40% above the off-season.",
+     "month": 12,
+     "total": 94100,
+     "budget": 90000,
+     "season": "peak",
+     "total_max": 112900,
+     "total_min": 75300,
+     "multiplier": 1.4
+    },
+    "trip_status": "failed"
+   },
+   "duration_ms": 4,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:55.852447Z"
+  },
+  {
+   "id": "11f00fd1-b2dc-4d28-b69c-eb7839bf5be4",
+   "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+   "agent_name": "orchestrator",
+   "status": "failed",
+   "input": {
+    "budget": 90000.0,
+    "end_date": "2026-12-18",
+    "interests": [
+     "museums",
+     "food",
+     "nature"
+    ],
+    "group_size": 3,
+    "start_date": "2026-12-15",
+    "destination": "Kochi",
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ]
+   },
+   "output": {
+    "local_tips": false,
+    "hotel_status": "skipped",
+    "hotels_count": 0,
+    "itinerary_id": null,
+    "flight_status": "completed",
+    "flights_count": 2,
+    "budget_decision": {
+     "reason": "Flights cost ₹47,917 (₹42,083 = 47% remaining). Maximum re-planning attempts (2) reached.",
+     "decision": "escalate",
+     "flight_cost": 47916.96,
+     "total_budget": 90000.0,
+     "remaining_budget": 42083.04
+    },
+    "replan_attempts": 2,
+    "activities_status": "skipped",
+    "attractions_count": 0,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 6086,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:28:55.856833Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": false,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-3b3cf732dc@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Kochi",
+    "start_date": "2026-12-15",
+    "end_date": "2026-12-18",
+    "budget": 90000,
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ]
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "a4605f06-8eab-49e2-bd76-c2358278dd8a",
+    "user_id": "e42aff79-1d1c-4b22-ab2c-13c2c86939fa",
+    "destination": "Kochi",
+    "start_date": "2026-12-15",
+    "end_date": "2026-12-18",
+    "budget": 90000.0,
+    "group_size": 3,
+    "interests": [
+     "museums",
+     "food",
+     "nature"
+    ],
+    "group_members": [
+     {
+      "name": "Asha",
+      "interests": [
+       "museums"
+      ]
+     },
+     {
+      "name": "Ravi",
+      "interests": [
+       "food"
+      ]
+     },
+     {
+      "name": "Mira",
+      "interests": [
+       "nature"
+      ]
+     }
+    ],
+    "status": "pending",
+    "created_at": "2026-10-15T12:28:15.870136Z"
+   }
+  },
+  {
+   "request": "POST /trips/a4605f06-8eab-49e2-bd76-c2358278dd8a/plan",
+   "sent": {},
+   "status": 202,
+   "seconds": 0.02,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "a4605f06-8eab-49e2-bd76-c2358278dd8a"
+   }
+  }
+ ],
+ "seconds": 40.4,
+ "asleep_s": 0.0
+}

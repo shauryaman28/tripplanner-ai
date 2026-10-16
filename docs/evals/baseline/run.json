@@ -1,0 +1,23 @@
+{
+ "began": "2026-10-15T12:22:44",
+ "seconds": 522.5,
+ "waited_s": 379.9,
+ "asleep_s": 0.0,
+ "commit": "ca9cd19f3b0a79f939e5e9e556ce27f37849194b+changes",
+ "against": "this checkout, served at http://127.0.0.1:52592 against its own database",
+ "gap_s": 45.0,
+ "asked_again": [
+  {
+   "began": "2026-10-15T12:35:51",
+   "seconds": 15.9,
+   "waited_s": 0.0,
+   "asleep_s": 0.0,
+   "commit": "9b47504eb0fa1e43586598dbc5a8a8412efcdb3c",
+   "against": "this checkout, served at http://127.0.0.1:52902 against its own database",
+   "gap_s": 45.0,
+   "scenarios": [
+    "group-kochi-family"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,1078 @@
+{
+ "scenario": "ambiguous-amritsar",
+ "asked": {
+  "trip": {
+   "destination": "Amritsar",
+   "start_date": "2026-12-09",
+   "end_date": "2026-12-11",
+   "budget": 40000,
+   "group_size": 1
+  },
+  "message": null,
+  "answer": "Mostly history, and the street food everyone talks about",
+  "choice": []
+ },
+ "events": [
+  "created",
+  "asked",
+  "answered",
+  "planned"
+ ],
+ "outcome": "plan",
+ "question": "What kinds of activities do you enjoy? (e.g. history, food, adventure, beach)",
+ "conflict": null,
+ "choice_taken": null,
+ "failure_reason": null,
+ "refinement": null,
+ "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+ "trip": {
+  "id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+  "user_id": "811213fa-786a-4fa9-a7fa-ea8c10422e8a",
+  "destination": "Amritsar",
+  "start_date": "2026-12-09",
+  "end_date": "2026-12-11",
+  "budget": 40000.0,
+  "group_size": 1,
+  "interests": null,
+  "group_members": null,
+  "status": "completed",
+  "created_at": "2026-10-15T12:39:41.298100Z"
+ },
+ "status": {
+  "status": "completed",
+  "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+  "progress": {
+   "agents_done": 3,
+   "agents_total": 3,
+   "agents": {
+    "flight_agent": "completed",
+    "hotel_agent": "completed",
+    "activities_agent": "completed"
+   },
+   "errors": {},
+   "retryable": {}
+  },
+  "run": null,
+  "budget_conflict": null,
+  "failure_reason": null
+ },
+ "itineraries": [
+  {
+   "id": "e760e615-3586-4b94-b97b-81e00e8d2ed0",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "content": null,
+   "structured_data": {
+    "days": [
+     {
+      "day": 1,
+      "date": "2026-12-09",
+      "hotel": {
+       "lat": 31.618541,
+       "lng": 74.883327,
+       "name": "Madpackers Amritsar",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "1555,Bazar kahiyan Wala, Near Dholli Mohalla, Inside Sultanwind Gate, Amritsar",
+       "cost_per_night": 2161.07
+      },
+      "flight": {
+       "stops": 0,
+       "origin": {
+        "lat": 28.558498,
+        "lng": 77.100193,
+        "code": "DEL",
+        "name": "Indira Gandhi International Airport"
+       },
+       "airline": "ZZ",
+       "arrival": "2026-12-09T07:19:00",
+       "departure": "2026-12-09T06:11:00",
+       "price_inr": 5415.41,
+       "destination": {
+        "lat": 31.707601,
+        "lng": 74.802036,
+        "code": "ATQ",
+        "name": "Sri Guru Ram Dass Jee International Airport"
+       },
+       "duration_mins": 68,
+       "flight_number": "ZZ-3744"
+      },
+      "evening": {
+       "lat": 31.643939971923828,
+       "lng": 74.87557983398438,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Bhai Vir Singh Memorial House",
+       "category": "history"
+      },
+      "morning": {
+       "lat": 31.636350631713867,
+       "lng": 74.8787841796875,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 6.0,
+       "activity": "Ram Bagh Road",
+       "category": "history"
+      },
+      "afternoon": {
+       "lat": 31.637666702270508,
+       "lng": 74.87716674804688,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 6.0,
+       "activity": "Summer Palace of Maharaja Ranjit Singh",
+       "category": "history"
+      }
+     },
+     {
+      "day": 2,
+      "date": "2026-12-10",
+      "hotel": {
+       "lat": 31.618541,
+       "lng": 74.883327,
+       "name": "Madpackers Amritsar",
+       "stars": 0,
+       "rating": 9.0,
+       "address": "1555,Bazar kahiyan Wala, Near Dholli Mohalla, Inside Sultanwind Gate, Amritsar",
+       "cost_per_night": 2161.07
+      },
+      "flight": null,
+      "evening": {
+       "lat": 31.622812271118164,
+       "lng": 74.8733139038086,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "ਗੁਰਦਵਾਰਾ ਗੁਰੂ ਕੇ ਮਹਿਲ",
+       "category": "spiritual"
+      },
+      "morning": {
+       "lat": 31.625701904296875,
+       "lng": 74.8790512084961,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Partition Museum",
+       "category": "museum"
+      },
+      "afternoon": {
+       "lat": 31.627229690551758,
+       "lng": 74.8674087524414,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Durgiana Mandir",
+       "category": "spiritual"
+      }
+     },
+     {
+      "day": 3,
+      "date": "2026-12-11",
+      "hotel": null,
+      "flight": null,
+      "evening": {
+       "lat": 31.620637893676758,
+       "lng": 74.87532806396484,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 3.0,
+       "activity": "Sri Akal Takht Sahib",
+       "category": "spiritual"
+      },
+      "morning": {
+       "lat": 31.637300491333008,
+       "lng": 74.8611068725586,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "Mata Lal Devi Mandir",
+       "category": "spiritual"
+      },
+      "afternoon": {
+       "lat": 31.620708465576172,
+       "lng": 74.8751220703125,
+       "cost": 0.0,
+       "suits": null,
+       "rating": 2.0,
+       "activity": "ਗੁਰਦੁਆਰਾ ਬਾਬਾ ਗੁਰਬਖਸ਼ ਸਿੰਘ ਜੀ ਸ਼ਹੀਦ",
+       "category": "spiritual"
+      }
+     }
+    ],
+    "group": null,
+    "missing": null,
+    "currency": "INR",
+    "total_cost": 9737.55,
+    "per_person_cost": 9737.55,
+    "local_intelligence": {
+     "best_times": {
+      "Hall Bazaar": "Evening (7:00-9:00 pm) for bustling street-food stalls and lively ambience.",
+      "Golden Temple": "Early morning (5:30-7:00 am) for serene prayers and cooler air.",
+      "Jallianwala Bagh": "Late afternoon (4:00-5:30 pm) when light softens the monuments.",
+      "Maharaja Ranjit Singh Museum": "Midday (12:00-2:00 pm) when guided tours are available and crowds thin."
+     },
+     "safety_tips": [
+      "December evenings can be foggy; keep a flashlight handy when walking near the river.",
+      "Pickpockets target crowded markets; keep wallet in a front zip pocket.",
+      "Cold weather can cause sudden chills; carry a light sweater for early morning temple visits."
+     ],
+     "tourist_traps": [
+      "Street stalls near the temple charge inflated prices for samosa; walk a few blocks to the Hall Bazaar for authentic, cheaper bites.",
+      "Guided “heritage walks” often include mandatory souvenir purchases; hire a local guide independently instead.",
+      "Avoid taxis that claim a flat rate of ₹500 for short trips; negotiate or use the meter."
+     ],
+     "cultural_norms": [
+      "Cover your head before entering the Golden Temple and remove shoes.",
+      "Avoid public displays of affection; modesty is valued.",
+      "When offered food, accept at least a bite as a sign of respect."
+     ],
+     "local_transport": "Auto-rickshaws and cycle-ricks are cheap and plentiful; use the city bus for longer hops between the Golden Temple and Jallianwala Bagh."
+    },
+    "per_person_breakdown": null
+   },
+   "total_cost": 9737.55,
+   "created_at": "2026-10-15T12:40:27.940122Z"
+  }
+ ],
+ "runs": [
+  {
+   "id": "4b6c04a6-4001-498c-a865-953ad5302d76",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "intent_parsing",
+   "status": "completed",
+   "input": {
+    "raw_input": "Mostly history, and the street food everyone talks about",
+    "destination_text": null
+   },
+   "output": {
+    "pass_through": false,
+    "extracted_fields": {
+     "interests": [
+      "history",
+      "street food"
+     ]
+    }
+   },
+   "duration_ms": 1250,
+   "turn": 1,
+   "token_count": 422,
+   "cost_usd": 0.0002828,
+   "created_at": "2026-10-15T12:40:17.984171Z"
+  },
+  {
+   "id": "cb8490de-0f4f-4385-b452-cac20c75e113",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "preferences",
+   "status": "completed",
+   "input": {
+    "user_id": "811213fa-786a-4fa9-a7fa-ea8c10422e8a"
+   },
+   "output": {
+    "loaded": false,
+    "preferences": null,
+    "state_updates": {}
+   },
+   "duration_ms": 2,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:18.005574Z"
+  },
+  {
+   "id": "1762f9a1-7685-451d-a050-c25df633287d",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "flight_agent",
+   "status": "completed",
+   "input": {
+    "date": "2026-12-09",
+    "budget": 40000.0,
+    "origin": "DEL",
+    "max_stops": 1,
+    "passengers": 1,
+    "destination": "Amritsar",
+    "return_date": "2026-12-11",
+    "preferred_airlines": []
+   },
+   "output": {
+    "error": null,
+    "flights": [
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "ZZ",
+      "arrival": "2026-12-09T07:19:00",
+      "departure": "2026-12-09T06:11:00",
+      "price_inr": 5415.41,
+      "destination": {
+       "lat": 31.707601,
+       "lng": 74.802036,
+       "code": "ATQ",
+       "name": "Sri Guru Ram Dass Jee International Airport"
+      },
+      "duration_mins": 68,
+      "flight_number": "ZZ-3744"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "BA",
+      "arrival": "2026-12-09T07:19:00",
+      "departure": "2026-12-09T06:11:00",
+      "price_inr": 5430.88,
+      "destination": {
+       "lat": 31.707601,
+       "lng": 74.802036,
+       "code": "ATQ",
+       "name": "Sri Guru Ram Dass Jee International Airport"
+      },
+      "duration_mins": 68,
+      "flight_number": "BA-0109"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AA",
+      "arrival": "2026-12-09T07:19:00",
+      "departure": "2026-12-09T06:11:00",
+      "price_inr": 5470.01,
+      "destination": {
+       "lat": 31.707601,
+       "lng": 74.802036,
+       "code": "ATQ",
+       "name": "Sri Guru Ram Dass Jee International Airport"
+      },
+      "duration_mins": 68,
+      "flight_number": "AA-1274"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-09T15:25:00",
+      "departure": "2026-12-09T14:10:00",
+      "price_inr": 17907.89,
+      "destination": {
+       "lat": 31.707601,
+       "lng": 74.802036,
+       "code": "ATQ",
+       "name": "Sri Guru Ram Dass Jee International Airport"
+      },
+      "duration_mins": 75,
+      "flight_number": "AI-2967"
+     },
+     {
+      "stops": 0,
+      "origin": {
+       "lat": 28.558498,
+       "lng": 77.100193,
+       "code": "DEL",
+       "name": "Indira Gandhi International Airport"
+      },
+      "airline": "AI",
+      "arrival": "2026-12-09T15:25:00",
+      "departure": "2026-12-09T14:10:00",
+      "price_inr": 17907.89,
+      "destination": {
+       "lat": 31.707601,
+       "lng": 74.802036,
+       "code": "ATQ",
+       "name": "Sri Guru Ram Dass Jee International Airport"
+      },
+      "duration_mins": 75,
+      "flight_number": "AI-2967"
+     }
+    ]
+   },
+   "duration_ms": 25,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:18.041007Z"
+  },
+  {
+   "id": "c36f54b7-9a08-4637-93a6-b4e7a9e216d2",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "budget_decision",
+   "status": "completed",
+   "input": {
+    "total_budget": 40000.0,
+    "cheapest_flight": 5415.41,
+    "replan_attempts": 0,
+    "flights_evaluated": 5
+   },
+   "output": {
+    "reason": "Budget check passed. Flights ₹5,415; ₹34,585 (86%) remaining for hotels and activities.",
+    "decision": "continue",
+    "flight_cost": 5415.41,
+    "total_budget": 40000.0,
+    "remaining_budget": 34584.59
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:18.049228Z"
+  },
+  {
+   "id": "dba1eedb-9025-48da-9b5a-d14ac34b7d7d",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "hotel_agent",
+   "status": "completed",
+   "input": {
+    "guests": 1,
+    "check_in": "2026-12-09",
+    "check_out": "2026-12-11",
+    "destination": "Amritsar",
+    "budget_per_night": 17292.29
+   },
+   "output": {
+    "error": null,
+    "hotels": [
+     {
+      "lat": 31.618541,
+      "lng": 74.883327,
+      "name": "Madpackers Amritsar",
+      "stars": 0,
+      "rating": 9.0,
+      "address": "1555,Bazar kahiyan Wala, Near Dholli Mohalla, Inside Sultanwind Gate, Amritsar",
+      "price_per_night_inr": 2161.07
+     },
+     {
+      "lat": 31.633246,
+      "lng": 74.876094,
+      "name": "SureStay by Best Western Model Town Amritsar",
+      "stars": 3,
+      "rating": 7.8,
+      "address": "6/616 G.T Road Model Town, Amritsar",
+      "price_per_night_inr": 2668.34
+     },
+     {
+      "lat": 31.616761,
+      "lng": 74.877002,
+      "name": "One Earth GG Regency",
+      "stars": 3,
+      "rating": 8.2,
+      "address": "Chowk Baba Sahib, near Gurdwara Baba Atal Rai Sahib, Amritsar, Punjab, 143001, Amritsar",
+      "price_per_night_inr": 3274.43
+     },
+     {
+      "lat": 31.657615,
+      "lng": 74.860951,
+      "name": "Bloom Boutique - Ranjit Avenue",
+      "stars": 4,
+      "rating": 9.6,
+      "address": "Block B, District Shopping Complex, Ranjit Avenue, Amritsar, Punjab, 143001, Amritsar",
+      "price_per_night_inr": 4459.06
+     },
+     {
+      "lat": 31.617498,
+      "lng": 74.904227,
+      "name": "Regenta Central Amritsar",
+      "stars": 3,
+      "rating": 9.8,
+      "address": "A - 275, East Mohan Nagar, G.T. Road, Amritsar",
+      "price_per_night_inr": 4499.27
+     }
+    ]
+   },
+   "duration_ms": 35,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:18.092374Z"
+  },
+  {
+   "id": "e457626b-02b3-4c24-9136-b9aadd058cb4",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "activities_agent",
+   "status": "completed",
+   "input": {
+    "limit": 10,
+    "interests": [
+     "sightseeing"
+    ],
+    "destination": "Amritsar"
+   },
+   "output": {
+    "error": null,
+    "attractions": [
+     {
+      "lat": 31.636350631713867,
+      "lng": 74.8787841796875,
+      "name": "Ram Bagh Road",
+      "rating": 6.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Amritsar."
+     },
+     {
+      "lat": 31.637666702270508,
+      "lng": 74.87716674804688,
+      "name": "Summer Palace of Maharaja Ranjit Singh",
+      "rating": 6.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Amritsar."
+     },
+     {
+      "lat": 31.643939971923828,
+      "lng": 74.87557983398438,
+      "name": "Bhai Vir Singh Memorial House",
+      "rating": 2.0,
+      "category": "history",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular history attraction in Amritsar."
+     },
+     {
+      "lat": 31.625701904296875,
+      "lng": 74.8790512084961,
+      "name": "Partition Museum",
+      "rating": 3.0,
+      "category": "museum",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular museum attraction in Amritsar."
+     },
+     {
+      "lat": 31.627229690551758,
+      "lng": 74.8674087524414,
+      "name": "Durgiana Mandir",
+      "rating": 3.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Amritsar."
+     },
+     {
+      "lat": 31.622812271118164,
+      "lng": 74.8733139038086,
+      "name": "ਗੁਰਦਵਾਰਾ ਗੁਰੂ ਕੇ ਮਹਿਲ",
+      "rating": 2.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Amritsar."
+     },
+     {
+      "lat": 31.637300491333008,
+      "lng": 74.8611068725586,
+      "name": "Mata Lal Devi Mandir",
+      "rating": 2.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Amritsar."
+     },
+     {
+      "lat": 31.620708465576172,
+      "lng": 74.8751220703125,
+      "name": "ਗੁਰਦੁਆਰਾ ਬਾਬਾ ਗੁਰਬਖਸ਼ ਸਿੰਘ ਜੀ ਸ਼ਹੀਦ",
+      "rating": 2.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Amritsar."
+     },
+     {
+      "lat": 31.620637893676758,
+      "lng": 74.87532806396484,
+      "name": "Sri Akal Takht Sahib",
+      "rating": 3.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Amritsar."
+     },
+     {
+      "lat": 31.650327682495117,
+      "lng": 74.88440704345703,
+      "name": "Maha Kali Mandir",
+      "rating": 2.0,
+      "category": "spiritual",
+      "interests": [
+       "sightseeing"
+      ],
+      "description": "A popular spiritual attraction in Amritsar."
+     }
+    ]
+   },
+   "duration_ms": 1930,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:19.989918Z"
+  },
+  {
+   "id": "09714d67-0f53-4a98-ba4d-ff3411a03dc2",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "destination_intelligence",
+   "status": "completed",
+   "input": {
+    "days": 3,
+    "model": "openai/gpt-oss-120b",
+    "month": "December",
+    "interests": [
+     "history",
+     "street food"
+    ],
+    "travellers": 1,
+    "destination": "Amritsar"
+   },
+   "output": {
+    "error": null,
+    "tool_calls": 0,
+    "local_intelligence": {
+     "best_times": {
+      "Hall Bazaar": "Evening (7:00-9:00 pm) for bustling street-food stalls and lively ambience.",
+      "Golden Temple": "Early morning (5:30-7:00 am) for serene prayers and cooler air.",
+      "Jallianwala Bagh": "Late afternoon (4:00-5:30 pm) when light softens the monuments.",
+      "Maharaja Ranjit Singh Museum": "Midday (12:00-2:00 pm) when guided tours are available and crowds thin."
+     },
+     "safety_tips": [
+      "December evenings can be foggy; keep a flashlight handy when walking near the river.",
+      "Pickpockets target crowded markets; keep wallet in a front zip pocket.",
+      "Cold weather can cause sudden chills; carry a light sweater for early morning temple visits."
+     ],
+     "tourist_traps": [
+      "Street stalls near the temple charge inflated prices for samosa; walk a few blocks to the Hall Bazaar for authentic, cheaper bites.",
+      "Guided “heritage walks” often include mandatory souvenir purchases; hire a local guide independently instead.",
+      "Avoid taxis that claim a flat rate of ₹500 for short trips; negotiate or use the meter."
+     ],
+     "cultural_norms": [
+      "Cover your head before entering the Golden Temple and remove shoes.",
+      "Avoid public displays of affection; modesty is valued.",
+      "When offered food, accept at least a bite as a sign of respect."
+     ],
+     "local_transport": "Auto-rickshaws and cycle-ricks are cheap and plentiful; use the city bus for longer hops between the Golden Temple and Jallianwala Bagh."
+    }
+   },
+   "duration_ms": 2383,
+   "turn": 1,
+   "token_count": 886,
+   "cost_usd": 0.00033045,
+   "created_at": "2026-10-15T12:40:20.442590Z"
+  },
+  {
+   "id": "4beec299-b713-44c3-bfbd-3daa6d4ada6c",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "itinerary_builder",
+   "status": "completed",
+   "input": {
+    "trip_meta": {
+     "end_date": "2026-12-11",
+     "group_size": 1,
+     "start_date": "2026-12-09",
+     "destination": "Amritsar"
+    },
+    "hotels_count": 5,
+    "flights_count": 5,
+    "attractions_count": 10,
+    "local_intelligence": true
+   },
+   "output": {
+    "draft": {
+     "days": [
+      {
+       "day": 1,
+       "date": "2026-12-09",
+       "hotel": {
+        "lat": 31.618541,
+        "lng": 74.883327,
+        "name": "Madpackers Amritsar",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "1555,Bazar kahiyan Wala, Near Dholli Mohalla, Inside Sultanwind Gate, Amritsar",
+        "cost_per_night": 2161.07
+       },
+       "flight": {
+        "stops": 0,
+        "origin": {
+         "lat": 28.558498,
+         "lng": 77.100193,
+         "code": "DEL",
+         "name": "Indira Gandhi International Airport"
+        },
+        "airline": "ZZ",
+        "arrival": "2026-12-09T07:19:00",
+        "departure": "2026-12-09T06:11:00",
+        "price_inr": 5415.41,
+        "destination": {
+         "lat": 31.707601,
+         "lng": 74.802036,
+         "code": "ATQ",
+         "name": "Sri Guru Ram Dass Jee International Airport"
+        },
+        "duration_mins": 68,
+        "flight_number": "ZZ-3744"
+       },
+       "evening": {
+        "lat": 31.643939971923828,
+        "lng": 74.87557983398438,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Bhai Vir Singh Memorial House",
+        "category": "history"
+       },
+       "morning": {
+        "lat": 31.636350631713867,
+        "lng": 74.8787841796875,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 6.0,
+        "activity": "Ram Bagh Road",
+        "category": "history"
+       },
+       "afternoon": {
+        "lat": 31.637666702270508,
+        "lng": 74.87716674804688,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 6.0,
+        "activity": "Summer Palace of Maharaja Ranjit Singh",
+        "category": "history"
+       }
+      },
+      {
+       "day": 2,
+       "date": "2026-12-10",
+       "hotel": {
+        "lat": 31.618541,
+        "lng": 74.883327,
+        "name": "Madpackers Amritsar",
+        "stars": 0,
+        "rating": 9.0,
+        "address": "1555,Bazar kahiyan Wala, Near Dholli Mohalla, Inside Sultanwind Gate, Amritsar",
+        "cost_per_night": 2161.07
+       },
+       "flight": null,
+       "evening": {
+        "lat": 31.622812271118164,
+        "lng": 74.8733139038086,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "ਗੁਰਦਵਾਰਾ ਗੁਰੂ ਕੇ ਮਹਿਲ",
+        "category": "spiritual"
+       },
+       "morning": {
+        "lat": 31.625701904296875,
+        "lng": 74.8790512084961,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Partition Museum",
+        "category": "museum"
+       },
+       "afternoon": {
+        "lat": 31.627229690551758,
+        "lng": 74.8674087524414,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Durgiana Mandir",
+        "category": "spiritual"
+       }
+      },
+      {
+       "day": 3,
+       "date": "2026-12-11",
+       "hotel": null,
+       "flight": null,
+       "evening": {
+        "lat": 31.620637893676758,
+        "lng": 74.87532806396484,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 3.0,
+        "activity": "Sri Akal Takht Sahib",
+        "category": "spiritual"
+       },
+       "morning": {
+        "lat": 31.637300491333008,
+        "lng": 74.8611068725586,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "Mata Lal Devi Mandir",
+        "category": "spiritual"
+       },
+       "afternoon": {
+        "lat": 31.620708465576172,
+        "lng": 74.8751220703125,
+        "cost": 0.0,
+        "suits": null,
+        "rating": 2.0,
+        "activity": "ਗੁਰਦੁਆਰਾ ਬਾਬਾ ਗੁਰਬਖਸ਼ ਸਿੰਘ ਜੀ ਸ਼ਹੀਦ",
+        "category": "spiritual"
+       }
+      }
+     ],
+     "group": null,
+     "missing": null,
+     "currency": "INR",
+     "total_cost": 9737.55,
+     "per_person_cost": 9737.55,
+     "local_intelligence": {
+      "best_times": {
+       "Hall Bazaar": "Evening (7:00-9:00 pm) for bustling street-food stalls and lively ambience.",
+       "Golden Temple": "Early morning (5:30-7:00 am) for serene prayers and cooler air.",
+       "Jallianwala Bagh": "Late afternoon (4:00-5:30 pm) when light softens the monuments.",
+       "Maharaja Ranjit Singh Museum": "Midday (12:00-2:00 pm) when guided tours are available and crowds thin."
+      },
+      "safety_tips": [
+       "December evenings can be foggy; keep a flashlight handy when walking near the river.",
+       "Pickpockets target crowded markets; keep wallet in a front zip pocket.",
+       "Cold weather can cause sudden chills; carry a light sweater for early morning temple visits."
+      ],
+      "tourist_traps": [
+       "Street stalls near the temple charge inflated prices for samosa; walk a few blocks to the Hall Bazaar for authentic, cheaper bites.",
+       "Guided “heritage walks” often include mandatory souvenir purchases; hire a local guide independently instead.",
+       "Avoid taxis that claim a flat rate of ₹500 for short trips; negotiate or use the meter."
+      ],
+      "cultural_norms": [
+       "Cover your head before entering the Golden Temple and remove shoes.",
+       "Avoid public displays of affection; modesty is valued.",
+       "When offered food, accept at least a bite as a sign of respect."
+      ],
+      "local_transport": "Auto-rickshaws and cycle-ricks are cheap and plentiful; use the city bus for longer hops between the Golden Temple and Jallianwala Bagh."
+     },
+     "per_person_breakdown": null
+    },
+    "error": null
+   },
+   "duration_ms": 7464,
+   "turn": 1,
+   "token_count": 5204,
+   "cost_usd": 0.0018525,
+   "created_at": "2026-10-15T12:40:27.923660Z"
+  },
+  {
+   "id": "cf1bd66b-33a9-4dc3-9e76-d3e955ebf84e",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "evaluator",
+   "status": "completed",
+   "input": {
+    "trip_end": "2026-12-11",
+    "trip_start": "2026-12-09",
+    "retry_count": 0,
+    "budget_range": [
+     7790.04,
+     11685.06
+    ],
+    "attractions_count": 10,
+    "expected_budget_total": 9737.55
+   },
+   "output": {
+    "passed": true,
+    "failures": [],
+    "retry_count": 0
+   },
+   "duration_ms": 0,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:27.935857Z"
+  },
+  {
+   "id": "2bdaf38e-af5c-4b41-b884-9eaf997f35b4",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "persist",
+   "status": "completed",
+   "input": {
+    "currency": "INR",
+    "days_count": 3,
+    "total_cost": 9737.55
+   },
+   "output": {
+    "missing": [],
+    "trip_status": "completed",
+    "itinerary_id": "e760e615-3586-4b94-b97b-81e00e8d2ed0",
+    "unmapped_activities": []
+   },
+   "duration_ms": 9,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:27.949167Z"
+  },
+  {
+   "id": "6e5721d5-4b7e-43dc-80c6-fa420f701ef7",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "preference_extractor",
+   "status": "completed",
+   "input": {
+    "facts": {
+     "hotels": [
+      "Madpackers Amritsar"
+     ],
+     "nights": 2,
+     "interests": [
+      "history",
+      "street food"
+     ],
+     "group_size": 1,
+     "destination": "Amritsar",
+     "user_message": "Mostly history, and the street food everyone talks about",
+     "top_activities": [
+      "Ram Bagh Road",
+      "Summer Palace of Maharaja Ranjit Singh",
+      "Bhai Vir Singh Memorial House",
+      "Partition Museum",
+      "Durgiana Mandir",
+      "ਗੁਰਦਵਾਰਾ ਗੁਰੂ ਕੇ ਮਹਿਲ",
+      "Mata Lal Devi Mandir",
+      "ਗੁਰਦੁਆਰਾ ਬਾਬਾ ਗੁਰਬਖਸ਼ ਸਿੰਘ ਜੀ ਸ਼ਹੀਦ"
+     ],
+     "total_cost_inr": 9737.55,
+     "avg_hotel_stars": 0.0,
+     "per_person_per_night_inr": 4869
+    }
+   },
+   "output": {
+    "applied": {
+     "travel_style": "mid-range"
+    },
+    "extracted": {
+     "home_city": null,
+     "travel_style": "mid-range",
+     "preferred_airlines": [],
+     "dietary_restrictions": []
+    }
+   },
+   "duration_ms": 1208,
+   "turn": 1,
+   "token_count": 917,
+   "cost_usd": 0.0002703,
+   "created_at": "2026-10-15T12:40:29.186798Z"
+  },
+  {
+   "id": "ce1aa49a-b7f2-420e-bda3-06b03f50431c",
+   "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+   "agent_name": "orchestrator",
+   "status": "completed",
+   "input": {
+    "budget": 40000.0,
+    "end_date": "2026-12-11",
+    "interests": [],
+    "raw_input": "Mostly history, and the street food everyone talks about",
+    "group_size": 1,
+    "start_date": "2026-12-09",
+    "destination": "Amritsar"
+   },
+   "output": {
+    "local_tips": true,
+    "hotel_status": "completed",
+    "hotels_count": 5,
+    "itinerary_id": "e760e615-3586-4b94-b97b-81e00e8d2ed0",
+    "flight_status": "completed",
+    "flights_count": 5,
+    "budget_decision": {
+     "reason": "Budget check passed. Flights ₹5,415; ₹34,585 (86%) remaining for hotels and activities.",
+     "decision": "continue",
+     "flight_cost": 5415.41,
+     "total_budget": 40000.0,
+     "remaining_budget": 34584.59
+    },
+    "replan_attempts": 0,
+    "activities_status": "completed",
+    "attractions_count": 10,
+    "evaluator_retry_count": 0
+   },
+   "duration_ms": 12463,
+   "turn": 1,
+   "token_count": null,
+   "cost_usd": null,
+   "created_at": "2026-10-15T12:40:29.195612Z"
+  }
+ ],
+ "graded_turn": 1,
+ "built": true,
+ "provider_refused": false,
+ "error": null,
+ "account": "eval-4f31fdc5e4@example.com",
+ "legs": [
+  {
+   "request": "POST /trips",
+   "sent": {
+    "destination": "Amritsar",
+    "start_date": "2026-12-09",
+    "end_date": "2026-12-11",
+    "budget": 40000,
+    "group_size": 1
+   },
+   "status": 201,
+   "seconds": 0.01,
+   "answer": {
+    "id": "b3e0fc7c-566e-473b-96c8-f17765e43a33",
+    "user_id": "811213fa-786a-4fa9-a7fa-ea8c10422e8a",
+    "destination": "Amritsar",
+    "start_date": "2026-12-09",
+    "end_date": "2026-12-11",
+    "budget": 40000.0,
+    "group_size": 1,
+    "interests": null,
+    "group_members": null,
+    "status": "pending",
+    "created_at": "2026-10-15T12:39:41.298100Z"
+   }
+  },
+  {
+   "request": "POST /trips/b3e0fc7c-566e-473b-96c8-f17765e43a33/plan",
+   "sent": {},
+   "status": 200,
+   "seconds": 0.02,
+   "answer": {
+    "status": "clarification_needed",
+    "question": "What kinds of activities do you enjoy? (e.g. history, food, adventure, beach)",
+    "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33"
+   }
+  },
+  {
+   "request": "POST /trips/b3e0fc7c-566e-473b-96c8-f17765e43a33/clarify",
+   "sent": {
+    "answer": "Mostly history, and the street food everyone talks about"
+   },
+   "status": 200,
+   "seconds": 0.01,
+   "answer": {
+    "status": "planning_started",
+    "trip_id": "b3e0fc7c-566e-473b-96c8-f17765e43a33"
+   }
+  }
+ ],
+ "seconds": 49.6,
+ "asleep_s": 0.0
+}
