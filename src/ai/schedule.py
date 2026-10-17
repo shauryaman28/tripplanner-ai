@@ -104,7 +104,7 @@ def _at(place: dict | None) -> tuple[float, float] | None:
     return (float(lat), float(lng)) if isinstance(lat, (int, float)) and isinstance(lng, (int, float)) else None
 
 
-def _landing(flight: dict | None, day_date: str) -> tuple[int | None, tuple[float, float] | None]:
+def landing(flight: dict | None, day_date: str) -> tuple[int | None, tuple[float, float] | None]:
     """When the plan's flight lands on this day (minutes after midnight), and where — or (None, None)."""
     if not isinstance(flight, dict):
         return None, None
@@ -123,7 +123,7 @@ def _legs(plan: dict) -> list[tuple[dict, tuple[float, float], str, tuple[float,
     slept_at: dict | None = None  # the hotel of the night before
     for day in plan.get("days") or []:
         hotel = day.get("hotel")
-        landed_at = _landing(day.get("flight"), str(day.get("date")))[1]
+        landed_at = landing(day.get("flight"), str(day.get("date")))[1]
         if landed_at:
             here, name = landed_at, "the airport"
         elif _at(slept_at) or _at(hotel):
@@ -164,7 +164,7 @@ async def add_times(plan: dict, lookup: Lookup) -> dict:
         travel[id(stop)] = ({**answer, "mode": ask["mode"]}, name, km)
 
     for day in plan.get("days") or []:
-        landed, _ = _landing(day.get("flight"), str(day.get("date")))
+        landed, _ = landing(day.get("flight"), str(day.get("date")))
         cursor = max(DAY_START, landed + LANDING_MINUTES) if landed is not None else DAY_START
         for slot in SLOTS:
             stop = day.get(slot)

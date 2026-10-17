@@ -306,6 +306,28 @@ def _days_line(start: str | None, end: str | None) -> str:
     )
 
 
+def _landing_line(start: str | None, flights: list[dict]) -> str:
+    """Phase 37 — when the first day can begin: the plan's flight lands on it ('' when it lands before 07:00).
+
+    The model chose stops for a day that ended at the airport: told nothing of the flight, it filled day 1
+    as it fills every day (DECISIONS #340). The clock still marks what does not fit (src/ai/schedule.py).
+    """
+    landed, _ = schedule.landing(_cheapest_flight(flights), str(start))
+    if landed is None or landed + schedule.LANDING_MINUTES <= schedule.DAY_START:
+        return ""
+    free = landed + schedule.LANDING_MINUTES
+    if free > schedule.DAY_END - schedule.MIN_VISIT:
+        return (
+            f"The flight lands at {schedule.hhmm(landed)} on {start}, too late for anything that day: day 1 gets "
+            'only the one "Explore the area" slot.\n'
+        )
+    return (
+        f"The flight lands at {schedule.hhmm(landed)} on {start}: the traveller is free from about "
+        f"{schedule.hhmm(free)}. On day 1 use only the parts of the day that end after that (morning 08:00–12:00, "
+        "afternoon 13:00–17:00, evening 18:00–22:00), and set the others to null.\n"
+    )
+
+
 def _build_user_prompt(
     trip_meta: dict,
     flights: list[dict],
@@ -316,7 +338,8 @@ def _build_user_prompt(
         f"Trip: {trip_meta.get('destination')} "
         f"from {trip_meta.get('start_date')} to {trip_meta.get('end_date')}, "
         f"{trip_meta.get('group_size', 1)} traveller(s).\n"
-        f"{_days_line(trip_meta.get('start_date'), trip_meta.get('end_date'))}\n"
+        f"{_days_line(trip_meta.get('start_date'), trip_meta.get('end_date'))}"
+        f"{_landing_line(trip_meta.get('start_date'), flights)}\n"
         f"Available flights (JSON): {json.dumps(flights)}\n\n"
         f"Available hotels (JSON): {json.dumps(hotels)}\n\n"
         f"Available attractions (JSON): {json.dumps(_for_prompt(attractions, trip_meta.get('group_members')))}\n\n"

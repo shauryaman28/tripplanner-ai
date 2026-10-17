@@ -478,3 +478,36 @@ def test_the_key_check_asks_google_one_journey_and_a_400_is_a_refusal(status, ac
     assert sent[0].method == "POST" and sent[0].headers["X-Goog-Api-Key"] == "AIza-test"
     assert len(body["origins"]) == len(body["destinations"]) == 1  # one element of the free 10,000 a month
     assert ok is accepted and "AIza-test" not in said
+
+
+# ── The builder is told when the first day can begin (DECISIONS #340) ──────
+
+
+def _lands(at: str) -> list[dict]:
+    return [{"price_inr": 8_200.0, "arrival": at, "destination": {"code": "GOI", "lat": 15.38, "lng": 73.83}}]
+
+
+@pytest.mark.parametrize(
+    ("arrival", "said"),
+    [
+        ("2030-01-10T06:30:00", ""),  # landed before the day begins: nothing to say
+        ("2030-01-11T14:05:00", ""),  # lands on another day than the first: not this rule's
+        ("2030-01-10T14:05:00", "The flight lands at 14:05 on 2030-01-10: the traveller is free from about 15:05."),
+        ("2030-01-10T22:42:00", 'too late for anything that day: day 1 gets only the one "Explore the area" slot.'),
+    ],
+)
+def test_the_builder_is_told_when_the_first_day_can_begin(arrival, said):
+    line = builder._landing_line("2030-01-10", _lands(arrival))
+    assert (said in line) if said else line == ""
+    prompt = builder._build_user_prompt(
+        {"destination": "Goa", "start_date": "2030-01-10", "end_date": "2030-01-12"},
+        _lands(arrival),
+        HOTELS,
+        ATTRACTIONS,
+    )
+    assert (line in prompt) and prompt.count("The flight lands") == (1 if said else 0)
+
+
+def test_the_line_speaks_of_the_flight_the_plan_takes_the_cheapest():
+    flights = _lands("2030-01-10T22:42:00") + [{**_lands("2030-01-10T09:00:00")[0], "price_inr": 4_000.0}]
+    assert "lands at 09:00" in builder._landing_line("2030-01-10", flights)
