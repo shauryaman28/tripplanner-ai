@@ -89,6 +89,7 @@ def test_a_request_is_counted_inside_its_span_and_says_whose_it_is_inside_both()
     assert [layer.cls.__name__ for layer in main.app.user_middleware] == [
         "CountsRequests",
         "RequestContext",
+        "SecurityHeaders",  # Phase 35
         "NoStoreByDefault",
         "CORSMiddleware",
     ]

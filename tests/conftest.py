@@ -27,6 +27,17 @@ from src.ai.embeddings.embedder import EmbeddingNotConfigured  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def no_sign_in_limits():
+    """Phase 35: the suites sign in hundreds of times a minute from one address — the limits are off for them, and
+    the tests of the limits switch them on for themselves. On the live settings, not in the environment: a
+    `Settings(...)` a test makes of a deployment must see the defaults a deployment would."""
+    from app.core.config import settings
+
+    with patch.multiple(settings, LOGIN_ATTEMPTS_PER_MINUTE=0, REGISTRATIONS_PER_MINUTE=0):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def no_fallback_llm():
     """A test whose Gemini mock fails must not reach a real model through the Groq fallback (src.ai.llm.ask)."""
     with patch("src.ai.llm._ask_groq", AsyncMock(side_effect=RuntimeError("no fallback model in tests"))) as groq:

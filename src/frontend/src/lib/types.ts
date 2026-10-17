@@ -249,6 +249,8 @@ export interface TripStatusResponse {
 export interface TokenResponse {
   access_token: string;
   token_type: "bearer";
+  expires_in?: number; // Phase 35: seconds the access token is good for
+  refresh_token?: string; // for clients that are not a browser; the site uses the HttpOnly cookie
 }
 
 export interface UserRead {

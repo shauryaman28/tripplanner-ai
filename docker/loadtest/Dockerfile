@@ -18,4 +18,4 @@ COPY loadtest/standins/ ./loadtest/standins/
 # The deployed image's command, word for word, but for what is served: the app with the stand-ins in
 # (loadtest/standins/app.py), which is `app.main:app` once it has put them there. It refuses to
 # load against a database or a Redis that is not on this machine.
-CMD ["sh", "-c", "python -m app.preflight && alembic upgrade head && exec uvicorn loadtest.standins.app:app --app-dir src/backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*' --timeout-graceful-shutdown 10"]
+CMD ["sh", "-c", "python -m app.preflight && alembic upgrade head && exec uvicorn loadtest.standins.app:app --app-dir src/backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}\" --timeout-graceful-shutdown 10"]

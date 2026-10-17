@@ -123,6 +123,9 @@ def serve(log_path: Path) -> Iterator[str]:
         "REDIS_URL": redis_url,
         "LOG_FORMAT": "text",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "",
+        # Phase 35: fifteen accounts made and signed in from one address — the harness's, not a guesser's
+        "LOGIN_ATTEMPTS_PER_MINUTE": "0",
+        "REGISTRATIONS_PER_MINUTE": "0",
     }
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("w") as log:

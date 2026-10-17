@@ -37,6 +37,7 @@ from app.api.routes.trips import router as trips_router
 from app.api.routes.users import router as users_router
 from app.core import error_reporting
 from app.core.config import settings
+from app.core.headers import SecurityHeaders, security_headers
 from app.core.security import decode_access_token
 from app.db import redis as redis_db
 from app.db.errors import database_is_away
@@ -63,6 +64,7 @@ logger = logging.getLogger(__name__)
 # object. Here, as the module is loaded, because the web server's own first lines come before the
 # app's startup does — and a log store should not have to cope with two kinds of line.
 _scrub = error_reporting.Scrubber(error_reporting.secrets_of(settings, mcp_settings)).text
+logs.redact_every_record(_scrub)  # Phase 35: every line, text or JSON, whoever writes it
 logs.configure(logs.chosen(settings.LOG_FORMAT, settings.APP_ENV), traces.BACKEND, scrub=_scrub)
 
 
@@ -351,6 +353,14 @@ class NoStoreByDefault:
 app.add_middleware(NoStoreByDefault)
 
 
+def _in_production() -> bool:
+    return str(settings.APP_ENV).lower() == "production"
+
+
+# Phase 35: nosniff, no frames, a policy that lets an answer load nothing, no referrer — on every answer.
+app.add_middleware(SecurityHeaders, production=_in_production)
+
+
 # ── Whose a request is (Phase 29) ──────────────────────────────────────────
 
 _TRIP_IN_PATH = re.compile(r"^/trips/([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})(?:/|$)")
@@ -473,15 +483,19 @@ async def database_is_away_handler(request: Request, exc: Exception) -> JSONResp
 
 
 @app.exception_handler(Exception)
-async def unexpected_error_handler(_: Request, exc: Exception) -> JSONResponse:
+async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Phase 27 — a 500 in the same envelope as every other error, and saying nothing of what went wrong.
 
     The error itself goes where it can be read: this handler's caller raises it
     again once the answer is sent, into the log and into Sentry.
+
+    Phase 35: Starlette answers an unhandled error outside every layer the app adds, so this answer
+    is given the security headers and no-store here — nothing else would.
     """
     message = "Something went wrong on our side. It has been reported."
     return JSONResponse(
         status_code=500,
+        headers={"Cache-Control": "no-store", **security_headers(request.url.path, _in_production())},
         content={"detail": message, "error": {"code": "INTERNAL_SERVER_ERROR", "message": message}},
     )
 

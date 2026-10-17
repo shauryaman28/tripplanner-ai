@@ -62,6 +62,20 @@ _SECRET_PARAMETER = re.compile(
 _URL_CREDENTIALS = re.compile(r"(?i)\b([a-z][a-z0-9+.\-]*://)[^/\s:@\"']+:[^/\s@\"']+@")
 _BEARER = re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/\-]+=*")
 _JWT = re.compile(r"\beyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\b")
+# Phase 35: what a provider's key looks like, for a key this process was never given (an old one, another
+# deployment's): Google's AIza… and its newer AQ.…, Groq's gsk_, Duffel's, LangSmith's lsv2_, LiteAPI's,
+# Anthropic's sk-ant-, OpenAI's sk-. Bare hex keys (OpenTripMap's, OpenWeather's) have no shape a trace id
+# or a cache digest does not share: those are taken out by value, and by name in a query string.
+_KEY_SHAPES = re.compile(
+    r"\bAIza[0-9A-Za-z_\-]{35}\b"
+    r"|\bAQ\.[0-9A-Za-z_\-]{40,}"
+    r"|\bgsk_[0-9A-Za-z]{40,}"
+    r"|\bduffel_(?:test|live)_[0-9A-Za-z_\-]{20,}"
+    r"|\blsv2_(?:pt|sk)_[0-9a-f]{20,}_[0-9a-f]{6,}"
+    r"|\b(?:sand|prod)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"|\bsk-ant-[0-9A-Za-z_\-]{20,}"
+    r"|\bsk-(?:proj-)?[0-9A-Za-z_\-]{32,}"
+)
 # An address ends in letters: "tripplanner-ai@0.27.0" is a release, not somebody's e-mail.
 _EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@(?:[A-Za-z0-9\-]+\.)+[A-Za-z]{2,}\b")
 # A dict key whose value is a secret whatever it looks like (headers, extras, cookies) — "x-ops-token",
@@ -105,6 +119,7 @@ class Scrubber:
         value = _SECRET_PARAMETER.sub(rf"\1{FILTERED}", value)
         value = _BEARER.sub(rf"\1{FILTERED}", value)
         value = _JWT.sub(FILTERED, value)
+        value = _KEY_SHAPES.sub(FILTERED, value)
         return _EMAIL.sub(FILTERED, value)
 
     def clean(self, value: Any, key: str = "") -> Any:

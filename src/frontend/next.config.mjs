@@ -43,6 +43,34 @@ const nextConfig = {
   // On Vercel this rewrite is carried out by its proxy, not by a function: no request the page makes
   // runs as code that could time out. The proxy waits two minutes for the backend to begin to answer,
   // and planning never makes it wait — POST /plan answers at once, and the progress is the stream.
+  // Phase 35: Next's image optimizer (/_next/image) is on in every app unless it is switched off, and the
+  // version this site is on has advisories against it that only Next 15.5 fixes (DECISIONS #322). Nothing here
+  // uses next/image: off, and the route is gone.
+  images: { unoptimized: true },
+
+  // Phase 35: the site's own pages say what the API's answers say — no frames (clickjacking), no sniffing,
+  // no referrer beyond the origin, no camera or location. Its policy says where it may be framed and what
+  // a page may base or post to; which scripts may run is not restricted (Next's own inline scripts would
+  // need a nonce per request — docs/phase35_build_log.md, Known limits). /api/* is the backend's, which
+  // sets its own.
+  async headers() {
+    return [
+      {
+        source: "/((?!api/).*)",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+          {
+            key: "Content-Security-Policy",
+            value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'",
+          },
+        ],
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       {

@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–34
+# How to Run & Verify — Phases 1–35
 
 ## What changed vs the original codebase?
 
@@ -33,6 +33,7 @@
 | 32 | `db/errors.py` (new: "the database cannot be reached", told from a statement it refused), `main.py` (that is a 503 in words; start-up recovery that could not look, looks again), `routes/trips.py` (a traveller is told what happened, never what was raised; a run that ended without marking its trip goes on trying to), `orchestrator.py` (an itinerary is saved together with the row that says its embeddings are owed), `db/session.py` (a note on why the driver has no timeout), `docker/prodlike/pgbouncer.ini` (`server_login_retry = 5`) — see `docs/phase32_build_log.md` | `scripts/chaos.py` (exercises 5 and 6), `docker/chaos/compose.yml` (Postgres keeps its data), `loadtest/standins/faults.py` + `models.py` (the embedding API can be made to fail), `docs/chaos-data-report.md` + `docs/chaos/` |
 | 33 | `mcp_server/models.py` + `tools.py` (a flight search with nothing within the budget says what the cheapest flight costs), `agents/budget_decision.py` (the ways out are priced from that fare) — see `docs/phase33_build_log.md` | `evals/` (new: the scenarios, the driver, the measurements, the grader, the report), `scripts/run_eval.py` (new), `.github/workflows/nightly.yml` (the suite every night), `tests/unit/test_phase33_eval.py` + `tests/fixtures/evals/`, `docs/evals/` |
 | 34 | `core/deep_health.py` (new: Postgres, Redis, the tool server, LangSmith — each asked with a deadline), `routes/admin.py` (`GET /admin/health-deep`; the embedding backlog as one function), `deps.py` (`may_check_health`), `main.py` (the embedding queue counted every 15 s; an `OSError` may be the database away), `db/errors.py` (a name that does not resolve, a network with no route: the database is away), `preflight.py`, `telemetry/metrics.py` (`embedding_queue_depth`, `mcp_cache_window_lookups`), `docker/observability/` (`compose.yml`, `prometheus.yml`, the dashboard), `scripts/observability.py` + `observability_check.py` + `trace_receiver.py`, `.github/workflows/ci.yml` (promtool and amtool) — see `docs/phase34_build_log.md` | `docker/observability/alerts/` (the four rules and promtool's tests), `docker/observability/alertmanager.yml`, `scripts/alert_receiver.py`, `scripts/alert_drill.py`, `docs/runbook.md`, `docs/alerts/` (every drill's record), two unit test files and one integration test file |
+| 35 | `core/headers.py`, `core/ratelimit.py`, `core/sessions.py`, `models/refresh_token.py` + migration 007, `schemas/text.py` (new), `routes/auth.py` (refresh, logout, the limits, a bounded form), `schemas/{trip,auth,user_preferences}.py` + `routes/{trips,admin}.py` + `deps.py` (every field bounded), `core/security.py` (PyJWT), `config.py`, `error_reporting.py` (key shapes), `preflight.py`, `main.py` (the headers, every log record redacted), `telemetry/logs.py` (LogRedactor), `mcp_server/server.py`, two prompts, both Dockerfiles (`FORWARDED_ALLOW_IPS`), the frontend's `api.ts` / `sse.ts` / `AppHeader.tsx` / `next.config.mjs`, `requirements.txt` + `constraints.txt` + `package.json` — see `docs/phase35_build_log.md` | `scripts/security_check.py`, `scripts/secret_audit.py`, `scripts/provider_keys.py` (new), two unit test files, one integration test file, `e2e/session.spec.ts` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -2022,6 +2023,129 @@ refusing and hanging, and who may ask; the embedding queue. `RUN_INTEGRATION=1 p
 (4) — the deep check on real Postgres, Redis and a tool server in a process of its own, the queue counted from
 real rows, and the real driver asked for a database whose name does not resolve.
 
+---
+
+## Step 33 — Verify Phase 35: security hardening
+
+Needs the dev containers (Step 1) for the suites, Docker for the production-like stack, and your `.env`
+for the key checks. Nothing is created anywhere but on this machine.
+
+### A. Signing in, staying signed in, the limit — as a stranger finds them
+
+```bash
+FORWARDED_ALLOW_IPS=127.0.0.1 python scripts/prodlike.py up   # the deployed image, production mode; this machine a stranger
+python scripts/security_check.py --prodlike
+```
+
+```
+1. The headers, on every kind of answer
+  ✓ a success: 200  — all there
+  ✓ a deliberate 500: 500  — all there
+  …
+2. Signing in
+  ✓ the access token is good for an hour  — expires_in 3600
+  ✓ …and in a cookie no script can read, sent only to the sign-in routes, over https only  — HttpOnly; Max-Age=1209600; Path=/api/auth; SameSite=strict; Secure
+3. What it takes
+  ✓ a destination with a line break in it is refused  — HTTP 422
+  ✓ a seven-character password is refused  — HTTP 422
+4. Staying signed in
+  ✓ the first, presented again, is refused  — HTTP 401
+  ✓ …and it ended the sign-in: the second is refused too  — HTTP 401
+  ✓ signing out ends the sign-in on the server  — logout 204, refresh after 401
+5. The limit on signing in
+  ✓ the sixth sign-in attempt from this address within a minute is refused with 429  — [401, 401, 401, 429, 429, 429] after 2 earlier; Retry-After 48 s
+  ✓ an address this machine makes up is not believed: still 429  — [429, 429, 429]
+
+21 passed, 0 failed
+```
+
+Run it again within the minute and the sign-ins fail: the address is still over its limit (Redis keeps the
+window across a restart). Start the stack without `FORWARDED_ALLOW_IPS` and the last check fails: this machine
+reaches the stack through Docker's private gateway, which the image trusts as a proxy — as it trusts a
+platform's own proxy — so the address it writes is believed. That is the setting doing its job, and the
+reason a deployment's proxy must be the only thing it trusts (E below).
+
+The headers by hand, as the roadmap says:
+
+```bash
+curl -sI localhost:8200/no-such-route
+# HTTP/1.1 404 Not Found
+# x-content-type-options: nosniff
+# x-frame-options: DENY
+# content-security-policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'
+# referrer-policy: no-referrer
+# permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+# strict-transport-security: max-age=31536000; includeSubDomains
+```
+
+(`curl -I` sends HEAD, which the API's GET routes answer 405 — with the same headers.)
+
+### B. No key anywhere it should not be
+
+```bash
+python scripts/secret_audit.py logs     # ./logs, .evals/, docs/, Loki (if the observability stack is up), the containers
+python scripts/secret_audit.py repo     # every tracked file, and every version of every file in every commit
+```
+
+```
+10 secret values from .env, .env.prodlike; 12 shapes
+163 files, 126,820 lines
+Loki: 31,271 lines
+the running containers' logs: 13,675 lines
+nothing found
+```
+
+It looks for every secret value in `.env` and `.env.prodlike` and for every provider's key shape, and prints
+only where, which setting, and four characters. Loki takes some minutes to read through.
+
+### C. The key rotation
+
+Rotating every key proves none of them is written anywhere but the environment: whatever had the old key in
+it stops working when the old key is deleted.
+
+1. At each provider, create a new key (the table of Phase 35's summary: Groq, Gemini, Duffel, LiteAPI,
+   OpenTripMap, OpenWeather, LangSmith) and put it in `.env`.
+2. `python scripts/provider_keys.py` — each provider is asked one question that costs no quota:
+
+   ```
+     ✓ GROQ_API_KEY           Groq         200 in 344 ms
+     ✓ GOOGLE_API_KEY         Gemini       200 in 569 ms
+     …
+     ✗ OPENWEATHER_API_KEY    OpenWeather  401 — the key was refused (a new one can take up to two hours to work)
+   ```
+3. Delete the old keys at the providers. Run it again: the same answers.
+4. A plan on the new keys: `python scripts/prod_check.py --prodlike` (after `python scripts/prodlike.py up`,
+   which gives the stack the new `.env`), and the eval suite when its grader has a key.
+5. `python scripts/secret_audit.py repo` — nothing found, for the new keys as for the old.
+
+### D. The dependencies
+
+```bash
+python -m venv /tmp/audit && /tmp/audit/bin/pip install pip-audit
+/tmp/audit/bin/pip-audit -r constraints.txt --no-deps --disable-pip      # No known vulnerabilities found
+cd src/frontend && npm audit --omit=dev                                   # next: the Next 14 advisories (DECISIONS #324)
+```
+
+### E. On a deployment — what is yours to set
+
+| What | Where | Why |
+|---|---|---|
+| `FORWARDED_ALLOW_IPS` | the backend's variables (Railway) | Only if its proxy connects from a public address. The image believes `X-Forwarded-For` from loopback and private networks only; if the platform's proxy is not one of them, every request seems to come from the proxy and the sign-in limit is everybody's at once. How to tell: six sign-ins with a wrong password from one network (the sixth is 429), then one from another network (a phone's): refused too means every request seems to come from one address — the proxy's. The log's `[RATE LIMIT] login from client <hash>` names the same hash for both |
+| `JWT_EXPIRE_MINUTES` | already 60 by default | the pre-start check warns above 60 |
+| `LOGIN_ATTEMPTS_PER_MINUTE`, `REGISTRATIONS_PER_MINUTE` | 5 by default | the pre-start check warns at 0 |
+
+Then `python scripts/security_check.py --api https://<backend> --ops-token <OPS_TOKEN> --production`: the same
+21 checks, and the last one says whether an address you make up is believed (it must not be).
+
+**The tests:** `pytest tests/unit/test_phase35_security.py tests/unit/test_phase35_secrets.py -v` — the headers on
+every kind of answer, every field of every request bounded (read from the API's own schema), what each kind of
+text takes, the passwords, the limiter's verdicts and its log, whom uvicorn believes, the warnings of the
+pre-start check; the LogRedactor on text lines, tracebacks and every handler, the scrubber and the audit
+agreeing on what a key looks like, the audit finding what is planted for it. `RUN_INTEGRATION=1 pytest
+tests/integration/test_phase35_auth_integration.py -v` — refresh tokens and the limit on real Postgres and
+Redis. `cd src/frontend && npx playwright test e2e/session.spec.ts` — staying signed in, and signing out, in
+a browser.
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -2077,3 +2201,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **32 (Chaos, data)** | The app as it was before this phase, kept in `docs/chaos/before/`: Postgres away 45 s → `✗ … none a 500 — 23 requests: ['200', '500']` and `✗ the app answers again within 10 s … the app after 13.7 s`; killed between the two writes → `✗ the traveller is told why in their own words — the page: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.ConnectionDoesNotExistError'>…`; the backend killed after a save → `✗ after the restart the itinerary is embedded … {'vectors': 0, 'pending_retry': 0}, 121.8 s after the backend was ready`. And two things that were broken *by* this phase on the way, and are kept so that nobody does them again: give the driver `command_timeout=20` in `app/db/session.py` and run `python scripts/chaos.py postgres-kill --postgres-away 45` → nine requests end as 500s at the same instant, three seconds after Postgres is back (`docs/chaos/tried/`); take `await db.flush()` out of `persist_node` in `orchestrator.py` → on the stack every plan fails with a foreign-key error (the row that owes the embedding is sent before the itinerary it points at). Why: two of this phase's own fixes were wrong the first time, and only running them showed it. |
 | **33 (Evals)** | In a copy, make the attractions search forget what the traveller enjoys (`activities_search_input`: `"interests": DEFAULT_INTERESTS`) and run `python scripts/run_eval.py --plan-only` there → every scenario still ends ✓ (the planner's own evaluator passes every plan — seven of its unit tests do fail on this copy), and the measurements of its records allow an average of at most 3.07 — nine plans held to 2, "the attractions search left out what the traveller enjoys" — where the healthy build's allow 4.73 (`docs/evals/broken-interests/`, `docs/evals/baseline/`). Or take the key check out of `scripts/run_eval.py` and run `pytest tests/unit/test_phase33_eval.py` → it fails at once ("a unit test must never start a backend or empty a database"). Why: an eval that only checked how plans end would pass a build whose plans are all wrong in the same way. |
 | **34 (Alerts)** | In `docker/observability/alerts/rules.yml` put the cache alert's floor back as it was first written — `sum by (job, instance) (increase(mcp_cache_lookups_total[5m])) >= 10` — and run promtool (Step 32 A) → `FAILED: … the first few misses after a restart do not pass the floor …`: a backend's first four misses after a restart fire it, on the strength of the last process's lookups — what the quiet drill found (`docs/alerts/first/quiet.json`: pending at 0.21, twenty seconds after a restart). Make the error threshold `) > 0.10` → `FAILED: … an endpoint with more than 5 % of its requests failing fires …`: the endpoint at 10 % is no longer alerted on. `docker stop tripplanner_redis` with a backend running → `GET /admin/health-deep` answers 503 in under a second, `redis: ConnectionError …`, and still asks the other three; `docker start tripplanner_redis` → 200. In `src/backend/app/db/errors.py` make `_unreachable` return only `isinstance(error, OSError) and error.errno in _NO_ROUTE` → `pytest tests/unit/test_phase34_health.py -k resolve` fails; on the stack that is the app the first drill ran on, where every request with the pooler stopped was a 500 (`docs/alerts/first/errors.json`) — and the alert fired all the same, which is why it was the record, not the verdict, that showed it. Why: an alert is only as good as the condition it was proved against and the message somebody reads at night. |
+| **35 (Security)** | In `src/backend/Dockerfile` put back `--forwarded-allow-ips '*'` → `pytest tests/unit/test_phase35_security.py -k believes` fails: a proxy on a private address that appended the real client, and the client is taken to be the address the client wrote itself (`6.6.6.6`) — the sign-in limit a header away, which is what the image did until this phase. Start the stack without `FORWARDED_ALLOW_IPS` and run `python scripts/security_check.py --prodlike` → `✗ an address this machine makes up is not believed … [401, 401, 401] — this machine is a trusted proxy for this backend`: from where a platform's proxy stands, it would be (Step 33 A). In `app/core/sessions.py` make the reuse check `if False:` → `RUN_INTEGRATION=1 pytest tests/integration/test_phase35_auth_integration.py -k stolen` fails: a token used twice no longer ends the sign-in. In `app/schemas/text.py` set `PASSWORD_MAX_BYTES = 10_000` → `-k bcrypt` fails: a 73-byte password is taken, and bcrypt would check it by its first 72. `curl -sI localhost:8200/no-such-route` on the stack → the seven headers, a 404 included. Why: a protection that nothing can show working is one that nobody would notice was gone. |

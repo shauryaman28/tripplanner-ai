@@ -4,14 +4,28 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
+from app.schemas.text import FreeText, Place, ShortText
 from app.schemas.types import UTCDateTime
 from src.ai import group
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+# Phase 35: the limits Phase 25's validators held a name and an interest to, said where the schema says them too
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=group.MAX_NAME_CHARS)]
+Interest = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=group.MAX_INTEREST_CHARS)]
+MAX_TRIP_INTERESTS = 12  # what the form offers, with room: each one is a search
 
 # The searches return at most ten attractions and the builder writes every day in one reply:
 # past two weeks a plan is mostly empty days, and a year-long one came back as a single day.
 MAX_TRIP_NIGHTS = 14
+
+
+def _words_only(interests: object) -> None:
+    """Each interest a few plain words (group.is_words) — said in the traveller's terms, before any type check."""
+    for interest in interests if isinstance(interests, list) else []:
+        if isinstance(interest, str) and not group.is_words(interest.strip(), group.MAX_INTEREST_CHARS):
+            raise ValueError(
+                f"an interest is at most {group.MAX_INTEREST_CHARS} letters, digits, spaces or simple punctuation"
+            )
 
 
 class GroupMember(BaseModel):
@@ -22,34 +36,36 @@ class GroupMember(BaseModel):
     is let in. No interests means "happy with whatever the others choose".
     """
 
-    name: NonBlank
-    interests: list[NonBlank] = Field(default_factory=list, max_length=group.MAX_INTERESTS)
+    name: Name
+    interests: list[Interest] = Field(default_factory=list, max_length=group.MAX_INTERESTS)
 
-    @field_validator("name")
+    # Phase 35: before the length the schema states, so that the traveller reads this and not a type error
+    @field_validator("name", mode="before")
     @classmethod
-    def name_is_a_name(cls, v: str) -> str:
-        if not group.is_words(v, group.MAX_NAME_CHARS):
+    def name_is_a_name(cls, v: object) -> object:
+        if isinstance(v, str) and not group.is_words(v.strip(), group.MAX_NAME_CHARS):
             raise ValueError(f"a name is at most {group.MAX_NAME_CHARS} letters, digits, spaces or simple punctuation")
+        return v
+
+    @field_validator("interests", mode="before")
+    @classmethod
+    def interests_are_words(cls, v: object) -> object:
+        _words_only(v)
         return v
 
     @field_validator("interests")
     @classmethod
-    def interests_are_words(cls, v: list[str]) -> list[str]:
-        for interest in v:
-            if not group.is_words(interest, group.MAX_INTEREST_CHARS):
-                raise ValueError(
-                    f"an interest is at most {group.MAX_INTEREST_CHARS} letters, digits, spaces or simple punctuation"
-                )
+    def each_interest_once(cls, v: list[str]) -> list[str]:
         return list(dict.fromkeys(v))  # each once, in the order given
 
 
 class TripCreate(BaseModel):
-    destination: Annotated[NonBlank, Field(max_length=200)]
+    destination: Place  # Phase 35: a place, in words — no line breaks, quotes or braces to carry anything into a prompt
     start_date: date
     end_date: date
     budget: float = Field(gt=0)
     group_size: int = Field(default=1, ge=1, le=9)  # 9 = the flight search's passenger limit
-    interests: list[NonBlank] | None = None
+    interests: list[Interest] | None = Field(default=None, max_length=MAX_TRIP_INTERESTS)
     # Phase 25: the travellers, told apart. Left out, the trip is planned as before — for
     # `group_size` people who all enjoy `interests`.
     group_members: list[GroupMember] | None = Field(
@@ -71,6 +87,13 @@ class TripCreate(BaseModel):
         everyones = [interest for member in self.group_members for interest in member.interests]
         self.interests = list(dict.fromkeys([*(self.interests or []), *everyones])) or None
         return self
+
+    @field_validator("interests", mode="before")
+    @classmethod
+    def trip_interests_are_words(cls, v: object) -> object:
+        """Phase 35: the trip's own interests held to the rule its travellers' always were (Phase 25)."""
+        _words_only(v)
+        return v
 
     @field_validator("start_date")
     @classmethod
@@ -136,19 +159,19 @@ class TripSearchResponse(BaseModel):
 class PlanRequest(BaseModel):
     """Optional body for POST /trips/{id}/plan."""
 
-    raw_input: str | None = None
+    raw_input: FreeText | None = None  # Phase 35: the traveller's own words, up to a few paragraphs
 
 
 class ClarifyRequest(BaseModel):
     """Body for POST /trips/{id}/clarify."""
 
-    answer: NonBlank
+    answer: ShortText
 
 
 class RefineRequest(BaseModel):
     """Body for POST /trips/{id}/refine — Phase 15."""
 
-    message: NonBlank
+    message: ShortText
 
 
 class ReplanRequest(BaseModel):

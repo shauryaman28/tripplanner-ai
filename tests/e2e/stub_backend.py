@@ -45,6 +45,9 @@ from unittest.mock import patch
 import uvicorn
 
 os.environ.setdefault("APP_ENV", "test")  # no SQL echo
+# Phase 35: every browser test signs in from this machine — sixty of them in two minutes
+os.environ.setdefault("LOGIN_ATTEMPTS_PER_MINUTE", "0")
+os.environ.setdefault("REGISTRATIONS_PER_MINUTE", "0")
 sys.path.insert(0, "src/backend")
 
 from tests import fakes  # noqa: E402

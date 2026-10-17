@@ -37,6 +37,12 @@ EXPOSE 8000
 #   ${PORT:-8000}   a platform says which port it will send traffic to (Railway: PORT); 8000 otherwise.
 #   exec            uvicorn takes this shell's place, so the platform's "stop" (SIGTERM) reaches it —
 #                   and the plans in flight are waited for instead of being cut off (app/main.py).
-#   --proxy-headers the platform's proxy says which scheme and client the request really had.
+#   --proxy-headers the platform's proxy says which scheme and client the request really had —
+#                   believed only from FORWARDED_ALLOW_IPS (Phase 35): loopback and the private networks a
+#                   platform's own proxy connects from. X-Forwarded-For is then read from the right, and
+#                   the client is the address the last trusted proxy saw. It was '*' (everyone), and then
+#                   uvicorn takes the leftmost entry — the one a client writes itself: the login limit
+#                   would have been a header away. A deployment whose proxy connects from a public
+#                   address names it in FORWARDED_ALLOW_IPS (HOW_TO_RUN.md, Step 33).
 #   --timeout-graceful-shutdown   open connections (event streams) get this long to close.
-CMD ["sh", "-c", "python -m app.preflight && alembic upgrade head && exec uvicorn app.main:app --app-dir src/backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*' --timeout-graceful-shutdown 10"]
+CMD ["sh", "-c", "python -m app.preflight && alembic upgrade head && exec uvicorn app.main:app --app-dir src/backend --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}\" --timeout-graceful-shutdown 10"]
