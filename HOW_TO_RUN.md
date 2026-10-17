@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–35
+# How to Run & Verify — Phases 1–36
 
 ## What changed vs the original codebase?
 
@@ -34,6 +34,7 @@
 | 33 | `mcp_server/models.py` + `tools.py` (a flight search with nothing within the budget says what the cheapest flight costs), `agents/budget_decision.py` (the ways out are priced from that fare) — see `docs/phase33_build_log.md` | `evals/` (new: the scenarios, the driver, the measurements, the grader, the report), `scripts/run_eval.py` (new), `.github/workflows/nightly.yml` (the suite every night), `tests/unit/test_phase33_eval.py` + `tests/fixtures/evals/`, `docs/evals/` |
 | 34 | `core/deep_health.py` (new: Postgres, Redis, the tool server, LangSmith — each asked with a deadline), `routes/admin.py` (`GET /admin/health-deep`; the embedding backlog as one function), `deps.py` (`may_check_health`), `main.py` (the embedding queue counted every 15 s; an `OSError` may be the database away), `db/errors.py` (a name that does not resolve, a network with no route: the database is away), `preflight.py`, `telemetry/metrics.py` (`embedding_queue_depth`, `mcp_cache_window_lookups`), `docker/observability/` (`compose.yml`, `prometheus.yml`, the dashboard), `scripts/observability.py` + `observability_check.py` + `trace_receiver.py`, `.github/workflows/ci.yml` (promtool and amtool) — see `docs/phase34_build_log.md` | `docker/observability/alerts/` (the four rules and promtool's tests), `docker/observability/alertmanager.yml`, `scripts/alert_receiver.py`, `scripts/alert_drill.py`, `docs/runbook.md`, `docs/alerts/` (every drill's record), two unit test files and one integration test file |
 | 35 | `core/headers.py`, `core/ratelimit.py`, `core/sessions.py`, `models/refresh_token.py` + migration 007, `schemas/text.py` (new), `routes/auth.py` (refresh, logout, the limits, a bounded form), `schemas/{trip,auth,user_preferences}.py` + `routes/{trips,admin}.py` + `deps.py` (every field bounded), `core/security.py` (PyJWT), `config.py`, `error_reporting.py` (key shapes), `preflight.py`, `main.py` (the headers, every log record redacted), `telemetry/logs.py` (LogRedactor), `mcp_server/server.py`, two prompts, both Dockerfiles (`FORWARDED_ALLOW_IPS`), the frontend's `api.ts` / `sse.ts` / `AppHeader.tsx` / `next.config.mjs`, `requirements.txt` + `constraints.txt` + `package.json` — see `docs/phase35_build_log.md` | `scripts/security_check.py`, `scripts/secret_audit.py`, `scripts/provider_keys.py` (new), two unit test files, one integration test file, `e2e/session.spec.ts` |
+| 36 | `src/ai/orchestrator/orchestrator.py` (the language node first, the localise node before persist; both in a change's run; the language, a typed destination and the stops' words carried), `src/ai/builder/builder.py` (local names and descriptions on a plan in another language; English untouched), `src/ai/llm.py`, `models/user_preferences.py` + `schemas/user_preferences.py` + `routes/users.py` (`preferred_language`), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `AppHeader.tsx`, `DayCard.tsx`, `LocalTips.tsx`, `ItineraryView.tsx`, `api.ts`, `types.ts`, `requirements.txt` + `constraints.txt` (langdetect) — see `docs/phase36_build_log.md` | `src/ai/language.py`, migration 008, `scripts/language_check.py`, `prompts/itinerary_builder_v10.md` + `translator_v1.md`, `src/frontend/src/lib/language.ts` + `components/PlanLanguageMenu.tsx`, `tests/fixtures/phase36/` (the English record), one unit test file, one integration test file, `e2e/language.spec.ts`, `docs/phase36_live/` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -2145,6 +2146,67 @@ agreeing on what a key looks like, the audit finding what is planted for it. `RU
 tests/integration/test_phase35_auth_integration.py -v` — refresh tokens and the limit on real Postgres and
 Redis. `cd src/frontend && npx playwright test e2e/session.spec.ts` — staying signed in, and signing out, in
 a browser.
+
+## Step 34 — Verify Phase 36: plans in Hindi, Tamil and Bengali
+
+Needs the dev containers (Step 1) for the suites; for B, the production-like stack and your `.env` (real
+models — a few calls each to Gemini and Groq, on their free tiers).
+
+### A. The suites — the three languages, and English untouched
+
+```bash
+pytest tests/unit/test_phase36_language.py -v
+RUN_INTEGRATION=1 pytest tests/integration/test_phase36_language_integration.py -v
+cd src/frontend && npx playwright test e2e/language.spec.ts
+```
+
+`test_english_sees_zero_change` runs two English trips through the whole planner on the stand-in models and
+compares every prompt each model is sent, the plan and the run's state with what the planner did before this
+phase (`tests/fixtures/phase36/english_plan.json`). It must never be "fixed" by recording again: a change to an
+English plan is a change, and goes in DECISIONS first. (`python -m tests.fixtures.phase36.capture_english`
+records it again, for the day such a change is made on purpose.)
+
+### B. The roadmap's request on the production-like stack
+
+```bash
+python scripts/prodlike.py up                 # the image, with this phase in it
+python scripts/language_check.py --prodlike   # --all: Tamil, Bengali, a chosen language, a change typed in Hindi
+```
+
+```
+A. The roadmap's request, in Hindi
+     planned in 17.4 s
+  ✓ planned in hi, decided by the request  — hi, by the request; translated: {'raw_input': '5-day trip to Goa, budget ₹50,000', 'destination': 'Goa'}
+  ✓ every stop is described in Hindi  — 10 of 10
+  ✓ every place has its name in Hindi's script  — 10 of 10
+  ✓ every name the plan goes by is still English
+  ✓ the local tips are in Hindi  — लचीलेपन के लिए स्कूटर किराए पर लें; …
+  ✓ the trip keeps the destination as it was typed  — गोवा
+     e.g. Excavated site in Chandor → खोदाई स्थल चंदोर में: इतिहास प्रेमियों के लिए चंदोर में पुरातात्विक स्थल का अन्वेषण करें।
+
+E. A request in English, nothing chosen
+  ✓ no step of this phase ran
+  ✓ the plan has no key it did not have before
+
+11 passed, 0 failed
+```
+
+On Groq's free tier a plan's calls are sometimes turned away ("Rate limit reached … tokens per minute") and
+asked again: the plan is slower, not wrong. A plan in another language asks the builder for more tokens than
+an English one (DECISIONS #339).
+
+### C. In the browser
+
+Sign in, open the language menu in the header (it says "As I write"), choose हिन्दी · Hindi. Plan a trip by
+typing a request in English or Hindi: the plan says "Written in हिन्दी (Hindi)", each stop has its Hindi name and
+a sentence under its English one, the local tips are in Hindi, and the PDF has them too. Sign out and in again:
+the menu still says हिन्दी. Choose "As I write": an English request is planned in English again.
+
+### D. What each step did
+
+`GET /trips/{id}/runs`: the `language` row says what was read (`read`), what the plan is in and what decided it
+(`language`, `decided_by`: the preference, the request, the trip), and what was translated; the `localise` row
+how many strings were put into the plan's language and how many stayed English. An English plan has neither row.
 
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
