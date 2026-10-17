@@ -59,11 +59,13 @@ TYPICAL_MINUTES = {
 }
 DEFAULT_MINUTES = 105
 
-# The estimate when the tool cannot answer. A road is longer than the straight line; an auto-rickshaw and a
-# taxi in an Indian town move at town speeds, and take a few minutes to find. Checked against Google's own
-# times for a plan's journeys in docs/phase37_build_log.md.
-ROAD_FACTOR = 1.35
-SPEED_KMH = {"walk": 4.5, "auto-rickshaw": 22.0, "taxi": 28.0}
+# The estimate when the tool cannot answer — made to look like the tool's own answer, which is Google's time
+# for a car without traffic (an auto-rickshaw is asked as a car too). Measured on ten Goa journeys against
+# OpenStreetMap's router (docs/phase37_build_log.md): the road was 1.31–3.17 times the straight line, 1.6 at
+# the median (across a river it is three times: no straight line knows there is a river); a car's time
+# without traffic, about 50 km/h of road. A walk is a walk.
+ROAD_FACTOR = 1.6
+SPEED_KMH = {"walk": 4.5, "auto-rickshaw": 50.0, "taxi": 50.0}
 PICKUP_MINUTES = {"walk": 0, "auto-rickshaw": 5, "taxi": 5}
 
 # Asks the travel-time tool: its parameters → {"minutes", "km", "mode", "source"}, or None when it cannot answer.

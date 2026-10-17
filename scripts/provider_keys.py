@@ -5,8 +5,10 @@
 
 For a key rotation: put the new keys in .env, run this, then delete the old keys at the providers and run
 it again — the answers are the same, and nothing in the repository knew the old ones (secret_audit.py).
-Each question costs no quota: a list of models, one airline, the list of countries, one place's name,
-the weather in one city, one LangSmith project.
+Each question costs no quota — a list of models, one airline, the list of countries, one place's name,
+the weather in one city, one LangSmith project — but one: Google's Routes API is asked one real journey
+(Fort Aguada to Baga Beach), one element of the 10,000 a month its route matrix gives free (Phase 37). It
+answers 400 to an invalid key as well as to a bad request, so nothing cheaper says a key works.
 
     ✓ GROQ_API_KEY          Groq            200 in 312 ms
     ✗ OPENWEATHER_API_KEY   OpenWeather     401 — the key was refused (a new one can take up to two hours to work)
@@ -38,6 +40,7 @@ class Question:
     headers: dict[str, str]
     params: dict[str, str]
     refused_means: str = "the key was refused"
+    body: dict | None = None
 
 
 def questions(key: dict[str, str]) -> list[Question]:
@@ -61,6 +64,13 @@ def questions(key: dict[str, str]) -> list[Question]:
                  {"x-api-key": key.get("LANGCHAIN_API_KEY", "")}, {"limit": "1"}),
         Question("ANTHROPIC_API_KEY", "Anthropic", "GET", "https://api.anthropic.com/v1/models",
                  {"x-api-key": key.get("ANTHROPIC_API_KEY", ""), "anthropic-version": "2023-06-01"}, {"limit": "1"}),
+        Question("GOOGLE_MAPS_API_KEY", "Google Maps", "POST",
+                 "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix",
+                 {"X-Goog-Api-Key": key.get("GOOGLE_MAPS_API_KEY", ""), "X-Goog-FieldMask": "duration,condition"}, {},
+                 "the key was refused — is the Routes API enabled for its project, and billing on?",
+                 {"origins": [{"waypoint": {"location": {"latLng": {"latitude": 15.4925, "longitude": 73.7735}}}}],
+                  "destinations": [{"waypoint": {"location": {"latLng": {"latitude": 15.5553, "longitude": 73.7517}}}}],
+                  "travelMode": "DRIVE"}),
     ]  # fmt: skip
 
 
@@ -77,13 +87,15 @@ def ask(question: Question, client: httpx.Client) -> tuple[bool, str]:
     """(accepted, what to say). Never the key, never the address: a status code and a time."""
     started = time.perf_counter()
     try:
-        answer = client.request(question.method, question.url, headers=question.headers, params=question.params)
+        answer = client.request(
+            question.method, question.url, headers=question.headers, params=question.params, json=question.body
+        )
     except httpx.HTTPError as failed:
         return False, f"could not be asked: {type(failed).__name__}"
     took = (time.perf_counter() - started) * 1000
     if answer.status_code == 200:
         return True, f"200 in {took:.0f} ms"
-    if answer.status_code in (401, 403):
+    if answer.status_code in (401, 403) or (answer.status_code == 400 and question.body is not None):
         return False, f"{answer.status_code} — {question.refused_means}"
     if answer.status_code == 429:
         return True, "429 — the key was accepted, and is over its quota for now"

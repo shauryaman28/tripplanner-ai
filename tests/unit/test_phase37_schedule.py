@@ -11,14 +11,18 @@ The roadmap's acceptance, and where each is held:
          - cached on the second call ([CACHE HIT] in the logs)      → test_the_second_ask_is_a_cache_hit
 """
 
+import importlib.util
 import json
 import logging
 import random
 import re
+import sys
 import uuid
 from datetime import date
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 from app.pdf.document import _stop_row
@@ -160,16 +164,16 @@ def test_the_way_is_chosen_by_the_distance():
     ]
 
 
-def test_an_estimate_is_the_straight_line_made_a_road_at_town_speeds():
+def test_an_estimate_is_the_straight_line_made_a_road_driven_without_traffic():
     km = schedule.straight_km(FORT_AGUADA, BAGA_BEACH)
     assert 7.2 < km < 7.4
     assert schedule.estimate(km, "auto-rickshaw") == {
-        "minutes": 33,
-        "km": 9.9,
+        "minutes": 20,  # OpenStreetMap's router: 13 minutes for this drive — and 5 to find the auto-rickshaw
+        "km": 11.8,
         "mode": "auto-rickshaw",
         "source": "estimate",
     }
-    assert schedule.estimate(1.0, "walk")["minutes"] == 18
+    assert schedule.estimate(1.0, "walk")["minutes"] == 22  # 1.6 km of road at 4.5 km/h
     assert schedule.estimate(0, "taxi")["minutes"] == 5  # the taxi still has to be found
 
 
@@ -215,7 +219,7 @@ async def test_a_stop_more_than_10_km_away_has_a_travel_note():
     morning, afternoon, evening = (plan["days"][0][slot] for slot in SLOTS)
     assert schedule.straight_km(BAGA_BEACH, OLD_GOA) > 10 > schedule.straight_km(FORT_AGUADA, BAGA_BEACH)
     assert "travel" not in afternoon  # 7 km: no note — only its minutes
-    assert afternoon["travel_from_previous_minutes"] == 33
+    assert afternoon["travel_from_previous_minutes"] == 20
     assert evening["travel"] == {
         "from": "Baga Beach",
         "minutes": evening["travel_from_previous_minutes"],
@@ -443,3 +447,34 @@ def test_the_page_and_the_pdf_name_the_ways_alike():
     block = source[source.index("TRAVEL_MODES") : source.index("};", source.index("TRAVEL_MODES"))]
     assert dict(re.findall(r'"?([a-z-]+)"?: "([^"]+)"', block)) == TRAVEL_MODES
     assert '${note.source === "google" ? "" : "about "}' in source  # an estimate is "about", there too
+
+
+# ── Does the key open Google's Routes API? (scripts/provider_keys.py) ──────
+
+
+def _provider_keys():
+    spec = importlib.util.spec_from_file_location("provider_keys", Path("scripts/provider_keys.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module  # a dataclass looks its own module up while it is being made
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(("status", "accepted"), [(200, True), (400, False), (403, False), (429, True)])
+def test_the_key_check_asks_google_one_journey_and_a_400_is_a_refusal(status, accepted):
+    keys = _provider_keys()
+    (question,) = [
+        q for q in keys.questions({"GOOGLE_MAPS_API_KEY": "AIza-test"}) if q.setting == "GOOGLE_MAPS_API_KEY"
+    ]
+    sent = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(status, json=[{"condition": "ROUTE_EXISTS", "duration": "780s"}] if status == 200 else {})
+
+    with httpx.Client(transport=httpx.MockTransport(answer)) as client:
+        ok, said = keys.ask(question, client)
+    body = json.loads(sent[0].content)
+    assert sent[0].method == "POST" and sent[0].headers["X-Goog-Api-Key"] == "AIza-test"
+    assert len(body["origins"]) == len(body["destinations"]) == 1  # one element of the free 10,000 a month
+    assert ok is accepted and "AIza-test" not in said
