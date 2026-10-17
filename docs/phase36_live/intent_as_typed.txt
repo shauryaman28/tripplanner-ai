@@ -1,0 +1,4 @@
+Gemini, ta as typed: {"destination": "Goa", "budget": 50000.0, "interests": ["beaches", "forts", "sightseeing"]} (1.3s)
+Gemini, bn as typed: {"destination": "Goa", "budget": 50000.0, "interests": ["beaches", "forts", "sightseeing"]} (3.6s)
+Groq openai/gpt-oss-20b, hi as typed: {"destination": "Goa", "budget": 50000.0, "interests": ["beach", "forts"]} (1.1s)
+Groq openai/gpt-oss-20b, hi translated: {"destination": "Goa", "budget": 50000.0, "interests": ["beaches", "forts"]} (1.0s)

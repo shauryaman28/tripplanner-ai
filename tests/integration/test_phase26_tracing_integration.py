@@ -164,7 +164,8 @@ async def test_a_refinement_is_classified_on_a_row_of_its_own_and_every_run_of_t
     assert classify.outputs["refinement_type"] == "targeted_hotel"
     assert classify.tokens == classifier["token_count"]  # the row and the trace agree here too
     assert (refine.metadata["turn"], refine.metadata["detail"]) == (2, "targeted_hotel")
-    assert refine.names() == ["hotel_agent", "build_itinerary", "evaluate", "persist", "merge"]
+    # (Phase 36: the request is read for its language first, and the plan localised before it is saved)
+    assert refine.names() == ["language", "hotel_agent", "build_itinerary", "evaluate", "localise", "persist", "merge"]
 
 
 async def test_a_refinement_goes_ahead_when_its_classification_cannot_be_logged(db_session, caplog):
@@ -373,7 +374,12 @@ async def test_the_local_receiver_takes_a_trace_over_http_and_finds_it_by_its_tr
     assert len(everything) == 2
     assert trace["name"] == "plan trip" and trace["metadata"]["trip_id"] == str(trip_id)
     assert {one["project"] for one in everything} == {"local"}  # the receiver says where each trace was sent
-    assert [span["name"] for span in trace["spans"]][:3] == ["intent_parsing", "apply_preferences", "run_flight"]
+    assert [span["name"] for span in trace["spans"]][:4] == [
+        "language",
+        "intent_parsing",
+        "apply_preferences",
+        "run_flight",
+    ]
     assert trace["tokens"] > 0 and trace["duration_ms"] >= 0
     # /records is everything, exactly as it was sent: the place to see what would leave the machine
     builds = [run for run in records if run["name"] == "build_itinerary"]

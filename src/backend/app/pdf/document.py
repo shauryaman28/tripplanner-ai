@@ -270,12 +270,23 @@ def _stop_row(day: int, stop: Stop) -> list:
         words = [
             _p("All day", EYEBROW),
             _p("Free time", ROW_TITLE_QUIET),
-            _p("Nothing booked — explore the area at your own pace.", META),
+            # Phase 36: on a plan in another language, what the page says of a free day — in it
+            _p(
+                scripts.shorten(
+                    stop.description or "Nothing booked — explore the area at your own pace.", DETAIL_LIMIT
+                ),
+                META,
+            ),
         ]
         return ["", words, ""]
 
     mark = PinMark(theme.day_style(day), label=str(stop.order)) if stop.order else PinMark(theme.UNMAPPED_STYLE)
     body = [_p(SLOT_LABELS[stop.slot], EYEBROW), _p(scripts.shorten(stop.name, NAME_LIMIT), ROW_TITLE)]
+    # Phase 36: on a plan in Hindi, Tamil or Bengali, the place's name and a sentence on it, in that language
+    if stop.local_name:
+        body.append(_p(scripts.shorten(stop.local_name, NAME_LIMIT), ROW_TITLE_QUIET))
+    if stop.description:
+        body.append(_p(scripts.shorten(stop.description, DETAIL_LIMIT), BODY))
     if facts := stop_facts(stop):
         body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
     return [mark, body, _amount(stop.cost, "entry fees") if stop.cost > 0 else ""]

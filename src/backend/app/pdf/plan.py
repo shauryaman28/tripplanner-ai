@@ -57,6 +57,9 @@ class Stop:
     free_time: bool
     order: int | None  # the number on its map pin, 1-based within the day; None when it has no pin
     suits: tuple[str, ...] = ()  # Phase 25, a group trip: the travellers this stop is for
+    # Phase 36, a plan in Hindi, Tamil or Bengali: the place's name and a sentence on it, in that language
+    local_name: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -287,6 +290,8 @@ def _read_day(raw: dict, index: int) -> Day:
                 free_time=free_time,
                 order=order if lat is not None else None,
                 suits=() if free_time else _names(entry.get("suits")),
+                local_name=None if free_time else _text(entry.get("local_name")),
+                description=_text(entry.get("description")),
             )
         )
 

@@ -1,0 +1,452 @@
+{
+ "started": "2026-10-17 09:54:18",
+ "runs": [
+  {
+   "label": "A hi: the roadmap's request",
+   "trip_id": "3a5981df-5a69-47c9-b1ea-04862e0b47c4",
+   "seconds": 17.4,
+   "turn": 1,
+   "agents": [
+    "language:completed",
+    "intent_parsing:completed",
+    "preferences:completed",
+    "flight_agent:completed",
+    "budget_decision:completed",
+    "activities_agent:completed",
+    "destination_intelligence:completed",
+    "hotel_agent:completed",
+    "itinerary_builder:completed",
+    "evaluator:completed",
+    "localise:completed",
+    "persist:completed",
+    "preference_extractor:completed",
+    "orchestrator:completed"
+   ],
+   "language_row": {
+    "language": "hi",
+    "confidence": 1.0,
+    "decided_by": "request",
+    "translated": {
+     "raw_input": "5 days trip to Goa, budget ₹50,000",
+     "destination": "Goa"
+    },
+    "kept_as_typed": [],
+    "request_read_as": "hi"
+   },
+   "localise_row": {
+    "output": {
+     "error": null,
+     "translated": 15,
+     "kept_in_english": 0
+    },
+    "input": {
+     "strings": 15,
+     "language": "hi"
+    },
+    "ms": 3387
+   },
+   "language_ms": 1179,
+   "builder_ms": 7511,
+   "plan_language": "hi",
+   "days": 5,
+   "stops": 10,
+   "described_in_language": 10,
+   "local_names": 10,
+   "names_in_english": true,
+   "sample": [
+    {
+     "activity": "Excavated site in Chandor",
+     "local_name": "चैंडोर में उत्खनित स्थल",
+     "description": "इतिहास प्रेमियों के लिए चैंडोर में प्राचीन अवशेषों का अन्वेषण करें।"
+    },
+    {
+     "activity": "Rachol Church",
+     "local_name": "राचोल चर्च",
+     "description": "आध्यात्मिक शांति के लिए राचोल चर्च में सुंदर वास्तुकला देखें।"
+    },
+    {
+     "activity": "Rachol Seminary",
+     "local_name": "राचोल सेमिनरी",
+     "description": "राचोल सेमिनरी में धार्मिक शिक्षा और इतिहास का अनुभव करें।"
+    }
+   ],
+   "tips_transport": "लचीलेपन के लिए एक स्कूटर किराए पर लें; नवंबर में ट्रैफिक कम होता है और अधिकांश समुद्र तटों और किलों के पास पार्किंग आसान होती है।",
+   "trip_destination": "गोवा",
+   "total_cost": 37922.99,
+   "evaluator": [
+    "completed"
+   ],
+   "new_keys_on_english": null
+  },
+  {
+   "label": "B ta: Madurai temples",
+   "trip_id": "456efde5-7e08-4c35-b9e8-787829e1029c",
+   "seconds": 30.7,
+   "turn": 1,
+   "agents": [
+    "language:completed",
+    "intent_parsing:completed",
+    "preferences:completed",
+    "flight_agent:completed",
+    "budget_decision:completed",
+    "destination_intelligence:completed",
+    "activities_agent:completed",
+    "hotel_agent:completed",
+    "itinerary_builder:completed",
+    "evaluator:completed",
+    "localise:completed",
+    "persist:completed",
+    "preference_extractor:completed",
+    "orchestrator:completed"
+   ],
+   "language_row": {
+    "language": "ta",
+    "confidence": 1.0,
+    "decided_by": "request",
+    "translated": {
+     "raw_input": "A three-day tour from Chennai to Madurai, want to see temples",
+     "destination": "Madurai"
+    },
+    "kept_as_typed": [],
+    "request_read_as": "ta"
+   },
+   "localise_row": {
+    "output": {
+     "error": null,
+     "translated": 18,
+     "kept_in_english": 0
+    },
+    "input": {
+     "strings": 18,
+     "language": "ta"
+    },
+    "ms": 3467
+   },
+   "language_ms": 972,
+   "builder_ms": 5417,
+   "plan_language": "ta",
+   "days": 3,
+   "stops": 9,
+   "described_in_language": 9,
+   "local_names": 9,
+   "names_in_english": true,
+   "sample": [
+    {
+     "activity": "Sri Meenakshi Amman Temple",
+     "local_name": "ஸ்ரீ மீனாட்சி அம்மன் கோவில்",
+     "description": "மதுரையில் உள்ள இந்த பிரபல ஆன்மீக கோவில் பார்வையிடவும்."
+    },
+    {
+     "activity": "Thiru Aappanoor",
+     "local_name": "திரு ஆப்பானூர்",
+     "description": "மதுரையில் உள்ள இந்த ஆன்மீக இடத்தை ஆராயுங்கள்."
+    },
+    {
+     "activity": "Sri Meenakshi Amman",
+     "local_name": "ஸ்ரீ மீனாட்சி அம்மன்",
+     "description": "மதுரையின் ஆன்மீக பாரம்பரியத்தை அனுபவிக்கவும்."
+    }
+   ],
+   "tips_transport": "கு, சிறிய பயணங்களுக்கு ஆட்டோ-ரிக்ஷாக்கள் மலிவானவை; நீண்ட தூரத்திற்கு புகழ்பெற்ற டாக்ஸியை அமர்த்தவும் அல்லது நகர பேருந்து சேவையைப் பயன்படுத்தவும்.",
+   "trip_destination": "மதுரை",
+   "total_cost": 8977.96,
+   "evaluator": [
+    "completed"
+   ],
+   "new_keys_on_english": null
+  },
+  {
+   "label": "C bn: Kolkata",
+   "trip_id": "091bf093-debc-4a54-8649-b6c95622861b",
+   "seconds": 33.8,
+   "turn": 1,
+   "agents": [
+    "language:completed",
+    "intent_parsing:completed",
+    "preferences:completed",
+    "flight_agent:completed",
+    "budget_decision:completed",
+    "destination_intelligence:failed",
+    "activities_agent:completed",
+    "hotel_agent:completed",
+    "itinerary_builder:failed",
+    "activities_agent:completed",
+    "itinerary_builder:completed",
+    "evaluator:completed",
+    "localise:completed",
+    "persist:completed",
+    "preference_extractor:completed",
+    "orchestrator:completed"
+   ],
+   "language_row": {
+    "language": "bn",
+    "confidence": 1.0,
+    "decided_by": "request",
+    "translated": {
+     "raw_input": "I want to spend three days in Kolkata, seeing old houses, the museum, and sweet shops",
+     "destination": "Kolkata"
+    },
+    "kept_as_typed": [],
+    "request_read_as": "bn"
+   },
+   "localise_row": {
+    "output": {
+     "error": null,
+     "translated": 0,
+     "kept_in_english": 0
+    },
+    "input": {
+     "strings": 0,
+     "language": "bn"
+    },
+    "ms": 0
+   },
+   "language_ms": 950,
+   "builder_ms": 6246,
+   "plan_language": "bn",
+   "days": 3,
+   "stops": 9,
+   "described_in_language": 9,
+   "local_names": 9,
+   "names_in_english": true,
+   "sample": [
+    {
+     "activity": "Medical College and Hospital, Kolkata",
+     "local_name": "মেডিকেল কলেজ অ্যান্ড হসপিটাল, কলকাতা",
+     "description": "ইতিহাসিক চিকিৎসা প্রতিষ্ঠানটি ঘুরে পুরনো স্থাপত্য ও ঐতিহ্য দেখুন।"
+    },
+    {
+     "activity": "marble Palace",
+     "local_name": "মার্বেল প্যালেস",
+     "description": "ইতিহাসিক মার্বেল প্যালেসের শিল্পকর্ম ও স্থাপত্য উপভোগ করুন।"
+    },
+    {
+     "activity": "Ashutosh Shiksha Prangan",
+     "local_name": "অশুতোষ শিক্ষা প্রাঙ্গণ",
+     "description": "শিক্ষা সংক্রান্ত ঐতিহাসিক স্থাপনা পরিদর্শন করুন এবং ইতিহাস জানুন।"
+    }
+   ],
+   "tips_transport": null,
+   "trip_destination": "কলকাতা",
+   "total_cost": 14662.02,
+   "evaluator": [
+    "completed"
+   ],
+   "new_keys_on_english": null
+  },
+  {
+   "label": "F hi: a change typed in Hindi",
+   "trip_id": "3a5981df-5a69-47c9-b1ea-04862e0b47c4",
+   "seconds": 40.6,
+   "turn": 2,
+   "agents": [
+    "refinement_classifier:completed",
+    "language:completed",
+    "hotel_agent:completed",
+    "itinerary_builder:failed",
+    "activities_agent:completed",
+    "itinerary_builder:completed",
+    "evaluator:completed",
+    "localise:completed",
+    "persist:completed",
+    "orchestrator:completed"
+   ],
+   "language_row": {
+    "language": "hi",
+    "confidence": null,
+    "decided_by": "request",
+    "translated": {
+     "refinement_request": "I want a hotel near the beach"
+    },
+    "kept_as_typed": [],
+    "request_read_as": "hi"
+   },
+   "localise_row": {
+    "output": {
+     "error": null,
+     "translated": 19,
+     "kept_in_english": 0
+    },
+    "input": {
+     "strings": 19,
+     "language": "hi"
+    },
+    "ms": 2558
+   },
+   "language_ms": 936,
+   "builder_ms": 29228,
+   "plan_language": "hi",
+   "days": 5,
+   "stops": 10,
+   "described_in_language": 10,
+   "local_names": 0,
+   "names_in_english": true,
+   "sample": [
+    {
+     "activity": "Excavated site in Chandor",
+     "local_name": null,
+     "description": "गोवा में एक लोकप्रिय ऐतिहासिक आकर्षण।"
+    },
+    {
+     "activity": "Rachol Church",
+     "local_name": null,
+     "description": "गोवा में एक लोकप्रिय आध्यात्मिक आकर्षण।"
+    },
+    {
+     "activity": "Rachol Seminary",
+     "local_name": null,
+     "description": "गोवा में एक लोकप्रिय आध्यात्मिक आकर्षण।"
+    }
+   ],
+   "tips_transport": "लचीलेपन के लिए स्कूटर किराए पर लें; नवंबर में ट्रैफिक कम होता है और अधिकांश समुद्र तटों और किलों के पास पार्किंग आसान होती है।",
+   "trip_destination": "गोवा",
+   "total_cost": 37922.99,
+   "evaluator": [
+    "completed"
+   ],
+   "new_keys_on_english": null
+  },
+  {
+   "label": "D en request, Hindi chosen",
+   "trip_id": "2c8b63a8-bb22-4fcd-b6a2-bbe6c8e93c3c",
+   "seconds": 33.8,
+   "turn": 1,
+   "agents": [
+    "language:completed",
+    "intent_parsing:completed",
+    "preferences:completed",
+    "flight_agent:completed",
+    "budget_decision:completed",
+    "destination_intelligence:failed",
+    "activities_agent:completed",
+    "hotel_agent:completed",
+    "itinerary_builder:completed",
+    "evaluator:completed",
+    "localise:completed",
+    "persist:completed",
+    "preference_extractor:completed",
+    "orchestrator:completed"
+   ],
+   "language_row": {
+    "language": "hi",
+    "confidence": null,
+    "decided_by": "preference",
+    "translated": {},
+    "kept_as_typed": [],
+    "request_read_as": null
+   },
+   "localise_row": {
+    "output": {
+     "error": null,
+     "translated": 0,
+     "kept_in_english": 0
+    },
+    "input": {
+     "strings": 0,
+     "language": "hi"
+    },
+    "ms": 0
+   },
+   "language_ms": 0,
+   "builder_ms": 28480,
+   "plan_language": "hi",
+   "days": 3,
+   "stops": 9,
+   "described_in_language": 9,
+   "local_names": 9,
+   "names_in_english": true,
+   "sample": [
+    {
+     "activity": "Ram Niwas Garden",
+     "local_name": "राम निवास गार्डन",
+     "description": "एक सुंदर बगीचा जहाँ आप शांति में टहल सकते हैं।"
+    },
+    {
+     "activity": "City Palace",
+     "local_name": "सिटी पैलेस",
+     "description": "राजस्थानी शाही महल का इतिहास और कला देखें।"
+    },
+    {
+     "activity": "Jantar Mantar",
+     "local_name": "जंतर मंतर",
+     "description": "प्राचीन खगोलीय उपकरणों की यात्रा करें और विज्ञान सीखें।"
+    }
+   ],
+   "tips_transport": null,
+   "trip_destination": "Jaipur",
+   "total_cost": 18074.94,
+   "evaluator": [
+    "completed"
+   ],
+   "new_keys_on_english": null
+  },
+  {
+   "label": "E en request, nothing chosen",
+   "trip_id": "131f8565-6d04-4572-aca4-41a36369bc14",
+   "seconds": 36.9,
+   "turn": 1,
+   "agents": [
+    "intent_parsing:completed",
+    "preferences:completed",
+    "flight_agent:completed",
+    "budget_decision:completed",
+    "hotel_agent:completed",
+    "destination_intelligence:completed",
+    "activities_agent:completed",
+    "itinerary_builder:failed",
+    "activities_agent:completed",
+    "itinerary_builder:completed",
+    "evaluator:completed",
+    "persist:completed",
+    "preference_extractor:completed",
+    "orchestrator:completed"
+   ],
+   "language_row": null,
+   "localise_row": {
+    "output": null,
+    "input": null,
+    "ms": null
+   },
+   "language_ms": null,
+   "builder_ms": 14250,
+   "plan_language": null,
+   "days": 3,
+   "stops": 9,
+   "described_in_language": 0,
+   "local_names": 0,
+   "names_in_english": true,
+   "sample": [
+    {
+     "activity": "Jagdish Temple",
+     "local_name": null,
+     "description": null
+    },
+    {
+     "activity": "City Palace",
+     "local_name": null,
+     "description": null
+    },
+    {
+     "activity": "Bagore-ki-Haveli",
+     "local_name": null,
+     "description": null
+    }
+   ],
+   "tips_transport": "Hire a small auto-rickshaw for short hops; for longer distances, a private car with driver is cheap and comfortable.",
+   "trip_destination": "Udaipur",
+   "total_cost": 9461.6,
+   "evaluator": [
+    "completed"
+   ],
+   "new_keys_on_english": []
+  }
+ ],
+ "refine_answer": {
+  "status": "refinement_started",
+  "trip_id": "3a5981df-5a69-47c9-b1ea-04862e0b47c4",
+  "turn": 2,
+  "refinement_type": "targeted_hotel",
+  "reason": "The user wants the hotel to be closer to the beach, keeping flights and activities unchanged."
+ },
+ "finished": "2026-10-17 09:57:32"
+}

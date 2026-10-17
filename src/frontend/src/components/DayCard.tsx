@@ -7,7 +7,7 @@ import { flightPart, stayPart, stopPart, type PlanSection } from "@/lib/changes"
 import { formatClock, formatDuration, formatINR, formatWeekday, namesInWords } from "@/lib/format";
 import { HOTEL_STYLE, SLOT_LABELS, dayStops, dayStyle, hotelPinId, type DayStop, type PinStyle, type SlotName } from "@/lib/map";
 import { categoryMeta, describeRating } from "@/lib/places";
-import type { DaySchedule } from "@/lib/types";
+import type { ActivitySlot, DaySchedule } from "@/lib/types";
 import { Pin, UpdatedTag, UpdatingTag, partClass } from "./ui";
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   updating?: PlanSection | null;
   /** The parts that came back different from the last change (lib/changes.ts) — marked for a few seconds. */
   changed?: ReadonlySet<string>;
+  /** Phase 36: the language the plan is written in ("hi", "ta", "bn") — what is in it is marked with it. */
+  language?: string;
 }
 
 const NOTHING_CHANGED: ReadonlySet<string> = new Set();
@@ -69,6 +71,17 @@ function Row({
   );
 }
 
+/** Phase 36 — a stop's name and a sentence on it, in the plan's language. Nothing for a plan in English. */
+function InTheirLanguage({ activity, language }: { activity: ActivitySlot; language?: string }) {
+  if (!language || !(activity.local_name || activity.description)) return null;
+  return (
+    <div lang={language} data-local-text className="mt-1 space-y-0.5">
+      {activity.local_name && <p className="text-sm font-medium text-ink-700">{activity.local_name}</p>}
+      {activity.description && <p className="break-words text-sm leading-relaxed text-ink-600">{activity.description}</p>}
+    </div>
+  );
+}
+
 /** The stop's own pin — same colour, shape and number as on the map; click to go there. */
 function MapButton({ pinStyle, label, name, onClick }: { pinStyle: PinStyle; label: ReactNode; name: string; onClick: () => void }) {
   return (
@@ -101,12 +114,14 @@ function ActivityRow({
   onShowOnMap,
   updating,
   changed,
+  language,
 }: {
   day: number;
   stop: DayStop;
   onShowOnMap: Props["onShowOnMap"];
   updating: boolean;
   changed: boolean;
+  language?: string;
 }) {
   const { activity, slot } = stop;
 
@@ -121,7 +136,13 @@ function ActivityRow({
         part={stopPart(day, slot)}
         updating={updating}
       >
-        <p className="mt-0.5 text-xs text-ink-500">Nothing booked — explore the area at your own pace.</p>
+        {language && activity.description ? (
+          <p lang={language} data-local-text className="mt-0.5 text-sm text-ink-600">
+            {activity.description}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-xs text-ink-500">Nothing booked — explore the area at your own pace.</p>
+        )}
       </Row>
     );
   }
@@ -144,6 +165,7 @@ function ActivityRow({
         )
       }
     >
+      <InTheirLanguage activity={activity} language={language} />
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-600">
         {category && (
           <span className="flex items-center gap-1">
@@ -177,7 +199,7 @@ function ActivityRow({
   );
 }
 
-export default function DayCard({ day, onShowOnMap, updating = null, changed = NOTHING_CHANGED }: Props) {
+export default function DayCard({ day, onShowOnMap, updating = null, changed = NOTHING_CHANGED, language }: Props) {
   const stops = dayStops(day);
   const { hotel, flight } = day;
   const dayCost = stops.reduce((sum, stop) => sum + (stop.activity.cost ?? 0), 0) + (hotel?.cost_per_night ?? 0);
@@ -247,6 +269,7 @@ export default function DayCard({ day, onShowOnMap, updating = null, changed = N
               onShowOnMap={onShowOnMap}
               updating={updating === "activities"}
               changed={changed.has(stopPart(day.day, stop.slot))}
+              language={language}
             />
           ))}
 

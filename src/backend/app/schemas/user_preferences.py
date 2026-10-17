@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel, Field, StringConstraints, field_validator
 
 from app.core.preferences import MAX_ITEM_LENGTH, MAX_LIST_ITEMS, normalise_airlines, normalise_dietary
-from app.models.user_preferences import TravelStyle
+from app.models.user_preferences import PlanLanguage, TravelStyle
 from app.schemas.types import UTCDateTime
 
 DietaryItem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_ITEM_LENGTH)]
@@ -21,12 +21,17 @@ class PreferencesUpdate(BaseModel):
     preferred_airlines are 2-character IATA carrier codes (e.g. "6E" for
     IndiGo, "AI" for Air India) because they are matched against the
     carrier code Amadeus returns.
+
+    preferred_language (Phase 36) is the language plans are written in: "en",
+    "hi", "ta" or "bn". Null — and left out, like any field here — is none
+    chosen: each request's own language decides.
     """
 
     dietary_restrictions: list[DietaryItem] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     preferred_airlines: list[AirlineCode] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     travel_style: TravelStyle | None = None
     home_city: str | None = Field(default=None, max_length=100)
+    preferred_language: PlanLanguage | None = None
 
     @field_validator("dietary_restrictions")
     @classmethod
@@ -55,6 +60,7 @@ class PreferencesRead(BaseModel):
     preferred_airlines: list[str] = Field(default_factory=list)
     travel_style: str | None = None
     home_city: str | None = None
+    preferred_language: str | None = None  # Phase 36
     updated_at: UTCDateTime | None = None
 
     model_config = {"from_attributes": True}

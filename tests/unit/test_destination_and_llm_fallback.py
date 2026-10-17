@@ -248,7 +248,8 @@ async def test_groq_answers_when_gemini_cannot():
         patch("src.ai.llm._ask_groq", AsyncMock(return_value='{"from": "groq"}')) as groq,
     ):
         assert await llm.ask("prompt") == '{"from": "groq"}'
-    groq.assert_awaited_once_with("prompt")
+    # with a short answer's room (Phase 36 lets a translation ask for more)
+    groq.assert_awaited_once_with("prompt", llm.SHORT_ANSWER_TOKENS, llm.SHORT_PROMPT_TIMEOUT_S)
 
 
 @pytest.mark.asyncio

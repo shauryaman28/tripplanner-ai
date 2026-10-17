@@ -52,6 +52,9 @@ export interface ActivitySlot {
   category?: string | null;   // Phase 18 — attached from the attraction search
   rating?: number | null;     // OpenTripMap popularity rate — see lib/places.ts
   suits?: string[] | null;    // Phase 25, a group trip — the travellers this stop is for
+  // Phase 36 — only on a plan in Hindi, Tamil or Bengali (StructuredItinerary.language): in that language
+  local_name?: string | null; // the place's name as the language writes it; `activity` stays the English one
+  description?: string | null; // a sentence on the stop (on a free day: what the page says of one, translated)
 }
 
 export interface HotelSlot {
@@ -112,6 +115,7 @@ export interface StructuredItinerary {
   per_person_cost?: number | null;                 // one traveller's share of total_cost
   per_person_breakdown?: PerPersonBreakdown | null; // what it is made of; null for one traveller
   group?: unknown;                                 // who got how many stops — read by lib/group.ts
+  language?: "hi" | "ta" | "bn";                   // Phase 36 — absent: the plan is in English
 }
 
 /** A trip's cost split equally between its travellers. flights / stay / activities / total are one traveller's part. */
@@ -245,6 +249,16 @@ export interface TripStatusResponse {
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────
+
+/** GET/PUT /users/preferences (Phase 16; `preferred_language` Phase 36). PUT replaces the whole of it. */
+export interface Preferences {
+  dietary_restrictions: string[];
+  preferred_airlines: string[];
+  travel_style: string | null;
+  home_city: string | null;
+  preferred_language: "en" | "hi" | "ta" | "bn" | null;
+  updated_at?: string | null;
+}
 
 export interface TokenResponse {
   access_token: string;

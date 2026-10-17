@@ -45,6 +45,14 @@ def no_fallback_llm():
 
 
 @pytest.fixture(autouse=True)
+def no_translation_model():
+    """Phase 36: a request in Hindi is translated by a model (src/ai/language.py). A test that wants a translation
+    stubs it — tests/fakes.py's `network_stubs` does; one that does not finds the request kept as it was typed."""
+    with patch("src.ai.language._call_model", AsyncMock(side_effect=RuntimeError("no model in tests"))) as model:
+        yield model
+
+
+@pytest.fixture(autouse=True)
 def no_destination_intelligence_llm():
     """The DestinationIntelligenceAgent (Phase 22) runs in every plan: a test that wants local tips stubs its model.
 

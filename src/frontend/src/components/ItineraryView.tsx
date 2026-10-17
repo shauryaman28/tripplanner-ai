@@ -7,6 +7,7 @@ import { useRef, useState } from "react";
 import type { PlanSection } from "@/lib/changes";
 import { nightsBetween } from "@/lib/format";
 import { perPersonCost } from "@/lib/group";
+import { planLanguage } from "@/lib/language";
 import type { Itinerary, Trip } from "@/lib/types";
 import CostSummary from "./CostSummary";
 import DayCard from "./DayCard";
@@ -69,6 +70,7 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
 
   // one section of the plan, or none: "all" dims the whole plan instead, "pending" touches nothing yet
   const section = updating === "all" || updating === "pending" ? null : updating;
+  const language = planLanguage(data.language); // Phase 36: null for a plan in English
 
   return (
     <section
@@ -98,6 +100,11 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
         <div>
           <h2 className="font-display text-2xl font-medium tracking-tight text-ink-900">Day by day</h2>
           <p className="mt-0.5 text-sm text-ink-600">Each day has its own colour — the same one on the map.</p>
+          {language && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-700" data-plan-written-in={language.code}>
+              Written in <span lang={language.code}>{language.native}</span> ({language.name})
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {/* PDF export (Phase 19) */}
@@ -112,13 +119,18 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
       <ol className="space-y-4">
         {data.days.map((day) => (
           <li key={day.day}>
-            <DayCard day={day} onShowOnMap={showOnMap} updating={section} changed={changed} />
+            <DayCard day={day} onShowOnMap={showOnMap} updating={section} changed={changed} language={language?.code} />
           </li>
         ))}
       </ol>
 
       {/* Local tips (Phase 22) — nothing at all when the itinerary has none. */}
-      <LocalTips intelligence={data.local_intelligence} days={data.days} destination={trip?.destination ?? null} />
+      <LocalTips
+        intelligence={data.local_intelligence}
+        days={data.days}
+        destination={trip?.destination ?? null}
+        language={language?.code}
+      />
 
       {/* Map (Phase 18). It draws the stops, so it waits with them. */}
       <div ref={mapRef} id="trip-map" className={`transition-opacity duration-300 ${section === "activities" ? "opacity-60" : ""}`}>

@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { getEmail, logout } from "@/lib/api";
 import Brand from "./Brand";
+import PlanLanguageMenu from "./PlanLanguageMenu";
 
 /** Sticky top bar for the signed-in pages. `children` is the breadcrumb slot. */
 export default function AppHeader({ children }: { children?: ReactNode }) {
@@ -29,6 +30,9 @@ export default function AppHeader({ children }: { children?: ReactNode }) {
         </Link>
 
         <div className="min-w-0 flex-1">{children}</div>
+
+        {/* Phase 36: the language plans are written in — saved with the traveller's preferences */}
+        <PlanLanguageMenu />
 
         {email && (
           <span className="hidden items-center gap-2 text-sm text-ink-600 md:flex" title={email}>
