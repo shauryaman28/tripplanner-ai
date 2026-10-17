@@ -44,10 +44,11 @@ export default function PlanLanguageMenu() {
 
   if (chosen === undefined) return null;
 
+  // on a phone: no icon, and a narrower box — the header has the width of the screen and no more
   return (
     <div className="flex shrink-0 items-center gap-1.5">
       <label htmlFor={id} className="flex items-center gap-1.5 text-ink-500" title="The language your plans are written in">
-        <Languages className="h-4 w-4" aria-hidden />
+        <Languages className="hidden h-4 w-4 sm:block" aria-hidden />
         <span className="sr-only">Plan language</span>
       </label>
       <select
@@ -56,7 +57,7 @@ export default function PlanLanguageMenu() {
         onChange={(event) => choose((event.target.value || null) as PreferredLanguage)}
         disabled={saving === "saving"}
         data-plan-language={chosen ?? ""}
-        className="focus-ring max-w-[9.5rem] cursor-pointer rounded-lg border border-transparent bg-transparent py-1.5 pl-1.5 pr-6 text-sm text-ink-700 transition hover:border-ink-200 hover:bg-white disabled:cursor-wait disabled:opacity-60"
+        className="focus-ring max-w-[6.5rem] cursor-pointer rounded-lg border border-transparent bg-transparent py-1.5 pl-1 pr-5 text-sm sm:max-w-[9.5rem] sm:pl-1.5 sm:pr-6 text-ink-700 transition hover:border-ink-200 hover:bg-white disabled:cursor-wait disabled:opacity-60"
       >
         <option value="">As I write</option>
         <option value="en">English</option>
