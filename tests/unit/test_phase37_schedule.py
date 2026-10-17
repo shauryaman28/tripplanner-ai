@@ -35,6 +35,7 @@ from src.ai.mcp_server.cache import make_cache_key
 from src.ai.mcp_server.models import CACHES, TOOL_NAMES, ToolError, TravelTimeInput
 from src.ai.mcp_server.tools import ROUTES_FIELDS, ROUTES_MATRIX_URL, TTL_TRAVEL, get_travel_time
 from src.ai.orchestrator.orchestrator import OrchestratorAgent
+from tests import fakes
 from tests.fakes import ATTRACTIONS, HOTELS, FakeProviders, flight, memory_cache, network_stubs, providers_faked
 
 FORT_AGUADA = (15.4925, 73.7735)
@@ -376,12 +377,13 @@ async def test_the_builder_asks_the_tool_for_each_journey_and_logs_how_many_goog
 
 
 async def test_without_the_tool_the_builder_estimates_and_says_so(no_travel_time_tool):
-    result = await builder.ItineraryBuilder().run(
-        trip_meta={"destination": "Goa", "start_date": "2030-01-10", "end_date": "2030-01-12", "group_size": 1},
-        flights=[flight(8_200.0)],
-        hotels=HOTELS,
-        attractions=ATTRACTIONS,
-    )
+    with patch.object(builder, "_call_llm", fakes.fake_builder_llm):  # the stand-in model: never a real one
+        result = await builder.ItineraryBuilder().run(
+            trip_meta={"destination": "Goa", "start_date": "2030-01-10", "end_date": "2030-01-12", "group_size": 1},
+            flights=[flight(8_200.0)],
+            hotels=HOTELS,
+            attractions=ATTRACTIONS,
+        )
     assert no_travel_time_tool.await_count == result["travel"]["legs"] > 0
     assert result["travel"]["from_google"] == 0
     far = [s["travel"] for s in stops_of(result["draft"]) if s.get("travel")]

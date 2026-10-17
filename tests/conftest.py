@@ -13,6 +13,12 @@ import os
 # the app is imported: it sets up its logging as it is loaded.)
 os.environ["LOG_FORMAT"] = "text"
 os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
+# Phase 37: the app hands the Gemini and Groq SDKs their keys through the environment (app/core/config.py),
+# so a test that builds without a stand-in model talked to the real one, on any machine with keys in .env —
+# one did, until its break-on-purpose run had no .env to find. The SDKs get a key that opens nothing:
+# such a call fails, and costs nothing. (Set before the app is imported, which only sets them if unset.)
+os.environ["GROQ_API_KEY"] = "no-real-key-in-tests"
+os.environ["GOOGLE_API_KEY"] = "no-real-key-in-tests"
 
 if os.getenv("RUN_INTEGRATION"):
     from tests.database import use_database
