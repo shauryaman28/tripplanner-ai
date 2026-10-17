@@ -121,6 +121,7 @@ def _as_a_process() -> None:
         from src.backend.app.core.error_reporting import Scrubber, secrets_of
 
     scrub = Scrubber(secrets_of(mcp_settings)).text
+    logs.redact_every_record(scrub)  # Phase 35: every line, text or JSON
     logs.configure(
         logs.chosen(mcp_settings.LOG_FORMAT, mcp_settings.APP_ENV), traces.TOOL_SERVER, stream=sys.stderr, scrub=scrub
     )

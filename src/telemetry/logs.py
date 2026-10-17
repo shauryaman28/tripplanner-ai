@@ -142,6 +142,60 @@ class JsonLines(JsonFormatter):
         return log_data
 
 
+class LogRedactor(logging.Filter):
+    """Phase 35 — every log line put through the scrubber, whatever writes it and in whatever format.
+
+    Until Phase 35 only a JSON line was scrubbed (in its formatter): a development console, a text
+    log file and every handler a library brings wrote what they were given. This works on the
+    record itself — its message with the arguments put in, its traceback and stack — so every
+    handler after it sees the same clean text. `redact_every_record` puts it in front of all of
+    them at once; it is also an ordinary filter, for a handler of one's own.
+    """
+
+    def __init__(self, scrub: Callable[[str], str]) -> None:
+        super().__init__()
+        self.scrub = scrub
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:  # a message whose arguments do not fit it: logging says so itself, later
+            return True
+        cleaned = self.scrub(message)
+        if cleaned != message:
+            record.msg, record.args = cleaned, None
+        if record.exc_info and not record.exc_text:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+        if record.exc_text:
+            record.exc_text = self.scrub(record.exc_text)
+        if record.stack_info:
+            record.stack_info = self.scrub(record.stack_info)
+        return True
+
+
+_redactor: LogRedactor | None = None
+
+
+def redact_every_record(scrub: Callable[[str], str]) -> LogRedactor:
+    """Every record this process makes from now on goes through a LogRedactor as it is made — before any
+    handler, any format, any library's own handler sees it. Safe to call again: the scrubber is replaced,
+    not a second redactor added."""
+    global _redactor
+    if _redactor is not None:
+        _redactor.scrub = scrub
+        return _redactor
+    _redactor = redactor = LogRedactor(scrub)
+    make = logging.getLogRecordFactory()
+
+    def redacted(*args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = make(*args, **kwargs)
+        redactor.filter(record)
+        return record
+
+    logging.setLogRecordFactory(redacted)
+    return redactor
+
+
 def configure(
     log_format: str, service: str, stream: TextIO | None = None, scrub: Callable[[str], str] | None = None
 ) -> bool:

@@ -2,8 +2,12 @@
  * Typed API client for the TripPlanner FastAPI backend.
  *
  * All routes are prefixed with /api which Next.js rewrites to the backend.
- * The token lives in localStorage — simplest thing that survives a reload;
- * a production app would use an httpOnly cookie.
+ *
+ * Phase 35: two tokens. The access token (an hour) lives in localStorage, where the pages look to see
+ * whether anybody is signed in. The refresh token never reaches this code: the backend sets it as an
+ * HttpOnly cookie that the browser sends only to /api/auth/*. When the access token runs out, a request
+ * answered 401 asks POST /api/auth/refresh once — one refresh at a time, however many requests found
+ * the token gone — and is sent again with the new token. Only when that fails is the visitor signed out.
  */
 
 import type {
@@ -21,7 +25,7 @@ import type {
 } from "./types";
 
 // ---------------------------------------------------------------------------
-// Token store — simplest possible; replace with httpOnly cookie in production
+// Token store — the access token; the refresh token is an HttpOnly cookie (Phase 35)
 // ---------------------------------------------------------------------------
 
 let _token: string | null = null;
@@ -81,9 +85,54 @@ async function apiError(res: Response): Promise<ApiError> {
   return new ApiError(res.status, detail);
 }
 
+// ---------------------------------------------------------------------------
+// Staying signed in (Phase 35)
+// ---------------------------------------------------------------------------
+
+let _refreshing: Promise<string | null> | null = null;
+
+/** A new access token from the refresh cookie, or null when the sign-in has ended. One at a time. */
+export function refreshAccessToken(): Promise<string | null> {
+  if (!_refreshing) {
+    _refreshing = (async () => {
+      try {
+        const res = await fetch("/api/auth/refresh", { method: "POST", credentials: "same-origin" });
+        if (!res.ok) return null;
+        const data: TokenResponse = await res.json();
+        setToken(data.access_token);
+        return data.access_token;
+      } catch {
+        return null;
+      } finally {
+        _refreshing = null;
+      }
+    })();
+  }
+  return _refreshing;
+}
+
+/** Seconds until a token runs out, read from its payload — or 0 when it cannot be read. */
+function secondsLeft(token: string): number {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" ? payload.exp - Date.now() / 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The access token, refreshed first if it is within a minute of running out — for the event stream,
+ * which cannot be told 401 and asked again the way a request can. */
+export async function freshToken(): Promise<string | null> {
+  const token = getToken();
+  if (!token) return null;
+  return secondsLeft(token) > 60 ? token : (await refreshAccessToken()) ?? null;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
+  again = true,
 ): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
@@ -93,6 +142,10 @@ async function request<T>(
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`/api${path}`, { ...options, headers });
+  // The access token has run out (or was never good): refresh it once, and ask again
+  if (res.status === 401 && again && token && !path.startsWith("/auth/")) {
+    if (await refreshAccessToken()) return request<T>(path, options, false);
+  }
   if (!res.ok) throw await apiError(res);
 
   // 204 No Content
@@ -123,9 +176,19 @@ export async function login(email: string, password: string): Promise<string> {
     throw new ApiError(res.status, res.status === 401 ? "That email and password don't match." : "Could not sign in. Please try again.");
   }
   const data: TokenResponse = await res.json();
-  setToken(data.access_token);
+  setToken(data.access_token); // the refresh token in the body is left alone: the cookie is this page's
   localStorage.setItem("tp_email", email);
   return data.access_token;
+}
+
+/** Sign out: the server ends the sign-in (every refresh token of it), and this browser forgets it. */
+export async function logout(): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+  } catch {
+    // signed out here whatever the server said: the page must not keep anyone signed in
+  }
+  clearToken();
 }
 
 // ---------------------------------------------------------------------------

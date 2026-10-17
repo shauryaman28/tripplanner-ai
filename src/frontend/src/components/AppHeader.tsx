@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { clearToken, getEmail } from "@/lib/api";
+import { getEmail, logout } from "@/lib/api";
 import Brand from "./Brand";
 
 /** Sticky top bar for the signed-in pages. `children` is the breadcrumb slot. */
@@ -16,8 +16,8 @@ export default function AppHeader({ children }: { children?: ReactNode }) {
   // localStorage is not there during server rendering
   useEffect(() => setEmail(getEmail()), []);
 
-  function signOut() {
-    clearToken();
+  async function signOut() {
+    await logout(); // Phase 35: the server ends the sign-in too, not only this browser
     router.replace("/login");
   }
 

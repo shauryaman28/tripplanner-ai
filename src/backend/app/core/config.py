@@ -60,7 +60,22 @@ class Settings(BaseSettings):
     # JWT (Phase 5)
     JWT_SECRET: str = "change-me-before-production"
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 1440
+    # Phase 35: an hour (it was a day) — a token that leaks is good for that long; staying signed in is
+    # the refresh token's job (POST /auth/refresh): REFRESH_TOKEN_DAYS each, used once, and never past
+    # REFRESH_SESSION_DAYS after the sign-in. A refresh token presented again more than
+    # REFRESH_REUSE_GRACE_S after it was used ends its whole sign-in (two parties have it).
+    JWT_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_DAYS: int = 14
+    REFRESH_SESSION_DAYS: int = 30
+    REFRESH_REUSE_GRACE_S: int = 10
+    # The browser keeps its refresh token in an HttpOnly cookie that only the sign-in routes are sent —
+    # as the browser sees them, through the site's /api proxy.
+    REFRESH_COOKIE_PATH: str = "/api/auth"
+
+    # Phase 35: how many times one address may try to sign in, or make an account, in any 60 seconds
+    # (app/core/ratelimit.py). 0: no limit — for a stack that is loaded from one address on purpose.
+    LOGIN_ATTEMPTS_PER_MINUTE: int = 5
+    REGISTRATIONS_PER_MINUTE: int = 5
 
     # LLMs (Phase 6+) — model IDs are settings so a retired model is an env change, not a code change
     GOOGLE_API_KEY: str = ""  # Gemini: intent parsing, refinement classifier, embeddings

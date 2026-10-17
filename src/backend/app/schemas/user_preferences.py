@@ -8,7 +8,7 @@ from app.schemas.types import UTCDateTime
 
 DietaryItem = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_ITEM_LENGTH)]
 # Case-insensitive on input; canonicalised to upper-case by the validator below.
-AirlineCode = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[A-Za-z0-9]{2}$")]
+AirlineCode = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2, pattern=r"^[A-Za-z0-9]{2}$")]
 
 
 class PreferencesUpdate(BaseModel):

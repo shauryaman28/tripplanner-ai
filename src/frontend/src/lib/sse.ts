@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentStatus, SSEAgentUpdateEvent } from "./types";
-import { getToken } from "./api";
+import { freshToken } from "./api";
 
 // Compiled in when the site is built (next.config.mjs refuses a deployment build without it).
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
@@ -77,11 +77,13 @@ export function useSSE(tripId: string | null, enabled: boolean = true): UseSSERe
     showDraft();
   }, [showDraft]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (!tripId || closedRef.current) return;
 
-    const token = getToken();
-    if (!token) return;
+    // Phase 35: an access token lasts an hour, and a stream is opened with it in its address — so it is
+    // refreshed first when it is about to run out (a stream that is refused cannot say it was a 401).
+    const token = await freshToken();
+    if (!token || closedRef.current) return;
 
     setStatus(attempt.current === 0 ? "connecting" : "reconnecting");
 

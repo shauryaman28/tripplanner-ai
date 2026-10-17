@@ -71,7 +71,7 @@ async def test_register_new_user_returns_201():
     try:
         with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                resp = await c.post("/auth/register", json={"email": "test@example.com", "password": "pass123"})
+                resp = await c.post("/auth/register", json={"email": "test@example.com", "password": "pass1234"})
     finally:
         app.dependency_overrides.pop(get_db, None)
 
@@ -92,7 +92,7 @@ async def test_register_duplicate_email_returns_400():
     try:
         with patch("app.db.redis.redis_client", AsyncMock(ping=AsyncMock(return_value=True))):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-                resp = await c.post("/auth/register", json={"email": "dupe@example.com", "password": "pass123"})
+                resp = await c.post("/auth/register", json={"email": "dupe@example.com", "password": "pass1234"})
     finally:
         app.dependency_overrides.pop(get_db, None)
 

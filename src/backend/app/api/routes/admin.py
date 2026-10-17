@@ -29,6 +29,7 @@ from app.models.agent_run import AgentRun
 from app.models.embedding import Embedding
 from app.models.user import User
 from app.schemas.cost import AgentCost, CostLine, CostSummary, DayCost
+from app.schemas.text import TOKEN_CHARS
 from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
 from src.ai.mcp_server.config import mcp_settings
 from src.ai.utils.embeddings import EMBEDDINGS_PENDING_KEY
@@ -153,8 +154,10 @@ class DeliberateError(RuntimeError):
 
 @router.get("/sentry-test")
 async def sentry_test(
-    marker: str = Query("no-marker", pattern=r"^[A-Za-z0-9_-]{1,64}$", description="Put in the error, to find it by."),
-    x_ops_token: str | None = Header(None),
+    marker: str = Query(
+        "no-marker", max_length=64, pattern=r"^[A-Za-z0-9_-]{1,64}$", description="Put in the error, to find it by."
+    ),
+    x_ops_token: str | None = Header(None, max_length=TOKEN_CHARS),
 ) -> None:
     """Phase 27 — fail on purpose, so that error reporting can be seen to work.
 

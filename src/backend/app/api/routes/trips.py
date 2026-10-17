@@ -479,7 +479,7 @@ async def _get_trip_or_404(trip_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSess
 
 @router.get("", response_model=list[TripRead])
 async def list_trips(
-    status_filter: str | None = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status", max_length=20),  # Phase 35: no status is longer
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[Trip]:

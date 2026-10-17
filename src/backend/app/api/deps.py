@@ -14,7 +14,7 @@ import uuid
 import redis.asyncio as aioredis
 from fastapi import Depends, Header, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
+from jwt import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -22,6 +22,7 @@ from app.core.security import decode_access_token
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.text import TOKEN_CHARS
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -38,7 +39,7 @@ async def _user_from_token(token: str, db: AsyncSession) -> User:
     malformed subject, deleted user — is the same 401."""
     try:
         user_id = uuid.UUID(decode_access_token(token).get("sub", ""))
-    except (JWTError, ValueError, TypeError, AttributeError):
+    except (InvalidTokenError, ValueError, TypeError, AttributeError):
         raise _UNAUTHORIZED
     user = await db.get(User, user_id)
     if user is None:
@@ -55,8 +56,8 @@ async def get_current_user(
 
 
 async def get_current_user_sse(
-    authorization: str | None = Header(None),
-    token: str | None = Query(None),
+    authorization: str | None = Header(None, max_length=TOKEN_CHARS),
+    token: str | None = Query(None, max_length=TOKEN_CHARS),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Like get_current_user but also accepts token as ?token= query param.
@@ -85,7 +86,10 @@ async def get_redis_or_none() -> aioredis.Redis | None:
         return None
 
 
-def may_read_metrics(authorization: str | None = Header(None), x_ops_token: str | None = Header(None)) -> None:
+def may_read_metrics(
+    authorization: str | None = Header(None, max_length=TOKEN_CHARS),
+    x_ops_token: str | None = Header(None, max_length=TOKEN_CHARS),
+) -> None:
     """Phase 29 — who GET /metrics answers.
 
     The numbers name every route and say how busy each is: not a secret worth much, and not for

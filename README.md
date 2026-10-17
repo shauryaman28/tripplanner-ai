@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 34 / 50 — Advanced Monitoring & Alerts**
+**Status: Phase 35 / 50 — Security Hardening**
 
 ---
 
@@ -441,9 +441,10 @@ tripplanner-ai/
 | 32 | Chaos engineering, the data layer — Postgres killed while a plan is made and between the two writes that save one; the backend killed between saving an itinerary and embedding it ([docs/chaos-data-report.md](docs/chaos-data-report.md), [docs/phase32_build_log.md](docs/phase32_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment** | 35 unit + 5 integration |
 | 33 | Eval suite — fifteen trips asked of the planner over its API, on real models and providers; measured where they can be (every name against the searches, the total against `estimate_budget`, the dates and slots, what a change changed) and graded by Claude Haiku 4.5 where they cannot; a table, a history, and `--assert-min-score` for the nightly run. Its first run found "raise the budget" leading back into the same conflict — fixed ([docs/phase33_build_log.md](docs/phase33_build_log.md)) | ✅ Built, asked and measured on real providers — **not yet graded: the grader needs `ANTHROPIC_API_KEY`** | 75 unit |
 | 34 | Advanced monitoring & alerts — four Prometheus alerts (slow plans, an endpoint's errors, the cache, failing model calls) sent on by Alertmanager, each message with the numbers behind it and its own runbook section; promtool fires each from series written by hand, and a drill makes each one fire on the running stack after twelve minutes in which none may; `GET /admin/health-deep`; one dashboard with the alerts on top. Running them found three things: a cache floor that counted the last process's lookups, a pooler that is gone answered 500, and Phase 27's deliberate error paging somebody — all fixed ([docs/runbook.md](docs/runbook.md), [docs/phase34_build_log.md](docs/phase34_build_log.md)) | ✅ Done on the load test's stack with stand-ins, on one laptop — **not on a deployment** | 90 unit + 4 integration |
-| 35–50 | Production & Polish | ⏳ | |
+| 35 | Security hardening — access tokens for an hour and rotating refresh tokens (an HttpOnly cookie for the site; used twice, the sign-in ends; sign-out ends it on the server); five sign-in attempts a minute per address — on an address a client cannot make up, which the image had let it; a length on every field the API takes and a kind for its text; passwords 8 characters to 72 bytes; security headers on every answer; a LogRedactor on every log line; the OWASP Top 10 item by item; the dependencies audited (Python clean; Next 14's advisories read one by one) ([docs/phase35_build_log.md](docs/phase35_build_log.md)) | ✅ Done on the production-like stack — **the key rotation waits for you**; not on a deployment | 73 unit + 13 integration + 4 browser |
+| 36–50 | Production & Polish | ⏳ | |
 
-**Total: 1,455 unit + contract, 83 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,528 unit + contract, 96 integration, 64 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -532,6 +533,15 @@ by hand (CI too); `python scripts/alert_drill.py all` makes each one fire on the
 after twelve minutes in which none may. `GET /admin/health-deep` (the operator's, like `/metrics`) asks Postgres,
 Redis, the tool server and LangSmith to do their work, each with its own deadline. The dashboard has the alerts on
 top, and the model cost and the embedding queue beside the rest.
+
+**Security (Phase 35).** An access token lasts an hour; the site stays signed in with a refresh token kept in an
+HttpOnly cookie, used once each — one used twice ends the sign-in, and signing out ends it on the server. Five
+sign-in attempts a minute per address (`LOGIN_ATTEMPTS_PER_MINUTE`), on the address the platform's proxy saw
+(`FORWARDED_ALLOW_IPS`). Every field the API takes has a length; a destination is a place, a request a person's
+words. Every answer carries security headers. Every log line, text or JSON, goes through a redactor.
+`python scripts/security_check.py --prodlike` checks all of it from outside; `python scripts/secret_audit.py logs`
+and `repo` look for a key in the logs, the repository and its history; `python scripts/provider_keys.py` asks
+each provider whether the keys in `.env` work.
 
 **Load testing (Phase 30).** `python scripts/loadtest.py k6` builds a k6 that can read an event stream;
 `up` starts the deployed image on the production-like stack with stand-ins for the models and the providers

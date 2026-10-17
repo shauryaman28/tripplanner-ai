@@ -132,6 +132,18 @@ def check(settings, providers=None) -> Report:
                 weak(f"{name} is empty: {what}")
     if not settings.SENTRY_DSN:
         weak("SENTRY_DSN is empty: errors are logged and reported to nobody")
+    # Phase 35: what keeps a password from being guessed, and a stolen token from being good for long
+    if getattr(settings, "LOGIN_ATTEMPTS_PER_MINUTE", 5) <= 0:
+        weak(
+            "LOGIN_ATTEMPTS_PER_MINUTE is 0: the limit on signing in is off — a password can be guessed as fast as bcrypt allows"
+        )
+    if getattr(settings, "REGISTRATIONS_PER_MINUTE", 5) <= 0:
+        weak("REGISTRATIONS_PER_MINUTE is 0: accounts can be made without any limit")
+    if getattr(settings, "JWT_EXPIRE_MINUTES", 60) > 60:
+        weak(
+            f"JWT_EXPIRE_MINUTES is {settings.JWT_EXPIRE_MINUTES}: a stolen access token is good for that long — "
+            "staying signed in is the refresh token's job (60 is the default)"
+        )
     if not settings.OPS_TOKEN:
         weak(
             "OPS_TOKEN is empty: GET /metrics answers nobody, so Prometheus cannot read this deployment"

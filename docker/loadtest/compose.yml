@@ -24,3 +24,7 @@ services:
       OPENWEATHER_API_KEY: standin-not-a-key
       # One request in ten is traced while the load runs — docs/load-test-report.md says why.
       OTEL_TRACES_SAMPLE_RATIO: ${LOADTEST_TRACE_RATIO:-0.1}
+      # Phase 35: every visitor of a load test comes from one address, on purpose — the per-address limits
+      # on signing in and making accounts would be the load test's only result. Off here, and only here.
+      LOGIN_ATTEMPTS_PER_MINUTE: "0"
+      REGISTRATIONS_PER_MINUTE: "0"
