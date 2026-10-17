@@ -28,6 +28,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__, preflight
 from app.api.deps import may_read_metrics
+from app.api.routes.admin import embedding_backlog
 from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.health import router as health_router
@@ -242,6 +243,12 @@ async def _regenerate_embeddings(itinerary_ids: list) -> None:
         await generate_embeddings(itinerary_id)
 
 
+async def _embedding_queue() -> dict[str, int]:
+    """Phase 34: the embedding queue as GET /admin/embedding-health counts it — for the gauge."""
+    async with AsyncSessionLocal() as db:
+        return await embedding_backlog(db, await redis_db.get_redis())
+
+
 # ── Lifespan ───────────────────────────────────────────────────────────────
 
 
@@ -273,8 +280,10 @@ async def lifespan(app: FastAPI):
             logger.warning("Redis unavailable at startup: %s", exc)
         await _recover_after_restart()
     watching = spawn(metrics.watch_event_loop())  # Phase 30: how late the event loop runs what is due
+    counting = spawn(metrics.watch_embedding_queue(_embedding_queue))  # Phase 34: the embeddings owed
     yield
     watching.cancel()
+    counting.cancel()
     try:
         # The plans in flight first — they need Redis and the tool server, which are closed next.
         await finish_runs(settings.SHUTDOWN_GRACE_SECONDS)
@@ -443,6 +452,7 @@ async def redis_is_away_handler(_: Request, exc: Exception) -> JSONResponse:
 @app.exception_handler(DBAPIError)
 @app.exception_handler(PoolTimeout)
 @app.exception_handler(ConnectionError)
+@app.exception_handler(OSError)  # Phase 34: a database whose host name does not resolve (db/errors.py)
 async def database_is_away_handler(request: Request, exc: Exception) -> JSONResponse:
     """Phase 32 — the database cannot be reached: said as that, and as something that passes.
 

@@ -1,0 +1,625 @@
+{
+ "drill": "cache",
+ "began": "2026-10-16T18:05:14+00:00",
+ "commit": "b312dffc885568800ce7028cd19607c8902b6762",
+ "alert": "CacheHitRatioLow",
+ "cause": "the cache is emptied as fast as it is filled",
+ "threshold": 0.3,
+ "timeline_s": {
+  "broken": 92.27,
+  "pending": 244.91,
+  "firing": 421.89,
+  "delivered": 432.78,
+  "mended": 432.78,
+  "resolved": 634.26,
+  "delivered_at_utc": "2026-10-16T18:12:24+00:00"
+ },
+ "measure": {
+  "before": {
+   "value": 0.8571,
+   "threshold": 0.3,
+   "lookups_5m": 460.3827
+  },
+  "while_broken": {
+   "value": 0.0,
+   "threshold": 0.3,
+   "lookups_5m": 426.1017
+  },
+  "after": {
+   "value": 0.0,
+   "threshold": 0.3,
+   "lookups_5m": 426.1003
+  }
+ },
+ "traffic": {
+  "before": {
+   "visits": 15,
+   "list": {
+    "200": 15
+   },
+   "create": {
+    "201": 15
+   },
+   "plan": {
+    "202": 15
+   },
+   "outcome": {
+    "completed": 15
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.1,
+    "max": 18.1
+   }
+  },
+  "while_broken": {
+   "visits": 57,
+   "list": {
+    "200": 57
+   },
+   "create": {
+    "201": 57
+   },
+   "plan": {
+    "202": 57
+   },
+   "outcome": {
+    "completed": 57
+   },
+   "plan_seconds": {
+    "min": 14.1,
+    "median": 22.2,
+    "max": 26.3
+   }
+  },
+  "after": {
+   "visits": 37,
+   "list": {
+    "200": 37
+   },
+   "create": {
+    "201": 37
+   },
+   "plan": {
+    "202": 37
+   },
+   "outcome": {
+    "completed": 37
+   },
+   "plan_seconds": {
+    "min": 10.1,
+    "median": 12.1,
+    "max": 14.2
+   }
+  }
+ },
+ "delivered": [
+  {
+   "receiver": "stand-in",
+   "status": "firing",
+   "alerts": [
+    {
+     "status": "firing",
+     "labels": {
+      "alertname": "CacheHitRatioLow",
+      "instance": "host.docker.internal:8200",
+      "job": "tripplanner-prodlike",
+      "metric": "mcp_cache_hit_ratio",
+      "service": "tripplanner-backend",
+      "severity": "warning"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: mcp_cache_hit_ratio (hits ÷ lookups over 5m, this process: host.docker.internal:8200).\nNow: 0% · threshold: 30% · backend: tripplanner-prodlike.\nLookups in the last 5 min: hotels miss 100; attractions miss 100; geocode miss 100; flights miss 75; weather miss 50;\nerror = Redis could not be asked; miss = asked and not there (the warming did not run, or the entries are gone).\nLook first: GET /admin/health-deep (redis), then the log lines with \"[CACHE WARM]\".",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#cachehitratiolow",
+      "summary": "The tool server's cache answered 0% of lookups over the last 5 minutes; the threshold is 30%."
+     },
+     "startsAt": "2026-10-16T18:12:14.246Z",
+     "endsAt": "0001-01-01T00:00:00Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=mcp_cache_hit_ratio+%3C+0.3+and+on+%28job%2C+instance%29+sum+by+%28job%2C+instance%29+%28increase%28mcp_cache_lookups_total%5B5m%5D%29%29+%3E%3D+10&g0.tab=1",
+     "fingerprint": "1b6572a848446678"
+    }
+   ],
+   "notification_reason": "first notification",
+   "groupLabels": {
+    "alertname": "CacheHitRatioLow",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "CacheHitRatioLow",
+    "instance": "host.docker.internal:8200",
+    "job": "tripplanner-prodlike",
+    "metric": "mcp_cache_hit_ratio",
+    "service": "tripplanner-backend",
+    "severity": "warning"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: mcp_cache_hit_ratio (hits ÷ lookups over 5m, this process: host.docker.internal:8200).\nNow: 0% · threshold: 30% · backend: tripplanner-prodlike.\nLookups in the last 5 min: hotels miss 100; attractions miss 100; geocode miss 100; flights miss 75; weather miss 50;\nerror = Redis could not be asked; miss = asked and not there (the warming did not run, or the entries are gone).\nLook first: GET /admin/health-deep (redis), then the log lines with \"[CACHE WARM]\".",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#cachehitratiolow",
+    "summary": "The tool server's cache answered 0% of lookups over the last 5 minutes; the threshold is 30%."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"CacheHitRatioLow\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T18:12:24+00:00"
+  }
+ ],
+ "resolved": [
+  {
+   "receiver": "stand-in",
+   "status": "resolved",
+   "alerts": [
+    {
+     "status": "resolved",
+     "labels": {
+      "alertname": "CacheHitRatioLow",
+      "instance": "host.docker.internal:8200",
+      "job": "tripplanner-prodlike",
+      "metric": "mcp_cache_hit_ratio",
+      "service": "tripplanner-backend",
+      "severity": "warning"
+     },
+     "annotations": {
+      "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+      "description": "Metric: mcp_cache_hit_ratio (hits ÷ lookups over 5m, this process: host.docker.internal:8200).\nNow: 28.19% · threshold: 30% · backend: tripplanner-prodlike.\nLookups in the last 5 min: hotels miss 72; attractions hit 56; flights miss 54; weather miss 50; attractions miss 46; geocode miss 46; hotels hit 29; flights hit 22;\nerror = Redis could not be asked; miss = asked and not there (the warming did not run, or the entries are gone).\nLook first: GET /admin/health-deep (redis), then the log lines with \"[CACHE WARM]\".",
+      "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#cachehitratiolow",
+      "summary": "The tool server's cache answered 28.19% of lookups over the last 5 minutes; the threshold is 30%."
+     },
+     "startsAt": "2026-10-16T18:12:14.246Z",
+     "endsAt": "2026-10-16T18:15:44.246Z",
+     "generatorURL": "http://localhost:9090/graph?g0.expr=mcp_cache_hit_ratio+%3C+0.3+and+on+%28job%2C+instance%29+sum+by+%28job%2C+instance%29+%28increase%28mcp_cache_lookups_total%5B5m%5D%29%29+%3E%3D+10&g0.tab=1",
+     "fingerprint": "1b6572a848446678"
+    }
+   ],
+   "notification_reason": "all alerts resolved",
+   "groupLabels": {
+    "alertname": "CacheHitRatioLow",
+    "job": "tripplanner-prodlike"
+   },
+   "commonLabels": {
+    "alertname": "CacheHitRatioLow",
+    "instance": "host.docker.internal:8200",
+    "job": "tripplanner-prodlike",
+    "metric": "mcp_cache_hit_ratio",
+    "service": "tripplanner-backend",
+    "severity": "warning"
+   },
+   "commonAnnotations": {
+    "dashboard": "http://localhost:3001/d/tripplanner?var-job=tripplanner-prodlike",
+    "description": "Metric: mcp_cache_hit_ratio (hits ÷ lookups over 5m, this process: host.docker.internal:8200).\nNow: 28.19% · threshold: 30% · backend: tripplanner-prodlike.\nLookups in the last 5 min: hotels miss 72; attractions hit 56; flights miss 54; weather miss 50; attractions miss 46; geocode miss 46; hotels hit 29; flights hit 22;\nerror = Redis could not be asked; miss = asked and not there (the warming did not run, or the entries are gone).\nLook first: GET /admin/health-deep (redis), then the log lines with \"[CACHE WARM]\".",
+    "runbook_url": "https://github.com/shauryaman28/tripplanner-ai/blob/main/docs/runbook.md#cachehitratiolow",
+    "summary": "The tool server's cache answered 28.19% of lookups over the last 5 minutes; the threshold is 30%."
+   },
+   "routeLabels": {},
+   "externalURL": "http://localhost:9093",
+   "version": "4",
+   "groupKey": "{}:{alertname=\"CacheHitRatioLow\", job=\"tripplanner-prodlike\"}",
+   "truncatedAlerts": 0,
+   "received_at": "2026-10-16T18:16:24+00:00"
+  }
+ ],
+ "alert_changes": [
+  {
+   "t": 244.91,
+   "alert": "CacheHitRatioLow",
+   "about": "host.docker.internal:8200",
+   "state": "pending",
+   "value": "2.925170068027211e-01",
+   "active_at": "2026-10-16T18:09:14.246542836Z"
+  },
+  {
+   "t": 421.89,
+   "alert": "CacheHitRatioLow",
+   "about": "host.docker.internal:8200",
+   "state": "firing",
+   "value": "0e+00",
+   "active_at": "2026-10-16T18:09:14.246542836Z"
+  },
+  {
+   "t": 634.26,
+   "alert": "CacheHitRatioLow",
+   "about": "host.docker.internal:8200",
+   "state": "inactive"
+  }
+ ],
+ "measures": [
+  {
+   "t": 2.29,
+   "PlanLatencyHigh": 17.7001,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": null,
+   "cache lookups (5 min)": 460.3827,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 17.42,
+   "PlanLatencyHigh": 17.7251,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.9,
+   "cache lookups (5 min)": 446.3963,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 32.59,
+   "PlanLatencyHigh": 17.7,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.8571,
+   "cache lookups (5 min)": 440.3053,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 47.76,
+   "PlanLatencyHigh": 17.625,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.8667,
+   "cache lookups (5 min)": 435.2387,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 62.94,
+   "PlanLatencyHigh": 17.6,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.8814,
+   "cache lookups (5 min)": 424.0573,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 78.1,
+   "PlanLatencyHigh": 17.625,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.8767,
+   "cache lookups (5 min)": 411.4456,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 93.27,
+   "PlanLatencyHigh": 17.6756,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.8687,
+   "cache lookups (5 min)": 406.5161,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 108.43,
+   "PlanLatencyHigh": 17.7006,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.789,
+   "cache lookups (5 min)": 391.1757,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 123.59,
+   "PlanLatencyHigh": 17.7506,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.6515,
+   "cache lookups (5 min)": 388.9606,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 138.75,
+   "PlanLatencyHigh": 22.8,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.5658,
+   "cache lookups (5 min)": 385.7465,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 153.92,
+   "PlanLatencyHigh": 23.875,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.4859,
+   "cache lookups (5 min)": 384.5448,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 169.08,
+   "PlanLatencyHigh": 24.2167,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.4503,
+   "cache lookups (5 min)": 375.3218,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 184.24,
+   "PlanLatencyHigh": 24.3214,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.3945,
+   "cache lookups (5 min)": 378.2145,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 199.42,
+   "PlanLatencyHigh": 24.51,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.3675,
+   "cache lookups (5 min)": 370.0,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 214.58,
+   "PlanLatencyHigh": 24.575,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.332,
+   "cache lookups (5 min)": 367.8411,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 229.74,
+   "PlanLatencyHigh": 24.6038,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.3105,
+   "cache lookups (5 min)": 364.1605,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 244.91,
+   "PlanLatencyHigh": 24.6687,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.2848,
+   "cache lookups (5 min)": 362.0382,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 260.09,
+   "PlanLatencyHigh": 24.6972,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.2671,
+   "cache lookups (5 min)": 360.9716,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 275.26,
+   "PlanLatencyHigh": 24.6944,
+   "EndpointErrorRateHigh": 0.0,
+   "CacheHitRatioLow": 0.2493,
+   "cache lookups (5 min)": 356.8687,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 290.45,
+   "PlanLatencyHigh": 24.731,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.2363,
+   "cache lookups (5 min)": 364.5868,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 305.62,
+   "PlanLatencyHigh": 24.7522,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.2156,
+   "cache lookups (5 min)": 388.3889,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 320.79,
+   "PlanLatencyHigh": 24.9717,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1888,
+   "cache lookups (5 min)": 389.5423,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 335.95,
+   "PlanLatencyHigh": 24.9769,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1418,
+   "cache lookups (5 min)": 396.6441,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 351.13,
+   "PlanLatencyHigh": 24.9833,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1097,
+   "cache lookups (5 min)": 400.7695,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 366.29,
+   "PlanLatencyHigh": 27.25,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0691,
+   "cache lookups (5 min)": 409.9679,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 381.45,
+   "PlanLatencyHigh": 28.2,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0388,
+   "cache lookups (5 min)": 410.0435,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 396.62,
+   "PlanLatencyHigh": 28.2167,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0,
+   "cache lookups (5 min)": 420.8001,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 411.78,
+   "PlanLatencyHigh": 28.6625,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0,
+   "cache lookups (5 min)": 422.0339,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 426.92,
+   "PlanLatencyHigh": 28.95,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0,
+   "cache lookups (5 min)": 426.1017,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 442.09,
+   "PlanLatencyHigh": 28.97,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0,
+   "cache lookups (5 min)": 423.0508,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 457.25,
+   "PlanLatencyHigh": 28.97,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0188,
+   "cache lookups (5 min)": 426.0873,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 472.43,
+   "PlanLatencyHigh": 28.97,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0374,
+   "cache lookups (5 min)": 426.1003,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 487.6,
+   "PlanLatencyHigh": 28.99,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0646,
+   "cache lookups (5 min)": 422.0382,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 502.76,
+   "PlanLatencyHigh": 29.0,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.0817,
+   "cache lookups (5 min)": 411.8532,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 517.91,
+   "PlanLatencyHigh": 29.02,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1119,
+   "cache lookups (5 min)": 412.8814,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 533.08,
+   "PlanLatencyHigh": 29.02,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1327,
+   "cache lookups (5 min)": 404.7458,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 548.25,
+   "PlanLatencyHigh": 29.04,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1692,
+   "cache lookups (5 min)": 398.6454,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 563.42,
+   "PlanLatencyHigh": 29.06,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.1919,
+   "cache lookups (5 min)": 393.554,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 578.6,
+   "PlanLatencyHigh": 29.07,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.2199,
+   "cache lookups (5 min)": 389.4876,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 593.78,
+   "PlanLatencyHigh": 29.05,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.2448,
+   "cache lookups (5 min)": 379.3195,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 608.95,
+   "PlanLatencyHigh": 29.02,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.2763,
+   "cache lookups (5 min)": 380.33,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 624.13,
+   "PlanLatencyHigh": 29.0,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.304,
+   "cache lookups (5 min)": 372.1958,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 639.3,
+   "PlanLatencyHigh": 29.01,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.3333,
+   "cache lookups (5 min)": 364.0703,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 654.47,
+   "PlanLatencyHigh": 29.0,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.3636,
+   "cache lookups (5 min)": 363.0484,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 669.65,
+   "PlanLatencyHigh": 29.01,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.3944,
+   "cache lookups (5 min)": 354.9128,
+   "ModelErrorRateHigh": 0.0
+  }
+ ],
+ "expected": [
+  {
+   "ok": true,
+   "what": "90 s of travellers as usual: CacheHitRatioLow is quiet",
+   "detail": "{\"visits\": 12, \"list\": {\"200\": 12}, \"create\": {\"201\": 12}, \"plan\": {\"202\": 12}, \"outcome\": {\"completed\": 12}, \"plan_seconds\": {\"min\": 10.1, \"median\": 12.1, \"max\": 14.1}}"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: pending",
+   "detail": "153 s after"
+  },
+  {
+   "ok": true,
+   "what": "Prometheus: firing",
+   "detail": "330 s after"
+  },
+  {
+   "ok": true,
+   "what": "the receiver was sent it",
+   "detail": "1 notification(s), 1 alert(s), 341 s after it broke"
+  },
+  {
+   "ok": true,
+   "what": "its message says what to know host.docker.internal:8200",
+   "detail": ""
+  },
+  {
+   "ok": true,
+   "what": "mended: resolved, and the receiver told",
+   "detail": "201 s after it was mended"
+  }
+ ],
+ "as_expected": true,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

@@ -5,6 +5,7 @@ get_current_user_sse  — Bearer token in header OR ?token= query param (SSE)
 get_redis_dep         — thin wrapper so routes don't import redis directly
 get_redis_or_none     — the same client, or None when Redis is not available (cache-only use)
 may_read_metrics      — who GET /metrics answers (Phase 29)
+may_check_health      — who GET /admin/health-deep answers: the same people (Phase 34)
 """
 
 import hmac
@@ -103,3 +104,9 @@ def may_read_metrics(authorization: str | None = Header(None), x_ops_token: str 
     sent = bearer or x_ops_token or ""
     if not hmac.compare_digest(sent.encode(), expected.encode()):
         raise HTTPException(status_code=404, detail="Not Found")
+
+
+# Phase 34 — GET /admin/health-deep is for whoever runs the deployment, as the metrics are: it names
+# every dependency and how each is failing, and each call starts work (a query, a tool call, a request
+# to LangSmith) that nobody else should be able to make the app do at will.
+may_check_health = may_read_metrics

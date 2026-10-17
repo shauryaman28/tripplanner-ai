@@ -1,0 +1,440 @@
+{
+ "drill": "quiet",
+ "began": "2026-10-16T17:24:55+00:00",
+ "commit": "b312dffc885568800ce7028cd19607c8902b6762",
+ "minutes": 12,
+ "traffic": {
+  "visits": 118,
+  "list": {
+   "200": 118
+  },
+  "create": {
+   "201": 118
+  },
+  "plan": {
+   "202": 118
+  },
+  "outcome": {
+   "completed": 118
+  },
+  "plan_seconds": {
+   "min": 10.1,
+   "median": 12.1,
+   "max": 14.2
+  }
+ },
+ "nearest": {
+  "PlanLatencyHigh": 16.25,
+  "EndpointErrorRateHigh": null,
+  "CacheHitRatioLow": 0.2143,
+  "cache lookups (5 min)": 330.5085,
+  "ModelErrorRateHigh": 0.0
+ },
+ "thresholds": {
+  "PlanLatencyHigh": 30,
+  "EndpointErrorRateHigh": 0.05,
+  "CacheHitRatioLow": 0.3,
+  "ModelErrorRateHigh": 10
+ },
+ "measures": [
+  {
+   "t": 2.29,
+   "PlanLatencyHigh": 12.475,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": null,
+   "cache lookups (5 min)": 8.0167,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 17.43,
+   "PlanLatencyHigh": 12.475,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.2143,
+   "cache lookups (5 min)": 22.0561,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 32.6,
+   "PlanLatencyHigh": 14.9625,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.3529,
+   "cache lookups (5 min)": 42.1306,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 47.77,
+   "PlanLatencyHigh": 14.925,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.3396,
+   "cache lookups (5 min)": 61.2252,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 62.94,
+   "PlanLatencyHigh": 14.9,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.3582,
+   "cache lookups (5 min)": 75.3165,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 78.09,
+   "PlanLatencyHigh": 14.9313,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.4138,
+   "cache lookups (5 min)": 95.4547,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 93.25,
+   "PlanLatencyHigh": 14.9458,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.4519,
+   "cache lookups (5 min)": 112.59,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 108.4,
+   "PlanLatencyHigh": 14.9464,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.4576,
+   "cache lookups (5 min)": 126.7295,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 123.56,
+   "PlanLatencyHigh": 14.9437,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.4779,
+   "cache lookups (5 min)": 144.9113,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 138.71,
+   "PlanLatencyHigh": 14.9417,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.4837,
+   "cache lookups (5 min)": 162.1052,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 153.86,
+   "PlanLatencyHigh": 14.9477,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.497,
+   "cache lookups (5 min)": 176.2849,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 169.01,
+   "PlanLatencyHigh": 14.9432,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5,
+   "cache lookups (5 min)": 193.5132,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 184.18,
+   "PlanLatencyHigh": 14.95,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5099,
+   "cache lookups (5 min)": 211.774,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 199.34,
+   "PlanLatencyHigh": 14.9483,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5139,
+   "cache lookups (5 min)": 226.0198,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 214.51,
+   "PlanLatencyHigh": 14.9515,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5153,
+   "cache lookups (5 min)": 239.26,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 229.66,
+   "PlanLatencyHigh": 14.9539,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.52,
+   "cache lookups (5 min)": 254.2338,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 244.8,
+   "PlanLatencyHigh": 14.9548,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5247,
+   "cache lookups (5 min)": 267.4613,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 259.95,
+   "PlanLatencyHigh": 14.9534,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5267,
+   "cache lookups (5 min)": 285.7598,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 275.12,
+   "PlanLatencyHigh": 14.9552,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.527,
+   "cache lookups (5 min)": 301.0261,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 290.29,
+   "PlanLatencyHigh": 14.955,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5333,
+   "cache lookups (5 min)": 320.339,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 305.47,
+   "PlanLatencyHigh": 14.9556,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5337,
+   "cache lookups (5 min)": 329.3729,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 320.65,
+   "PlanLatencyHigh": 16.25,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5495,
+   "cache lookups (5 min)": 330.5018,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 335.81,
+   "PlanLatencyHigh": 16.175,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5606,
+   "cache lookups (5 min)": 330.5085,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 350.99,
+   "PlanLatencyHigh": 16.125,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5723,
+   "cache lookups (5 min)": 323.3887,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 366.18,
+   "PlanLatencyHigh": 16.05,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 322.3685,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 381.37,
+   "PlanLatencyHigh": 16.0,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.4024,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 396.55,
+   "PlanLatencyHigh": 15.925,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5732,
+   "cache lookups (5 min)": 323.3876,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 411.72,
+   "PlanLatencyHigh": 15.85,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 325.4237,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 426.89,
+   "PlanLatencyHigh": 15.775,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.4057,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 442.08,
+   "PlanLatencyHigh": 15.725,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5759,
+   "cache lookups (5 min)": 323.3876,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 457.24,
+   "PlanLatencyHigh": 15.65,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.409,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 472.41,
+   "PlanLatencyHigh": 15.6,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 328.4735,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 487.6,
+   "PlanLatencyHigh": 15.525,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5789,
+   "cache lookups (5 min)": 322.3707,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 502.78,
+   "PlanLatencyHigh": 15.475,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.4057,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 517.95,
+   "PlanLatencyHigh": 15.4,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.3991,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 533.14,
+   "PlanLatencyHigh": 15.35,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5789,
+   "cache lookups (5 min)": 323.3865,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 548.33,
+   "PlanLatencyHigh": 15.3,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5728,
+   "cache lookups (5 min)": 324.3991,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 563.49,
+   "PlanLatencyHigh": 15.25,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 325.4116,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 578.64,
+   "PlanLatencyHigh": 15.2,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5785,
+   "cache lookups (5 min)": 323.3833,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 593.83,
+   "PlanLatencyHigh": 15.125,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5754,
+   "cache lookups (5 min)": 325.4226,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 608.97,
+   "PlanLatencyHigh": 15.05,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.4079,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 624.11,
+   "PlanLatencyHigh": 15.025,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5785,
+   "cache lookups (5 min)": 324.4112,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 639.27,
+   "PlanLatencyHigh": 15.025,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5759,
+   "cache lookups (5 min)": 323.3909,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 654.44,
+   "PlanLatencyHigh": 15.025,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5785,
+   "cache lookups (5 min)": 324.4189,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 669.6,
+   "PlanLatencyHigh": 15.0,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.4057,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 684.76,
+   "PlanLatencyHigh": 15.025,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5759,
+   "cache lookups (5 min)": 324.4079,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 699.93,
+   "PlanLatencyHigh": 15.025,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5767,
+   "cache lookups (5 min)": 324.4079,
+   "ModelErrorRateHigh": 0.0
+  },
+  {
+   "t": 715.09,
+   "PlanLatencyHigh": 15.025,
+   "EndpointErrorRateHigh": null,
+   "CacheHitRatioLow": 0.5785,
+   "cache lookups (5 min)": 324.4035,
+   "ModelErrorRateHigh": 0.0
+  }
+ ],
+ "expected": [
+  {
+   "ok": false,
+   "what": "no alert fired, and none was even pending",
+   "detail": "[{\"t\": 22.54, \"alert\": \"CacheHitRatioLow\", \"about\": \"host.docker.internal:8200\", \"state\": \"pending\", \"value\": \"2.1428571428571427e-01\", \"active_at\": \"2026-10-16T17:25:14.246542836Z\"}, {\"t\": 37.71, \"alert\": \"CacheHitRatioLow\", \"about\": \"host.docker.internal:8200\", \"state\": \"inactive\"}]"
+  },
+  {
+   "ok": true,
+   "what": "the travellers got their plans",
+   "detail": "{\"visits\": 118, \"list\": {\"200\": 118}, \"create\": {\"201\": 118}, \"plan\": {\"202\": 118}, \"outcome\": {\"completed\": 118}, \"plan_seconds\": {\"min\": 10.1, \"median\": 12.1, \"max\": 14.2}}"
+  }
+ ],
+ "as_expected": false,
+ "asleep_s": 0.0,
+ "timings_hold": true
+}

@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 33 / 50 — Eval Suite**
+**Status: Phase 34 / 50 — Advanced Monitoring & Alerts**
 
 ---
 
@@ -225,9 +225,11 @@ tripplanner-ai/
 │   │       │       │                              + GET /similar and GET /search (Phase 23)
 │   │       │       ├── users.py         ← GET/PUT /users/preferences (Phase 16)
 │   │       │       └── admin.py         ← GET /admin/embedding-health (Phase 14), /admin/cost-summary (Phase 26),
-│   │       │                              /admin/sentry-test (Phase 27: fails on purpose; needs OPS_TOKEN)
+│   │       │                              /admin/sentry-test (Phase 27: fails on purpose; needs OPS_TOKEN),
+│   │       │                              /admin/health-deep (Phase 34: every dependency asked to do its work)
 │   │       ├── core/
 │   │       │   ├── config.py            ← pydantic-settings
+│   │       │   ├── deep_health.py       ← Phase 34: Postgres, Redis, the tool server, LangSmith — each with a deadline
 │   │       │   ├── error_reporting.py   ← Phase 27: Sentry — on with a DSN — and what is scrubbed out of a report
 │   │       │   └── security.py         ← JWT + password hashing
 │   │       ├── db/
@@ -334,7 +336,8 @@ tripplanner-ai/
 │   ├── prodlike/                        ← Phase 27: a production-like stack — the deployed image against a TLS-only
 │   │                                      Postgres behind a pooler in transaction mode and a TLS-only Redis
 │   ├── observability/                   ← Phase 29: Prometheus, Grafana, Jaeger, Loki and Alloy — what reads the
-│   │                                      app's metrics, traces and log lines; the dashboard, as a file
+│   │                                      app's metrics, traces and log lines; the dashboard, as a file. Phase 34:
+│   │                                      alerts/ (the four rules, and promtool's tests of them), Alertmanager
 │   ├── loadtest/                        ← Phase 30: the image the load test runs — the deployed one with the
 │   │                                      stand-ins added — and the stack it is laid over
 │   └── chaos/                           ← Phase 31: one more container on that stack — the far end of a model
@@ -371,15 +374,20 @@ tripplanner-ai/
 │                                          did under it — every run kept as a file in docs/loadtest/),
 │                                          chaos.py (Phase 31: the tool server killed, Gemini answering 429, the
 │                                          builder's model silent, Redis killed — and what the app then does),
-│                                          run_eval.py (Phase 33: the eval suite — fifteen real plans, graded)
+│                                          run_eval.py (Phase 33: the eval suite — fifteen real plans, graded),
+│                                          alert_receiver.py (Phase 34: a local stand-in for where alerts go),
+│                                          alert_drill.py (Phase 34: each alert made to fire on the load test's
+│                                          stack, and twelve quiet minutes in which none may)
 ├── prompts/                             ← versioned LLM prompts (one file per version per agent)
-├── docs/                                ← phase build logs (1–33) + phase1-17_audit.md + load-test-report.md
+├── docs/                                ← phase build logs (1–34) + phase1-17_audit.md + load-test-report.md
 │                                          (Phase 30: before, the bottleneck, after) + loadtest/ (every run it is made of)
 │                                          + chaos-report.md (Phase 31: expected, what happened, what was changed)
 │                                          + chaos-data-report.md (Phase 32: the same for Postgres and the backend)
 │                                          + chaos/ (every exercise's record, before and after)
 │                                          + eval-results-<date>.md and eval-history.csv (Phase 33: each graded
 │                                          run's table, and one line per run) + evals/ (the runs worth keeping)
+│                                          + runbook.md (Phase 34: what to do when each alert arrives)
+│                                          + alerts/ (Phase 34: every drill's record — when each alert fired)
 ├── DECISIONS.md                         ← architectural decision log
 ├── alembic.ini
 ├── docker-compose.yml
@@ -431,10 +439,11 @@ tripplanner-ai/
 | 30 | Load testing & performance baseline — k6 visits (create, stream, plan, itinerary) against the deployed image with stand-ins for the models and providers; before: 1.3 req/s at 210 ms p99, the bottleneck database connections held idle inside a transaction by every plan in flight; after: 43 req/s at 206 ms p99 ([docs/load-test-report.md](docs/load-test-report.md), [docs/phase30_build_log.md](docs/phase30_build_log.md)) | ✅ Measured on one laptop that ran both the load and the system — **not on a deployment**: there is none yet | 106 unit + 1 integration |
 | 31 | Chaos engineering — the tool server killed mid-plan, Gemini answering 429, the builder's model never answering, Redis killed under open streams; each written down as a hypothesis first, run on the app as it was, fixed, and run again ([docs/chaos-report.md](docs/chaos-report.md), [docs/phase31_build_log.md](docs/phase31_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment**: there is none, and none of this may be done to one | 55 unit + 9 integration |
 | 32 | Chaos engineering, the data layer — Postgres killed while a plan is made and between the two writes that save one; the backend killed between saving an itinerary and embedding it ([docs/chaos-data-report.md](docs/chaos-data-report.md), [docs/phase32_build_log.md](docs/phase32_build_log.md)) | ✅ Done on the production-like stack with stand-ins, on one laptop — **not on a deployment** | 35 unit + 5 integration |
-| 33 | Eval suite — fifteen trips asked of the planner over its API, on real models and providers; measured where they can be (every name against the searches, the total against `estimate_budget`, the dates and slots, what a change changed) and graded by Claude Haiku 4.5 where they cannot; a table, a history, and `--assert-min-score` for the nightly run. Its first run found "raise the budget" leading back into the same conflict — fixed ([docs/phase33_build_log.md](docs/phase33_build_log.md)) |
-| 33–50 | Production & Polish | ⏳ | |
+| 33 | Eval suite — fifteen trips asked of the planner over its API, on real models and providers; measured where they can be (every name against the searches, the total against `estimate_budget`, the dates and slots, what a change changed) and graded by Claude Haiku 4.5 where they cannot; a table, a history, and `--assert-min-score` for the nightly run. Its first run found "raise the budget" leading back into the same conflict — fixed ([docs/phase33_build_log.md](docs/phase33_build_log.md)) | ✅ Built, asked and measured on real providers — **not yet graded: the grader needs `ANTHROPIC_API_KEY`** | 75 unit |
+| 34 | Advanced monitoring & alerts — four Prometheus alerts (slow plans, an endpoint's errors, the cache, failing model calls) sent on by Alertmanager, each message with the numbers behind it and its own runbook section; promtool fires each from series written by hand, and a drill makes each one fire on the running stack after twelve minutes in which none may; `GET /admin/health-deep`; one dashboard with the alerts on top. Running them found three things: a cache floor that counted the last process's lookups, a pooler that is gone answered 500, and Phase 27's deliberate error paging somebody — all fixed ([docs/runbook.md](docs/runbook.md), [docs/phase34_build_log.md](docs/phase34_build_log.md)) | ✅ Done on the load test's stack with stand-ins, on one laptop — **not on a deployment** | 90 unit + 4 integration |
+| 35–50 | Production & Polish | ⏳ | |
 
-**Total: 1,365 unit + contract, 79 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,455 unit + contract, 83 integration, 60 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
@@ -512,7 +521,17 @@ reports. `python scripts/observability.py up` starts Prometheus, Grafana (http:/
 plans a trip and asks all four what they saw: the request rate, error rate and duration per endpoint,
 `llm_calls_total` / `mcp_cache_hit_ratio` / `itinerary_builds_total`, one connected trace from the
 request to the `INSERT` of the itinerary across both processes, and the trip's log lines from both
-services. Nothing here alerts yet (Phase 34), and none of it has run against a deployment.
+services. None of it has run against a deployment.
+
+**Alerts (Phase 34).** Four Prometheus rules (`docker/observability/alerts/rules.yml`): plans slower than 30 s
+at p99, an endpoint with more than 5% of its requests failing, the tool server's cache answering under 30%,
+more than 10 failed model calls a minute. Alertmanager (http://localhost:9093) sends what fires to a local
+stand-in receiver that prints it; each message names the endpoint or metric, its value against the threshold,
+the counts behind it, and links to its section of `docs/runbook.md`. promtool fires each rule from series written
+by hand (CI too); `python scripts/alert_drill.py all` makes each one fire on the load test's stack and resolve,
+after twelve minutes in which none may. `GET /admin/health-deep` (the operator's, like `/metrics`) asks Postgres,
+Redis, the tool server and LangSmith to do their work, each with its own deadline. The dashboard has the alerts on
+top, and the model cost and the embedding queue beside the rest.
 
 **Load testing (Phase 30).** `python scripts/loadtest.py k6` builds a k6 that can read an event stream;
 `up` starts the deployed image on the production-like stack with stand-ins for the models and the providers

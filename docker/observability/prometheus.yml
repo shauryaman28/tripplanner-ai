@@ -1,7 +1,16 @@
 # What Prometheus reads (Phase 29): GET /metrics of the backend, wherever it is running.
 global:
   scrape_interval: 5s # a laptop, and someone watching: a production setup would say 15s or 30s
-  evaluation_interval: 15s
+  evaluation_interval: 15s # how often the alerts are asked whether they hold
+
+# Phase 34: the four alerts, and where to send what fires.
+rule_files:
+  - /etc/prometheus/alerts/rules.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
 
 scrape_configs:
   # The backend as it is run for development — `uvicorn … --port 8000` on this machine. No token:

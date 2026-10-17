@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–32
+# How to Run & Verify — Phases 1–34
 
 ## What changed vs the original codebase?
 
@@ -32,6 +32,7 @@
 | 31 | `mcp_client/client.py` (a dead tool server is replaced and the call asked again; one task owns its session), `builder.py` (a timeout and a deadline for the model that writes the itinerary; `missing`), `preference_extractor.py` (a timeout), `orchestrator.py` (a timed-out build is not built again; "nothing could be searched"; a partial plan says what it lacks), `utils/failures.py` (words for a dead search service), `routes/trips.py` (a run does not wait on Redis, has a deadline as a whole, is started whatever Redis does; a planned trip whose state is gone is re-planned, not refused), `main.py` (Redis away → 503 in words), `telemetry/metrics.py` (`mcp_tool_server_starts_total`) — see `docs/phase31_build_log.md` | `loadtest/standins/faults.py` + `fault_server.py` (which model goes wrong, and the far end that fails), `docker/chaos/` (one more container), `scripts/chaos.py` (the four exercises), `docs/chaos-report.md` + `docs/chaos/` |
 | 32 | `db/errors.py` (new: "the database cannot be reached", told from a statement it refused), `main.py` (that is a 503 in words; start-up recovery that could not look, looks again), `routes/trips.py` (a traveller is told what happened, never what was raised; a run that ended without marking its trip goes on trying to), `orchestrator.py` (an itinerary is saved together with the row that says its embeddings are owed), `db/session.py` (a note on why the driver has no timeout), `docker/prodlike/pgbouncer.ini` (`server_login_retry = 5`) — see `docs/phase32_build_log.md` | `scripts/chaos.py` (exercises 5 and 6), `docker/chaos/compose.yml` (Postgres keeps its data), `loadtest/standins/faults.py` + `models.py` (the embedding API can be made to fail), `docs/chaos-data-report.md` + `docs/chaos/` |
 | 33 | `mcp_server/models.py` + `tools.py` (a flight search with nothing within the budget says what the cheapest flight costs), `agents/budget_decision.py` (the ways out are priced from that fare) — see `docs/phase33_build_log.md` | `evals/` (new: the scenarios, the driver, the measurements, the grader, the report), `scripts/run_eval.py` (new), `.github/workflows/nightly.yml` (the suite every night), `tests/unit/test_phase33_eval.py` + `tests/fixtures/evals/`, `docs/evals/` |
+| 34 | `core/deep_health.py` (new: Postgres, Redis, the tool server, LangSmith — each asked with a deadline), `routes/admin.py` (`GET /admin/health-deep`; the embedding backlog as one function), `deps.py` (`may_check_health`), `main.py` (the embedding queue counted every 15 s; an `OSError` may be the database away), `db/errors.py` (a name that does not resolve, a network with no route: the database is away), `preflight.py`, `telemetry/metrics.py` (`embedding_queue_depth`, `mcp_cache_window_lookups`), `docker/observability/` (`compose.yml`, `prometheus.yml`, the dashboard), `scripts/observability.py` + `observability_check.py` + `trace_receiver.py`, `.github/workflows/ci.yml` (promtool and amtool) — see `docs/phase34_build_log.md` | `docker/observability/alerts/` (the four rules and promtool's tests), `docker/observability/alertmanager.yml`, `scripts/alert_receiver.py`, `scripts/alert_drill.py`, `docs/runbook.md`, `docs/alerts/` (every drill's record), two unit test files and one integration test file |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -1904,6 +1905,123 @@ summary shows it skipped, not failed.
 the API, every measurement on real records (`tests/fixtures/evals/`) broken on purpose, the grader with a
 fake of Claude, the score, the table, the history, the nightly report and the exit codes.
 
+---
+
+## Step 32 — Verify Phase 34: alerts, the runbook, the deep health check
+
+Needs Docker and nothing else. Four alerts, evaluated by Prometheus and sent on by Alertmanager to a stand-in
+that prints them; a runbook section for each (`docs/runbook.md`); `GET /admin/health-deep`; the dashboard of
+Step 27 with an alerts row on top. Nothing is sent off this machine, and no quota is spent: the alerts are made
+to fire on the load test's stack, where every model and provider is a stand-in.
+
+### A. The rules, fired on purpose from series written by hand
+
+```bash
+docker run --rm -v "$PWD/docker/observability:/w:ro" --entrypoint promtool prom/prometheus:v3.15.0 test rules /w/alerts/tests.yml
+#   SUCCESS
+docker run --rm -v "$PWD/docker/observability:/w:ro" --entrypoint amtool prom/alertmanager:v0.34.1 check-config /w/alertmanager.yml
+```
+
+`docker/observability/alerts/tests.yml` is each alert firing — at the minute its `for:` allows, with its whole
+message as the person on call reads it — and each kept quiet where it must be: plans of up to 30 s, 4xx, a
+health check's 503, Phase 27's deliberate error, a few lookups after a restart, exactly 10 failed calls a minute. CI runs the same three
+commands on every push.
+
+### B. The stacks
+
+```bash
+python scripts/chaos.py up             # the load test's stack (Step 29): stand-ins for every model and provider
+python scripts/observability.py up     # Step 27's stack, and since Phase 34 Alertmanager (:9093) and the alert receiver (:9011)
+python scripts/observability.py logs -f alert-receiver     # in another terminal: each alert as it arrives
+```
+
+Prometheus → Alerts (http://localhost:9090/alerts) lists the four rules; Grafana (http://localhost:3001) has the
+alerts row at the top of the dashboard.
+
+### C. Each alert made to fire for real
+
+Keep the machine awake (lid open, plugged in): Prometheus evaluates nothing while it sleeps.
+
+```bash
+python scripts/alert_drill.py all      # about an hour: twelve quiet minutes, then the four, one after another
+```
+
+```
+── quiet: 12 minutes of travellers as usual → no alert ──
+  ✓ no alert fired, and none was even pending — []
+  ✓ the travellers got their plans — {"visits": 118, … "outcome": {"completed": 118}, …}
+── errors: the database's pooler is stopped → EndpointErrorRateHigh ──
+  ✓ 90 s of travellers as usual: EndpointErrorRateHigh is quiet
+    92 s: the database's pooler is stopped
+    GET /admin/health-deep while broken: HTTP 503 failing — postgres failing, redis ok, tool_server ok, langsmith off
+  ✓ Prometheus: pending — 11 s after
+  ✓ Prometheus: firing — 128 s after
+  ✓ the receiver was sent it — 1 notification(s), 1 alert(s), 140 s after it broke
+  ✓ its message says what to know GET /trips/{trip_id}/status
+      ▲ FIRING   EndpointErrorRateHigh · critical · tripplanner-prodlike · GET /trips/{trip_id}/status
+                 GET /trips/{trip_id}/status — 56.73% of its requests failed over the last 5 minutes; the threshold is 5%.
+                 …
+  ✓ mended: resolved, and the receiver told — 290 s after it was mended
+…
+5 of 5 went as expected.
+```
+
+| Drill | What is broken | Alert | Fired after | Resolved after mending |
+|---|---|---|---|---|
+| `quiet` | nothing, for 12 minutes | none may fire or be pending | — | — |
+| `slow-plans` | the builder's model never answers | PlanLatencyHigh | 340 s | 637 s |
+| `errors` | the pooler's container stopped | EndpointErrorRateHigh | 128 s | 290 s |
+| `cache` | the cache's keys deleted every half second | CacheHitRatioLow | 325 s | 197 s |
+| `model-errors` | Gemini and Groq's small model answer 429 | ModelErrorRateHigh | 254 s | 186 s |
+
+(17 October; the records are `docs/alerts/final/`. Most of each time is the alert's own window and `for:` — DECISIONS #303.)
+
+Each drill begins with travellers using the stack as usual (a trip created, planned and followed every few
+seconds), breaks one thing, waits for the alert to be pending, then firing, then delivered to the receiver with
+a message that names the endpoint or metric, its value and the threshold, mends it, and waits for the resolved
+message. Every step is timed in `docs/alerts/<label>/<drill>.json`, with every other alert that moved and each
+condition's measure every 15 s. `quiet` is twelve minutes of the same traffic with nothing broken: no alert may
+fire, or even be pending.
+
+### D. GET /admin/health-deep
+
+```bash
+curl -s localhost:8000/admin/health-deep | python -m json.tool                       # your backend (Step 5): open in development
+curl -s -H "Authorization: Bearer $(grep PRODLIKE_OPS_TOKEN .env.prodlike | cut -d= -f2)" \
+     localhost:8200/admin/health-deep | python -m json.tool                          # the stack's: the operations token
+```
+
+```json
+{"status": "ok", "took_ms": 446.4, "dependencies": {
+  "postgres":    {"status": "ok", "required": true,  "latency_ms": 14.1,  "detail": "SELECT 1 answered"},
+  "redis":       {"status": "ok", "required": true,  "latency_ms": 12.0,  "detail": "PING answered"},
+  "tool_server": {"status": "ok", "required": true,  "latency_ms": 294.8, "detail": "estimate_budget answered: ₹27,500 for the test trip"},
+  "langsmith":   {"status": "ok", "required": false, "latency_ms": 446.1, "detail": "the key is accepted · tracing off (LANGCHAIN_TRACING_V2 is not true)"}}}
+```
+
+Stop Redis (`docker stop tripplanner_redis`) and ask again → HTTP 503, `"status": "failing"`, `redis` failing with
+the error, the other three still asked and `ok`; start it again → `ok`. Without the token on the stack → 404.
+
+### E. On a deployment — what is yours to set
+
+Nothing is needed for the alerts to work on this machine. For a deployment, all optional:
+
+| What | Where it comes from | Where it goes |
+|---|---|---|
+| Where alerts are sent | Slack → Apps → Incoming Webhooks → a URL for a channel (or a pager's webhook) | a file `docker/observability/secrets/slack_webhook` (git-ignored), and the receiver in `alertmanager.yml` — the file's own comment has the lines |
+| A Prometheus that can read the deployment | Step 27 D | `prometheus.yml`'s commented `tripplanner-production` job, with the deployment's `OPS_TOKEN` |
+| The runbook's links | — | the alert messages link to `docs/runbook.md` on GitHub, `main` |
+
+`OPS_TOKEN` (Step 25 B) also opens `GET /admin/health-deep` on a deployment; without it, it answers nobody (the
+pre-start check says so).
+
+**The tests:** `pytest tests/unit/test_phase34_alerts.py tests/unit/test_phase34_health.py -v` (90) — the rules
+against the app's metrics, the roadmap's thresholds and the runbook; promtool and amtool; the receiver; the drill's
+judgement of a message; the check script's two new sections; every dependency of the deep check working, down,
+refusing and hanging, and who may ask; the embedding queue. `RUN_INTEGRATION=1 pytest tests/integration/test_phase34_health_integration.py -v`
+(4) — the deep check on real Postgres, Redis and a tool server in a process of its own, the queue counted from
+real rows, and the real driver asked for a database whose name does not resolve.
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -1958,3 +2076,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **31 (Chaos)** | The app as it was before this phase is all of it broken at once, and its records are kept — `docs/chaos/before/`: the tool server killed → `✗ the next plan works … failed, searches 0 of 3, {"flight_agent": "MCP client exception: ", …}`; the builder's model silent → `✗ the trip is marked failed — planning after 901.2 s`; Redis killed → `✗ a plan asked for while Redis is away … {"http": 500, …}` and a build of 32 s. One at a time, on the tests: in `src/ai/mcp_client/client.py` take `await _forget(session)` out of `_call_tool` → `test_a_call_that_finds_the_tool_server_gone_starts_another_and_asks_again` fails (the dead session is kept). In `src/ai/builder/builder.py` take `timeout=BUILD_READ_TIMEOUT_S,` out → `test_the_builders_client_is_made_with_a_timeout_and_one_more_try` fails; make `asyncio.timeout(BUILD_DEADLINE_S)` `asyncio.timeout(None)` → the tests do not fail, they *hang* — which is the bug — and are stopped by whoever runs them. In `routes/trips.py` make the first line of `_Publisher.__call__` `if False:` → `test_a_run_does_not_wait_on_a_redis_that_is_not_there` fails (forty publishes tried, not one); make `if planned is None:` in `refine_trip` `if True:` → only the integration test `test_a_planned_trip_whose_state_redis_has_lost_can_still_be_changed` fails. In `loadtest/standins/faults.py` take the `guard.check(…)` line out → `test_a_fault_never_points_a_client_at_anything_but_this_machine` fails. Close the laptop's lid on battery during `python scripts/chaos.py all` → every record says `asleep_s` and `"timings_hold": false` (it happened: twelve hours of it). Why: a chaos exercise that passes on a broken app is worse than none. |
 | **32 (Chaos, data)** | The app as it was before this phase, kept in `docs/chaos/before/`: Postgres away 45 s → `✗ … none a 500 — 23 requests: ['200', '500']` and `✗ the app answers again within 10 s … the app after 13.7 s`; killed between the two writes → `✗ the traveller is told why in their own words — the page: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.ConnectionDoesNotExistError'>…`; the backend killed after a save → `✗ after the restart the itinerary is embedded … {'vectors': 0, 'pending_retry': 0}, 121.8 s after the backend was ready`. And two things that were broken *by* this phase on the way, and are kept so that nobody does them again: give the driver `command_timeout=20` in `app/db/session.py` and run `python scripts/chaos.py postgres-kill --postgres-away 45` → nine requests end as 500s at the same instant, three seconds after Postgres is back (`docs/chaos/tried/`); take `await db.flush()` out of `persist_node` in `orchestrator.py` → on the stack every plan fails with a foreign-key error (the row that owes the embedding is sent before the itinerary it points at). Why: two of this phase's own fixes were wrong the first time, and only running them showed it. |
 | **33 (Evals)** | In a copy, make the attractions search forget what the traveller enjoys (`activities_search_input`: `"interests": DEFAULT_INTERESTS`) and run `python scripts/run_eval.py --plan-only` there → every scenario still ends ✓ (the planner's own evaluator passes every plan — seven of its unit tests do fail on this copy), and the measurements of its records allow an average of at most 3.07 — nine plans held to 2, "the attractions search left out what the traveller enjoys" — where the healthy build's allow 4.73 (`docs/evals/broken-interests/`, `docs/evals/baseline/`). Or take the key check out of `scripts/run_eval.py` and run `pytest tests/unit/test_phase33_eval.py` → it fails at once ("a unit test must never start a backend or empty a database"). Why: an eval that only checked how plans end would pass a build whose plans are all wrong in the same way. |
+| **34 (Alerts)** | In `docker/observability/alerts/rules.yml` put the cache alert's floor back as it was first written — `sum by (job, instance) (increase(mcp_cache_lookups_total[5m])) >= 10` — and run promtool (Step 32 A) → `FAILED: … the first few misses after a restart do not pass the floor …`: a backend's first four misses after a restart fire it, on the strength of the last process's lookups — what the quiet drill found (`docs/alerts/first/quiet.json`: pending at 0.21, twenty seconds after a restart). Make the error threshold `) > 0.10` → `FAILED: … an endpoint with more than 5 % of its requests failing fires …`: the endpoint at 10 % is no longer alerted on. `docker stop tripplanner_redis` with a backend running → `GET /admin/health-deep` answers 503 in under a second, `redis: ConnectionError …`, and still asks the other three; `docker start tripplanner_redis` → 200. In `src/backend/app/db/errors.py` make `_unreachable` return only `isinstance(error, OSError) and error.errno in _NO_ROUTE` → `pytest tests/unit/test_phase34_health.py -k resolve` fails; on the stack that is the app the first drill ran on, where every request with the pooler stopped was a 500 (`docs/alerts/first/errors.json`) — and the alert fired all the same, which is why it was the record, not the verdict, that showed it. Why: an alert is only as good as the condition it was proved against and the message somebody reads at night. |

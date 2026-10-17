@@ -11,6 +11,8 @@ it are the same everywhere: say so in words, and try again later.
 
 from __future__ import annotations
 
+import errno
+import socket
 from collections.abc import Iterator
 
 import asyncpg
@@ -27,7 +29,20 @@ _NOBODY_THERE = (
     asyncpg.TooManyConnectionsError,
     ConnectionError,  # refused, reset, a broken pipe: there was no connection to make or keep
     TimeoutError,  # no answer within the time a statement is given (db/session.py)
+    socket.gaierror,  # Phase 34: the database's host name does not resolve — see _unreachable
 )
+
+# Phase 34 — found by the alert drill (scripts/alert_drill.py errors): with the pooler's container stopped,
+# its name no longer resolved, and asyncpg raised `socket.gaierror: [Errno -2] Name or service not known`
+# as it was, unwrapped — an OSError, not a ConnectionError. Every request that needed the database was
+# a 500, and a run that could not mark its trip gave up at once instead of trying again. A hosted
+# database whose name stops resolving, or whose network cannot be reached, is as away as one that
+# refuses: these are said as that, and passed on as that.
+_NO_ROUTE = frozenset({errno.ENETUNREACH, errno.EHOSTUNREACH})
+
+
+def _unreachable(error: BaseException) -> bool:
+    return isinstance(error, socket.gaierror) or (isinstance(error, OSError) and error.errno in _NO_ROUTE)
 
 
 def _behind(exc: BaseException) -> Iterator[BaseException]:
@@ -48,5 +63,9 @@ def database_is_away(exc: BaseException) -> bool:
     if isinstance(exc, (OperationalError, DriverInterfaceError, PoolTimeout)):
         return True
     if isinstance(exc, DBAPIError):
-        return exc.connection_invalidated or any(isinstance(error, _NOBODY_THERE) for error in _behind(exc))
-    return isinstance(exc, (asyncpg.PostgresConnectionError, asyncpg.InterfaceError, ConnectionError))
+        return exc.connection_invalidated or any(
+            isinstance(error, _NOBODY_THERE) or _unreachable(error) for error in _behind(exc)
+        )
+    return isinstance(exc, (asyncpg.PostgresConnectionError, asyncpg.InterfaceError, ConnectionError)) or _unreachable(
+        exc
+    )

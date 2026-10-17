@@ -135,6 +135,7 @@ def check(settings, providers=None) -> Report:
     if not settings.OPS_TOKEN:
         weak(
             "OPS_TOKEN is empty: GET /metrics answers nobody, so Prometheus cannot read this deployment"
+            " — and GET /admin/health-deep answers nobody either, so its dependencies cannot be asked"  # Phase 34
             + (
                 " — and GET /admin/sentry-test is switched off, so error reporting cannot be tried out"
                 if settings.SENTRY_DSN

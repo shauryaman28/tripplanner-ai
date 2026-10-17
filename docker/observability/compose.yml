@@ -1,12 +1,15 @@
 # The observability stack on this machine (Phase 29): where the app's metrics, traces and log
-# lines go, and where they are looked at.
+# lines go, and where they are looked at. Phase 34: and who is told when something is wrong.
 #
 #     python scripts/observability.py up        # this file, started and waited for
 #
-#     Grafana      http://localhost:3001        the dashboard, and Explore for the log lines — no login
-#     Prometheus   http://localhost:9090        reads GET /metrics of the backend every 5 s
-#     Jaeger       http://localhost:16686       the traces; takes them as OTLP on http://localhost:4318
-#     Loki         http://localhost:3110        the log lines (3100 is taken: the browser tests' web server)
+#     Grafana        http://localhost:3001      the dashboard, and Explore for the log lines — no login
+#     Prometheus     http://localhost:9090      reads GET /metrics of the backend every 5 s; evaluates the
+#                                               alerts (alerts/rules.yml) — Alerts, at /alerts
+#     Alertmanager   http://localhost:9093      what fires, grouped and sent on (alertmanager.yml); silences
+#     alert receiver http://localhost:9011      where it is sent: prints each alert, keeps them at /alerts
+#     Jaeger         http://localhost:16686     the traces; takes them as OTLP on http://localhost:4318
+#     Loki           http://localhost:3110      the log lines (3100 is taken: the browser tests' web server)
 #     Alloy                                     reads the log lines and sends them to Loki
 #
 # Nothing here is in the app's path: with the stack down the app runs exactly as before, minus
@@ -23,8 +26,10 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=7d
+      - --web.external-url=http://localhost:9090 # an alert's "source" link opens here, not at the container's name
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts:/etc/prometheus/alerts:ro # Phase 34: the alert rules (and their tests, which Prometheus ignores)
       # the production-like backend's operations token, written by scripts/observability.py (git-ignored)
       - ./secrets:/etc/prometheus/secrets:ro
       - prometheus-data:/prometheus
@@ -32,6 +37,32 @@ services:
       - "9090:9090"
     extra_hosts:
       - "host.docker.internal:host-gateway" # the backend runs on the host, or publishes its port there
+    depends_on:
+      - alertmanager
+
+  # Phase 34: what Prometheus says fires goes here, and is sent on — grouped, repeated, said when it stops.
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://localhost:9093
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    depends_on:
+      - alert-receiver
+
+  # …and where Alertmanager sends it on this machine: a stand-in for Slack or a pager, which prints each
+  # alert (`python scripts/observability.py logs -f alert-receiver`) and keeps them for the drill to read.
+  alert-receiver:
+    image: python:3.11-slim # the app's own base image (src/backend/Dockerfile): nothing new to pull
+    command: ["python", "-u", "/receiver/alert_receiver.py", "--host", "0.0.0.0", "--port", "9011"]
+    volumes:
+      - ../../scripts/alert_receiver.py:/receiver/alert_receiver.py:ro
+    ports:
+      - "9011:9011"
 
   jaeger:
     # Jaeger 2: the all-in-one configuration it starts with by default — traces kept in memory.
