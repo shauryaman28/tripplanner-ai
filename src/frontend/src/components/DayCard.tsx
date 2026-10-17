@@ -137,7 +137,10 @@ function ActivityRow({
         part={stopPart(day, slot)}
         updating={updating}
       >
-        {language && activity.description ? (
+        {activity.no_time_left ? (
+          // Phase 37: the flight lands too late for anything that day
+          <p className="mt-0.5 text-xs text-ink-500">You arrive late — nothing is planned for today.</p>
+        ) : language && activity.description ? (
           <p lang={language} data-local-text className="mt-0.5 text-sm text-ink-600">
             {activity.description}
           </p>

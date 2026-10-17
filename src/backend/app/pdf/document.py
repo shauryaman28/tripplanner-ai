@@ -271,10 +271,14 @@ def _stop_row(day: int, stop: Stop) -> list:
         words = [
             _p("All day", EYEBROW),
             _p("Free time", ROW_TITLE_QUIET),
-            # Phase 36: on a plan in another language, what the page says of a free day — in it
+            # Phase 36: on a plan in another language, what the page says of a free day — in it; Phase 37: a late
+            # landing's day says that instead
             _p(
                 scripts.shorten(
-                    stop.description or "Nothing booked — explore the area at your own pace.", DETAIL_LIMIT
+                    "You arrive late — nothing is planned for today."
+                    if stop.no_time_left
+                    else stop.description or "Nothing booked — explore the area at your own pace.",
+                    DETAIL_LIMIT,
                 ),
                 META,
             ),

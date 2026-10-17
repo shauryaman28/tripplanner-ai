@@ -511,3 +511,16 @@ def test_the_builder_is_told_when_the_first_day_can_begin(arrival, said):
 def test_the_line_speaks_of_the_flight_the_plan_takes_the_cheapest():
     flights = _lands("2030-01-10T22:42:00") + [{**_lands("2030-01-10T09:00:00")[0], "price_inr": 4_000.0}]
     assert "lands at 09:00" in builder._landing_line("2030-01-10", flights)
+
+
+def test_a_late_landings_free_day_says_why_it_is_empty():
+    late = {
+        "total_cost": 0,
+        "days": [{"day": 1, "date": "2030-01-10", "morning": {"activity": FREE_TIME, "no_time_left": True}}],
+    }
+    (free,) = _pdf(late).days[0].stops
+    assert free.no_time_left and "You arrive late — nothing is planned for today." in [
+        paragraph.getPlainText() for paragraph in _stop_row(1, free)[1]
+    ]
+    source = open("src/frontend/src/components/DayCard.tsx", encoding="utf-8").read()
+    assert "You arrive late — nothing is planned for today." in source  # the page says it in the same words
