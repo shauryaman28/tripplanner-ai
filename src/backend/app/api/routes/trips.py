@@ -1265,6 +1265,7 @@ async def get_trip_runs(
 # ── GET /trips/{id}/timeline ───────────────────────────────────────────────
 
 _AGENT_LABELS: dict[str, str] = {
+    "language": "Read the language of the request",  # Phase 36
     "intent_parsing": "Extracted trip details from user input",
     "preferences": "Applied saved traveller preferences",
     "flight_agent": "Searched for flights",
@@ -1273,6 +1274,7 @@ _AGENT_LABELS: dict[str, str] = {
     "activities_agent": "Searched for activities and attractions",
     "itinerary_builder": "Built day-by-day itinerary",
     "evaluator": "Validated itinerary correctness",
+    "localise": "Wrote the plan in the traveller's language",  # Phase 36
     "persist": "Saved itinerary to database",
     "escalate": "Budget conflict — offered alternatives to user",
     "builder_failed": "Itinerary build failed after maximum retries",
@@ -1399,6 +1401,16 @@ def _run_detail(agent_name: str, output: dict, run_status: str) -> dict[str, Any
 
     if agent_name == "persist":
         return {"itinerary_id": output.get("itinerary_id"), "trip_status": output.get("trip_status")}
+
+    if agent_name == "language":  # Phase 36
+        return {
+            "language": output.get("language"),
+            "decided_by": output.get("decided_by"),
+            "translated": list(output.get("translated") or {}),
+        }
+
+    if agent_name == "localise":
+        return {"translated": output.get("translated"), "kept_in_english": output.get("kept_in_english")}
 
     if agent_name == "intent_parsing":
         return {

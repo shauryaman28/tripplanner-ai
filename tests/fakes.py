@@ -32,6 +32,7 @@ from requests.adapters import BaseAdapter
 
 from app import search
 from app.core.config import settings
+from src.ai import language as language_module
 from src.ai import llm as llm_module
 from src.ai import tracing
 from src.ai.agents import destination_intelligence, preference_extractor
@@ -47,6 +48,7 @@ _REAL_SEAMS = {
     "src.ai.agents.preference_extractor._call_llm": preference_extractor._call_llm,
     "src.ai.orchestrator.orchestrator._extract_intent": orchestrator_module._extract_intent,
     "src.ai.llm._ask_groq": llm_module._ask_groq,
+    "src.ai.language._call_model": language_module._call_model,
 }
 
 _DEL = {"latitude": 28.5585, "longitude": 77.1002}
@@ -230,9 +232,19 @@ async def fake_builder_llm(_system: str, user_prompt: str, on_token=None) -> str
     names = [a["name"] for a in attractions]
     hotel = {"name": hotels[0]["name"], "cost_per_night": hotels[0]["price_per_night_inr"]} if hotels else None
 
+    asked_for = re.search(r"The traveller reads (\w+)\.", user_prompt)  # Phase 36: a plan in another language
+    language = next(
+        (code for code, lang in language_module.SUPPORTED.items() if asked_for and lang.name == asked_for[1]), None
+    )
+
     def slot(index: int) -> dict:
         name = names[index] if index < len(names) else "Explore the area"
-        return {"activity": name, "cost": 0, "lat": None, "lng": None}
+        written = {"activity": name, "cost": 0, "lat": None, "lng": None}
+        if language and name != "Explore the area":
+            written.update(
+                local_name=f"{name} ({LOCAL_WORDS[language][0]})", description=f"{LOCAL_WORDS[language][1]} {name}"
+            )
+        return written
 
     days = [
         {
@@ -251,6 +263,51 @@ async def fake_builder_llm(_system: str, user_prompt: str, on_token=None) -> str
     )
     reply = json.dumps({"days": days, "total_cost": total, "currency": "INR"}, indent=1)  # indented, as models write
     return await stream_reply(reply, on_token) if on_token else reply
+
+
+# ── Translation (Phase 36) ─────────────────────────────────────────────────
+
+# What the stand-in builder writes in each language: a word for a local name, and the start of a sentence on a stop.
+LOCAL_WORDS = {
+    "hi": ("हिन्दी", "घूमने की जगह:"),
+    "ta": ("தமிழ்", "பார்க்க வேண்டிய இடம்:"),
+    "bn": ("বাংলা", "ঘুরে দেখার জায়গা:"),
+}
+# What the stand-in translator knows the English of. Anything else it puts into English as "(Hindi) …" with
+# the letters of the other script left out — Latin letters only, which is all the code checks.
+KNOWN_ENGLISH = {
+    "गोवा में 5 दिन की यात्रा, बजट ₹50,000": "A 5-day trip to Goa, budget ₹50,000",
+    "गोवा": "Goa",
+    "समुद्र तट": "beaches",
+    "इतिहास": "history",
+    "கோவாவில் 5 நாள் பயணம், பட்ஜெட் ₹50,000": "A 5-day trip to Goa, budget ₹50,000",
+    "গোয়ায় ৫ দিনের ভ্রমণ, বাজেট ₹৫০,০০০": "A 5-day trip to Goa, budget ₹50,000",
+    "होटल समुद्र तट के पास चाहिए": "I want a hotel near the beach",
+}
+# Strings it never translates, whichever way: what a model gets wrong now and then.
+UNTRANSLATABLE = {"FAIL-THIS-ONE"}
+
+
+async def fake_translate(prompt: str) -> str:
+    """Stand-in for the translation model (src/ai/language._call_model): deterministic, and checkable.
+
+    Into English: the sentences it knows, and anything else as "(Hindi) " + its Latin letters. Into
+    Hindi, Tamil or Bengali: the language's own name, then the string — "हिन्दी: Rent a scooter…" —
+    which is in the language's script, as the code checks a translation is.
+    """
+    source, target = re.search(r"from (\w+) into (\w+)\.", prompt).groups()
+    texts = json.loads(prompt.rsplit("Strings (JSON): ", 1)[1])
+    by_name = {lang.name: code for code, lang in language_module.SUPPORTED.items()}
+
+    def one(text: str) -> str:
+        if text in UNTRANSLATABLE:
+            return text  # sent back as it came: still in its own script, or in none of the other's
+        if target == "English":
+            latin = "".join(char for char in text if ord(char) < 0x250).strip()
+            return KNOWN_ENGLISH.get(text) or f"({source}) {latin}".strip()
+        return f"{LOCAL_WORDS[by_name[target]][0]}: {text}"
+
+    return json.dumps([one(text) for text in texts], ensure_ascii=False)
 
 
 # ── Embeddings (Phases 14, 23) ─────────────────────────────────────────────
@@ -348,6 +405,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.orchestrator.warming.call_tool", tools["warm"]),
         patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={})),
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
+        patch("src.ai.language._call_model", fake_translate),  # Phase 36
         patch("src.ai.agents.destination_intelligence._call_llm", fake_intelligence_llm),
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
         patch("src.ai.embeddings.embedder._call_embed", AsyncMock(side_effect=fake_embed)),

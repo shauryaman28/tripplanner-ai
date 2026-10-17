@@ -61,8 +61,10 @@ TRIP = {
 USER = uuid.uuid4()
 FLIGHTS = {"origin": "DEL", "destination": "Goa", "date": str(START), "budget": 50_000.0}
 
-# The graph's nodes in the order a plan that goes straight through visits them.
+# The graph's nodes in the order a plan that goes straight through visits them. (Phase 36 added `language`
+# and `localise`: an English plan passes through both as if they were not there, but they are its steps.)
 STRAIGHT_THROUGH = [
+    "language",
     "intent_parsing",
     "apply_preferences",
     "run_flight",
@@ -70,6 +72,7 @@ STRAIGHT_THROUGH = [
     "hotel_activities",
     "build_itinerary",
     "evaluate",
+    "localise",
     "persist",
     "merge",
     "extract_preferences",
@@ -240,7 +243,8 @@ async def test_a_replanning_branch_is_a_distinct_span():
 
     assert result["draft_itinerary"]
     # the run went through the flight search and the budget check twice…
-    assert trace.names()[:6] == [
+    assert trace.names()[:7] == [
+        "language",
         "intent_parsing",
         "apply_preferences",
         "run_flight",
@@ -312,7 +316,7 @@ async def test_a_refinement_and_a_retried_search_are_traces_of_their_own_with_th
         2,
     )
     assert refine.inputs == {"request": "A nicer hotel"}
-    assert refine.names() == ["hotel_agent", "build_itinerary", "evaluate", "persist", "merge"]
+    assert refine.names() == ["language", "hotel_agent", "build_itinerary", "evaluate", "localise", "persist", "merge"]
     built = refine.find("build_itinerary")[0]
     assert built.children[0].run_type == "llm"  # the model call, under its step
     # a step says what went in and what came out, as a node of the graph does
@@ -321,7 +325,7 @@ async def test_a_refinement_and_a_retried_search_are_traces_of_their_own_with_th
     assert refine.outputs["itinerary_id"] is None  # no database here: the run's own summary, as its output
 
     assert retry.name == "retry trip: activities_agent" and retry.metadata["kind"] == "retry"
-    assert retry.names()[0] == "activities_agent"
+    assert retry.names()[:2] == ["language", "activities_agent"]
 
     # "add a day" is a whole pass through the graph again: the same steps as a plan, named as what it is
     assert longer.name == "refine trip: add_day" and longer.metadata["kind"] == "refine"

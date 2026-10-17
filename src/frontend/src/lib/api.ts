@@ -14,6 +14,7 @@ import type {
   ApiErrorBody,
   GroupMember,
   Itinerary,
+  Preferences,
   ReplanChoice,
   SimilarTripsResponse,
   TokenResponse,
@@ -214,6 +215,26 @@ export async function createTrip(payload: CreateTripPayload): Promise<Trip> {
   return request<Trip>("/trips", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Preferences — the language plans are written in (Phase 36)
+// ---------------------------------------------------------------------------
+
+export async function getPreferences(): Promise<Preferences> {
+  return request<Preferences>("/users/preferences");
+}
+
+/**
+ * Save the language plans are written in — and nothing else of the traveller's preferences.
+ * PUT replaces them all, so what is saved is read first and sent back with this one change.
+ */
+export async function savePreferredLanguage(language: Preferences["preferred_language"]): Promise<Preferences> {
+  const { updated_at: _saved, ...current } = await getPreferences();
+  return request<Preferences>("/users/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ ...current, preferred_language: language }),
   });
 }
 

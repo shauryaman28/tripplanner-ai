@@ -23,6 +23,10 @@ Phase 25: a group trip (trip_meta["group_members"]). The model is told who trave
           everyone something in every two days; code then makes sure of it
           (group.rebalance), says on each stop who it is for, and adds each
           traveller's share of the cost; see prompts/itinerary_builder_v9.md.
+Phase 36: a plan in Hindi, Tamil or Bengali (trip_meta["language"]). The model also writes
+          each stop's description and local name in that language; its `activity` stays the
+          English name every check goes by. A plan in English is asked for, checked and saved
+          exactly as before; see prompts/itinerary_builder_v10.md.
 """
 
 from __future__ import annotations
@@ -33,11 +37,12 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import date
+from typing import ClassVar
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator, model_serializer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai import group, pricing
+from src.ai import group, language, pricing
 from src.ai.itinerary import FREE_TIME, SLOTS, LocalIntelligence, PerPersonBreakdown
 from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
 from src.ai.utils.run_logger import log_agent_run, timed_run
@@ -59,7 +64,22 @@ def _none_is_zero(value: object) -> object:
     return 0.0 if value is None else value
 
 
-class ActivitySlot(BaseModel):
+class _OnlyWhenSet(BaseModel):
+    """Phase 36: the fields in `_ONLY_WHEN_SET` are left out of a dump while they are None. They are
+    only ever set on a plan in another language — and a plan in English is saved as it was before them."""
+
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ()
+
+    @model_serializer(mode="wrap")
+    def _leave_out_unset(self, handler):
+        dumped = handler(self)
+        for key in self._ONLY_WHEN_SET:
+            if dumped.get(key) is None:
+                dumped.pop(key, None)
+        return dumped
+
+
+class ActivitySlot(_OnlyWhenSet):
     activity: str
     cost: float = 0.0
     lat: float | None = None
@@ -67,7 +87,11 @@ class ActivitySlot(BaseModel):
     category: str | None = None  # copied from the attraction — shown in the map popup (Phase 18)
     rating: float | None = None
     suits: list[str] | None = None  # Phase 25, a group trip: the members this stop is for — set by code
+    # Phase 36, a plan in Hindi, Tamil or Bengali: the place's name and a sentence on it, in that language
+    local_name: str | None = None
+    description: str | None = None
 
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("local_name", "description")
     _cost = field_validator("cost", mode="before")(_none_is_zero)
 
 
@@ -93,7 +117,7 @@ class DaySchedule(BaseModel):
     flight: dict | None = None
 
 
-class ItineraryDraft(BaseModel):
+class ItineraryDraft(_OnlyWhenSet):
     days: list[DaySchedule]
     total_cost: float
     currency: str = "INR"
@@ -106,6 +130,13 @@ class ItineraryDraft(BaseModel):
     per_person_cost: float | None = None
     per_person_breakdown: PerPersonBreakdown | None = None
     group: dict | None = None
+    language: str | None = None  # Phase 36 — set by ItineraryBuilder.run: "hi", "ta" or "bn"; absent for English
+
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("language",)
+
+
+# What a draft holds that the model never writes: a reply's own is dropped before it is read.
+_WRITTEN_BY_CODE = ("local_intelligence", "per_person_cost", "per_person_breakdown", "group", "missing", "language")
 
 
 class BuilderError(BaseModel):
@@ -221,6 +252,25 @@ def _group_block(members: list[dict] | None) -> str:
     )
 
 
+# How each language writes "Baga Beach" — the prompt's example of a local name (Phase 36).
+_LOCAL_NAME_EXAMPLES = {"hi": "बागा बीच", "ta": "பாகா கடற்கரை", "bn": "বাগা সৈকত"}
+
+
+def _language_block(code: str | None) -> str:
+    """Prompt paragraph for a plan in Hindi, Tamil or Bengali (Phase 36) — '' for a plan in English."""
+    if code not in language.SUPPORTED:
+        return ""
+    name = language.SUPPORTED[code].name
+    return (
+        f'The traveller reads {name}. Give every slot except "Explore the area" two more keys, both written in '
+        f'{name}, in the {name} script: "local_name" — the place\'s name as {name} speakers write it '
+        f'("Baga Beach" → "{_LOCAL_NAME_EXAMPLES[code]}"); "description" — one sentence of at most 25 words on what '
+        "to do there, from the attraction's category and description. \"activity\" stays the place's name exactly "
+        "as the attractions list gives it, in English: it is how the plan is checked, mapped and booked. JSON keys, "
+        "dates and numbers stay as they are.\n\n"
+    )
+
+
 # What the model is shown of an attraction. The rest of a search result — the interests a place was
 # found under, its score for a group — is for the code around the model, not for it.
 _ATTRACTION_KEYS = ("name", "category", "rating", "description", "lat", "lng")
@@ -261,6 +311,7 @@ def _build_user_prompt(
         f"{_group_block(trip_meta.get('group_members'))}"
         f"{_preferences_block(trip_meta.get('preferences'))}"
         f"{_request_block(trip_meta.get('request'), trip_meta.get('previous_plan'))}"
+        f"{_language_block(trip_meta.get('language'))}"
         "Build the itinerary now, respecting the data-scope and budget rules exactly."
     )
 
@@ -321,6 +372,26 @@ def _normalise_free_time(draft: dict) -> None:
                 has_real_activity = True
         if not has_real_activity:
             day[SLOTS[0]] = dict(free)
+
+
+def _keep_local_text(draft: dict, code: str | None) -> None:
+    """Phase 36 — each stop's description and local name, kept when they are in the plan's language.
+
+    One in another script, or too long, is let go — the localise step describes that stop instead
+    (src/ai/language.py). A free day gets its words there too. And a plan in English has neither:
+    a model that writes them anyway is not listened to.
+    """
+    for day in draft["days"]:
+        for slot_name in SLOTS:
+            slot = day.get(slot_name)
+            if not slot:
+                continue
+            if code in language.SUPPORTED and slot["activity"] != FREE_TIME:
+                slot["description"] = language.local_text(slot.get("description"), code, language.DESCRIPTION_CHARS)
+                slot["local_name"] = language.local_text(slot.get("local_name"), code, language.LOCAL_NAME_CHARS)
+            else:
+                slot.pop("description", None)
+                slot.pop("local_name", None)
 
 
 def _validate_data_scope(draft: dict, hotels: list[dict], attractions: list[dict]) -> list[str]:
@@ -425,7 +496,7 @@ async def build_itinerary(
         return BuilderError(error=f"Failed to parse builder JSON: {exc}", code="JSON_PARSE_ERROR")
     if not isinstance(parsed, dict):
         return BuilderError(error="Builder reply was not a JSON object.", code="JSON_PARSE_ERROR")
-    for written_by_code in ("local_intelligence", "per_person_cost", "per_person_breakdown", "group", "missing"):
+    for written_by_code in _WRITTEN_BY_CODE:
         parsed.pop(written_by_code, None)  # what goes there is never the model's to write
 
     # Shape first: every check below can then rely on it instead of guarding against
@@ -435,6 +506,7 @@ async def build_itinerary(
     except (ValidationError, TypeError) as exc:
         return BuilderError(error=f"Draft failed schema validation: {exc}", code="SCHEMA_INVALID")
 
+    _keep_local_text(draft, trip_meta.get("language"))
     _normalise_free_time(draft)
 
     violations = _validate_data_scope(draft, hotels, attractions)
@@ -518,6 +590,8 @@ class ItineraryBuilder:
             if isinstance(result, ItineraryDraft):
                 result.local_intelligence = _checked_intelligence(local_intelligence)
                 _add_group_and_shares(result, trip_meta, flights, attractions)
+                if trip_meta.get("language") in language.SUPPORTED:  # Phase 36
+                    result.language = trip_meta["language"]
 
         if isinstance(result, BuilderError):
             output = {"draft": None, "error": result.model_dump()}

@@ -9,6 +9,11 @@ is enforced by the schema layer (Literal) plus a CHECK constraint.
 
 updated_at is refreshed automatically by SQLAlchemy on every UPDATE, so
 neither the PUT route nor the PreferenceExtractor has to remember to set it.
+
+Phase 36: preferred_language — the language the traveller's plans are written
+in. NULL: none chosen, and each request's own language decides. Only the
+traveller sets it (PUT /users/preferences); the PreferenceExtractor never does,
+and neither does a request in Hindi (DECISIONS.md says why).
 """
 
 import uuid
@@ -21,6 +26,9 @@ from sqlmodel import Field, SQLModel
 
 TravelStyle = Literal["budget", "mid-range", "luxury"]
 TRAVEL_STYLES: tuple[str, ...] = get_args(TravelStyle)  # ordered cheapest → most expensive
+# English, Hindi, Tamil, Bengali — src/ai/language.SUPPORTED, and English (a test keeps the two in step)
+PlanLanguage = Literal["en", "hi", "ta", "bn"]
+PLAN_LANGUAGES: tuple[str, ...] = get_args(PlanLanguage)
 
 
 def _utcnow() -> datetime:
@@ -33,6 +41,10 @@ class UserPreferences(SQLModel, table=True):
         CheckConstraint(
             "travel_style IN ('budget', 'mid-range', 'luxury')",
             name="ck_user_preferences_travel_style",
+        ),
+        CheckConstraint(
+            "preferred_language IN ('en', 'hi', 'ta', 'bn')",
+            name="ck_user_preferences_preferred_language",
         ),
     )
 
@@ -48,5 +60,6 @@ class UserPreferences(SQLModel, table=True):
     )
     travel_style: str | None = Field(default=None, max_length=20)
     home_city: str | None = Field(default=None, max_length=100)
+    preferred_language: str | None = Field(default=None, max_length=5)  # Phase 36
 
     updated_at: datetime = Field(default_factory=_utcnow, sa_column_kwargs={"onupdate": _utcnow})

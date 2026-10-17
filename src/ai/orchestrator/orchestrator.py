@@ -1,8 +1,8 @@
-"""OrchestratorAgent — the planning graph (Phases 9–22).
+"""OrchestratorAgent — the planning graph (Phases 9–22, 36).
 
-    intent_parsing → apply_preferences → run_flight → budget_decision
+    language → intent_parsing → apply_preferences → run_flight → budget_decision
         ├─ continue → hotel_activities (+ local tips) → build_itinerary → evaluate
-        │                 ├─ passed → persist → merge → extract_preferences → END
+        │                 ├─ passed → localise → persist → merge → extract_preferences → END
         │                 ├─ retry  → retry_dispatch → build_itinerary
         │                 └─ failed → builder_failed → END
         ├─ replan   → run_flight   (≤ MAX_REPLAN_ATTEMPTS; tighter cap, one more stop)
@@ -23,6 +23,12 @@ The DestinationIntelligenceAgent (Phase 22) runs beside the hotel and
 activities searches. It is the one agent a plan does not depend on: it
 publishes nothing, and when it has nothing to say the plan is made without
 local tips — see _local_tips.
+
+A trip can be asked for in Hindi, Tamil or Bengali (Phase 36). The language node reads
+the request first and puts it into English for everything after it; the plan is then
+written in the traveller's language — the builder writes each stop's description in it,
+and the localise node translates what it did not write. A plan in English goes through
+both as if they were not there: no model is asked, nothing is logged, nothing changes.
 """
 
 from __future__ import annotations
@@ -39,7 +45,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
-from src.ai import group, tracing
+from src.ai import group, language, tracing
 from src.ai.agents.activities_agent import ActivitiesAgent
 from src.ai.agents.budget_alternatives import conflict_alternatives, plain_options
 from src.ai.agents.budget_decision import BudgetDecision, make_budget_decision, replan_flight_budget
@@ -162,6 +168,12 @@ class OrchestratorState(TypedDict, total=False):
     # Phase 16: snapshot of the user's saved preferences (set by apply_preferences_node)
     preferences: dict | None
 
+    # Phase 36: the language the plan is written in — "hi", "ta" or "bn". Absent (or None): English.
+    language: str | None
+    # …and a destination typed in one of them: {"typed": "गोवा", "english": "Goa"}. The run searches with
+    # the English; the trip keeps the name its traveller typed (Phase 20 draws it in its own script).
+    typed_destination: dict | None
+
     # Runtime helpers — never stored in DB
     publish_fn: Any | None
     on_complete: Any | None  # async callable(state), awaited just before planning_complete is published
@@ -243,6 +255,164 @@ async def _set_trip_status(state: OrchestratorState, status: TripStatus) -> None
         _sync_trip(trip, state)  # keep what intent parsing corrected (e.g. the destination) even if the run failed
         db.add(trip)
         await db.commit()
+
+
+# ── Language (Phase 36) ────────────────────────────────────────────────────
+
+_REQUEST_KEYS = ("raw_input", "refinement_request")
+
+
+def _what_was_written(state: OrchestratorState) -> list[tuple[tuple, str]]:
+    """Everything of the trip the traveller wrote in words, each with where it is in the state.
+
+    The request; the trip's destination and interests; each traveller's interests (Phase 25).
+    A traveller's name is not among them: a name is not translated.
+    """
+    found: list[tuple[tuple, str]] = [
+        ((key,), state[key])
+        for key in (*_REQUEST_KEYS, "destination")
+        if isinstance(state.get(key), str) and state[key].strip()
+    ]
+    found += [(("interests", n), text) for n, text in enumerate(state.get("interests") or []) if isinstance(text, str)]
+    for m, member in enumerate(state.get("group_members") or []):
+        if isinstance(member, dict):
+            interests = member.get("interests") or []
+            found += [(("group_members", m, n), text) for n, text in enumerate(interests) if isinstance(text, str)]
+    return found
+
+
+def _with_translations(state: OrchestratorState, translated: dict[tuple, str]) -> dict:
+    """The state's fields with their English in place — on copies of its lists, never the lists themselves."""
+    updates: dict[str, Any] = {}
+    for where, text in translated.items():
+        if len(where) == 1:
+            updates[where[0]] = text
+        elif where[0] == "interests":
+            updates.setdefault("interests", list(state.get("interests") or []))[where[1]] = text
+        else:
+            members = updates.setdefault("group_members", [dict(m) for m in state.get("group_members") or []])
+            members[where[1]]["interests"] = list(members[where[1]].get("interests") or [])
+            members[where[1]]["interests"][where[2]] = text
+    return updates
+
+
+async def _preferred_language(state: OrchestratorState) -> str | None:
+    """The traveller's saved `preferred_language` — None when they saved none, or nothing could be looked up."""
+    db, trip_id = state.get("db"), state.get("trip_id")
+    if db is None or trip_id is None:
+        return None
+    try:
+        user_id = await get_trip_user_id(db, trip_id)
+        prefs = await load_preferences(db, user_id) if user_id is not None else None
+    except Exception:
+        logger.warning("Could not look up the traveller's language — the request decides it", exc_info=True)
+        return None
+    finally:
+        await hand_back(db)  # Phase 30: a translation may follow — not with a connection in hand
+    chosen = getattr(prefs, "preferred_language", None)
+    return chosen if chosen == language.ENGLISH or chosen in language.SUPPORTED else None
+
+
+def _read_all(pieces: list[tuple[tuple, str]], request: str) -> tuple[dict[tuple, language.Reading], language.Reading]:
+    return {where: language.read(text) for where, text in pieces}, language.read(request)
+
+
+async def language_node(state: OrchestratorState) -> OrchestratorState:
+    """Phase 36 — which language the plan is written in, and what the traveller wrote, in English.
+
+    The plan's language is, in this order: the traveller's saved `preferred_language`; the language
+    the request is in, when it is Hindi, Tamil or Bengali; the language the trip was planned in
+    before (a change to a plan in Hindi is planned in Hindi); English.
+
+    Whatever was written in one of those three is translated into English, so that intent parsing,
+    the searches and the builder read what they always have — also with a preference saved, which
+    says what the plan is written in, not what the traveller types. A translation that fails leaves
+    the text as it was typed: intent parsing was reading such text before this phase, as best it could.
+
+    Text in Latin letters is not read (src/ai/language.py): an English trip asks no model here,
+    logs no row, and leaves the state exactly as it was.
+    """
+    pieces = _what_was_written(state)
+    request = " ".join(text for where, text in pieces if where[0] in _REQUEST_KEYS) or " ".join(t for _, t in pieces)
+    readings, reading = await asyncio.to_thread(_read_all, pieces, request)
+    preferred = await _preferred_language(state)
+
+    if preferred is not None:
+        decided_by, chosen = "preference", preferred
+    elif reading.supported:
+        decided_by, chosen = "request", reading.language
+    elif state.get("language"):
+        decided_by, chosen = "trip", state["language"]
+    else:
+        decided_by, chosen = "default", language.ENGLISH
+    plan_language = None if chosen == language.ENGLISH else chosen
+
+    foreign = {where: r.language for where, r in readings.items() if r.supported}
+    if not foreign and reading.script is None and plan_language is None and not state.get("language"):
+        return state  # English, in and out: as if this node were not there
+
+    translated: dict[tuple, str] = {}
+    error: str | None = None
+    async with timed_run("language") as timer:
+        for source in dict.fromkeys(foreign.values()):
+            texts = [(where, text) for where, text in pieces if foreign.get(where) == source]
+            try:
+                english = await language.translate([text for _, text in texts], source, language.ENGLISH)
+            except Exception as exc:
+                logger.warning("The request could not be put into English (%s) — it is read as typed", exc)
+                error = f"{type(exc).__name__}: {exc}"
+                continue
+            translated.update({where: out for (where, _), out in zip(texts, english, strict=True) if out})
+
+    def name(where: tuple) -> str:
+        return where[0] + "".join(f"[{part}]" for part in where[1:])
+
+    await _log(
+        state,
+        "language",
+        input={"read": {name(where): code for where, code in foreign.items()}, "preferred_language": preferred},
+        output={
+            "language": chosen,
+            "decided_by": decided_by,
+            "request_read_as": reading.language,
+            "confidence": reading.confidence,
+            "translated": {name(where): text for where, text in translated.items()},
+            "kept_as_typed": [name(where) for where in foreign if where not in translated],
+        },
+        duration_ms=timer.duration_ms,
+        status="failed" if error and not translated else "completed",
+        usage=timer.usage,
+    )
+    updates = _with_translations(state, translated)
+    if plan_language != state.get("language"):
+        updates["language"] = plan_language
+    if ("destination",) in translated:
+        updates["typed_destination"] = {"typed": state["destination"], "english": translated[("destination",)]}
+    return {**state, **updates}
+
+
+async def localise_node(state: OrchestratorState) -> OrchestratorState:
+    """Phase 36 — the plan that passed its checks, in the traveller's language (src/ai/language.localise).
+
+    The builder wrote each stop's description in it; this translates what it did not write — the
+    local tips, a free day, a stop the group repair moved in. Never fails the plan: what could not
+    be translated stays in English. A plan in English is passed on untouched, with no row logged.
+    """
+    plan_language, draft = state.get("language"), state.get("draft_itinerary")
+    if not plan_language or not draft:
+        return state
+    async with timed_run("localise") as timer:
+        done = await language.localise(draft, plan_language, state.get("attractions"))
+    await _log(
+        state,
+        "localise",
+        input={"language": plan_language, "strings": done.asked},
+        output={"translated": done.translated, "kept_in_english": done.asked - done.translated, "error": done.error},
+        duration_ms=timer.duration_ms,
+        status="failed" if done.error else "completed",
+        usage=timer.usage,
+    )
+    return {**state, "draft_itinerary": done.draft}
 
 
 # ── Intent parsing ─────────────────────────────────────────────────────────
@@ -821,6 +991,8 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
     if state.get("group_members"):  # Phase 25: who the plan is for, and whose interests found nothing
         trip_meta["group_members"] = group.clean_members(state["group_members"])
         trip_meta["group_searches"] = state.get("group_searches") or []
+    if state.get("language"):  # Phase 36: the plan is written in this language
+        trip_meta["language"] = state["language"]
 
     stream = _TokenStream(state) if state.get("publish_fn") is not None else None  # nobody listening → no streaming
     result = await ItineraryBuilder().run(
@@ -925,10 +1097,16 @@ def _unmapped_activities(draft: dict) -> list[str]:
 
 
 def _sync_trip(trip: Any, state: OrchestratorState) -> None:
-    """Keep the trip row in step with what was actually planned (a refinement may move dates or destination)."""
+    """Keep the trip row in step with what was actually planned (a refinement may move dates or destination).
+
+    Phase 36: a destination that was only translated is the same place — the trip keeps it as it was typed.
+    """
     for field in ("destination", "budget", "group_size"):
         if state.get(field):
             setattr(trip, field, state[field])
+    typed = state.get("typed_destination") or {}
+    if typed.get("typed") and state.get("destination") == typed.get("english"):
+        trip.destination = typed["typed"]
     for field in ("start_date", "end_date"):
         if _iso_date(state.get(field)):
             setattr(trip, field, date.fromisoformat(state[field]))
@@ -1171,6 +1349,7 @@ async def extract_preferences_node(state: OrchestratorState) -> OrchestratorStat
 def build_orchestrator_graph():
     graph = StateGraph(OrchestratorState)
 
+    graph.add_node("language", language_node)
     graph.add_node("intent_parsing", intent_parsing_node)
     graph.add_node("apply_preferences", apply_preferences_node)
     graph.add_node("run_flight", run_flight_node)
@@ -1179,6 +1358,7 @@ def build_orchestrator_graph():
     graph.add_node("build_itinerary", build_itinerary_node)
     graph.add_node("evaluate", evaluate_node)
     graph.add_node("retry_dispatch", retry_dispatch_node)
+    graph.add_node("localise", localise_node)
     graph.add_node("persist", persist_node)
     graph.add_node("builder_failed", builder_failed_node)
     graph.add_node("nothing_found", nothing_found_node)
@@ -1186,7 +1366,8 @@ def build_orchestrator_graph():
     graph.add_node("escalate", escalate_node)
     graph.add_node("extract_preferences", extract_preferences_node)
 
-    graph.set_entry_point("intent_parsing")
+    graph.set_entry_point("language")
+    graph.add_edge("language", "intent_parsing")
     graph.add_edge("intent_parsing", "apply_preferences")
     graph.add_edge("apply_preferences", "run_flight")
     graph.add_edge("run_flight", "budget_decision")
@@ -1202,9 +1383,10 @@ def build_orchestrator_graph():
     graph.add_conditional_edges(
         "evaluate",
         route_after_evaluator,
-        {"passed": "persist", "retry": "retry_dispatch", "failed": "builder_failed"},
+        {"passed": "localise", "retry": "retry_dispatch", "failed": "builder_failed"},
     )
     graph.add_edge("retry_dispatch", "build_itinerary")
+    graph.add_edge("localise", "persist")
     graph.add_edge("persist", "merge")
     graph.add_edge("merge", "extract_preferences")
     graph.add_edge("extract_preferences", END)
@@ -1384,9 +1566,15 @@ class OrchestratorAgent:
         Local tips (Phase 22) are about the place, so they are carried forward
         by every refinement that keeps the destination; a plan that has none yet
         gets them beside the search a targeted refinement repeats.
+
+        The plan's language (Phase 36) is carried forward too: a change to a plan
+        in Hindi comes back in Hindi, unless the traveller has since saved another.
         """
         if refinement_type in ("full_replan", "add_day"):
             fresh: dict = {k: prior_state.get(k) for k in TRIP_FIELDS}
+            for carried in ("language", "typed_destination"):  # Phase 36
+                if prior_state.get(carried):
+                    fresh[carried] = prior_state[carried]
             if refinement_type == "full_replan":
                 fresh.update(raw_input=refinement_message, intent_override=True)
             else:
@@ -1460,7 +1648,11 @@ class OrchestratorAgent:
         turn: int = 2,
         on_complete=None,
     ) -> dict:
-        """One search again, everything else carried forward, then build → evaluate → persist."""
+        """One search again, everything else carried forward, then build → evaluate → persist.
+
+        Phase 36: the request is read first, as a new plan's is — the language node puts it into
+        English, and says which language the plan is written in now.
+        """
         state: OrchestratorState = {
             **_RESULT_DEFAULTS,
             **prior_state,
@@ -1500,6 +1692,7 @@ class OrchestratorAgent:
             with tracing.root(
                 _trace_name(kind, detail), kind, trip_id, user_id, turn, inputs={"request": request}, detail=detail
             ) as trace:
+                state = await tracing.step("language", language_node, state)
                 escalated = False
                 if refinement_type == "targeted_flights":
                     updates = await search(_search_flights)
@@ -1523,7 +1716,7 @@ class OrchestratorAgent:
                     new_interests = None
                     if retry_of is None:  # the traveller's message usually names the new interests
                         try:
-                            new_interests = (await _extract_intent(request)).get("interests")
+                            new_interests = (await _extract_intent(state["refinement_request"])).get("interests")
                         except Exception:
                             new_interests = None
                         if new_interests:
@@ -1559,6 +1752,7 @@ class OrchestratorAgent:
                         state = await build_and_check(await tracing.step("retry_dispatch", retry_dispatch_node, state))
 
                     if route_after_evaluator(state) == "passed":
+                        state = await tracing.step("localise", localise_node, state)
                         state = await tracing.step(
                             "merge", merge_node, await tracing.step("persist", persist_node, state)
                         )

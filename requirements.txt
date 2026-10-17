@@ -35,6 +35,9 @@ langgraph>=0.2.0
 langchain-google-genai>=1.0.0  # Gemini Flash — intent parsing, refinement classifier
 langchain-groq>=0.2.0          # ItineraryBuilder + PreferenceExtractor (Groq, free tier)
 
+# ── Languages (Phase 36) ──────────────────────────────────────
+langdetect>=1.0.9  # which language a request is in: Hindi, Tamil, Bengali (src/ai/language.py)
+
 # ── Tracing (Phase 26) ────────────────────────────────────────
 langsmith>=0.10    # imported directly by src/ai/tracing.py (it also comes with langchain-core); tested on 0.10.17 and 0.14.7
 

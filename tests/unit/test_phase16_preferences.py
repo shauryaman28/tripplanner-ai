@@ -604,6 +604,7 @@ async def test_get_preferences_returns_empty_defaults_for_new_user():
         "preferred_airlines": [],
         "travel_style": None,
         "home_city": None,
+        "preferred_language": None,  # Phase 36: none chosen — each request's own language decides
         "updated_at": None,
     }
 

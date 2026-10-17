@@ -12,6 +12,8 @@ interface Props {
   /** The plan's days: a place the plan visits is marked, and listed first. */
   days: DaySchedule[];
   destination: string | null;
+  /** Phase 36: the language the tips are written in, on a plan in Hindi, Tamil or Bengali. */
+  language?: string;
 }
 
 const ICONS: Record<TipSectionKey, LucideIcon> = {
@@ -23,7 +25,17 @@ const ICONS: Record<TipSectionKey, LucideIcon> = {
 };
 
 /** One section: a heading that is a button, and the panel it opens (the WAI-ARIA accordion pattern). */
-function Section({ section, open, onToggle }: { section: TipSection; open: boolean; onToggle: () => void }) {
+function Section({
+  section,
+  open,
+  onToggle,
+  language,
+}: {
+  section: TipSection;
+  open: boolean;
+  onToggle: () => void;
+  language?: string;
+}) {
   const id = useId();
   const Icon = ICONS[section.key];
   const count = section.tips.length;
@@ -51,13 +63,16 @@ function Section({ section, open, onToggle }: { section: TipSection; open: boole
         </button>
       </h3>
 
-      <div id={`${id}-panel`} role="region" aria-labelledby={`${id}-heading`} hidden={!open} className="px-4 pb-4 pl-[60px] sm:px-5 sm:pl-[64px]">
+      <div id={`${id}-panel`} role="region" aria-labelledby={`${id}-heading`} hidden={!open} lang={language} className="px-4 pb-4 pl-[60px] sm:px-5 sm:pl-[64px]">
         {section.key === "best_times" ? (
           <ul className="space-y-3">
             {section.tips.map((tip) => (
               <li key={tip.place} className="text-sm leading-relaxed text-ink-700">
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="font-medium text-ink-900">{tip.place}</span>
+                  {/* a place's name stays as it is — it is matched to the plan's stops by it */}
+                  <span className="font-medium text-ink-900" lang={language ? "en" : undefined}>
+                    {tip.place}
+                  </span>
                   {tip.inPlan && (
                     <span className="rounded-full bg-good-soft px-2 py-0.5 text-[11px] font-medium text-good-ink">In your plan · {tip.inPlan}</span>
                   )}
@@ -90,7 +105,7 @@ function Section({ section, open, onToggle }: { section: TipSection; open: boole
  * when the itinerary has no tips — the agent behind them is the one part of a
  * plan allowed to be missing, and a plan without them is not an error.
  */
-export default function LocalTips({ intelligence, days, destination }: Props) {
+export default function LocalTips({ intelligence, days, destination, language }: Props) {
   const sections = tipSections(intelligence, days);
   const [open, setOpen] = useState<ReadonlySet<TipSectionKey>>(new Set());
   if (sections.length === 0) return null;
@@ -112,7 +127,7 @@ export default function LocalTips({ intelligence, days, destination }: Props) {
       </p>
       <div className="card mt-4 divide-y divide-ink-100">
         {sections.map((section) => (
-          <Section key={section.key} section={section} open={open.has(section.key)} onToggle={() => toggle(section.key)} />
+          <Section key={section.key} section={section} open={open.has(section.key)} onToggle={() => toggle(section.key)} language={language} />
         ))}
       </div>
     </section>

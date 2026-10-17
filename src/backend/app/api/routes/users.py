@@ -47,6 +47,7 @@ async def put_preferences(
     prefs.preferred_airlines = body.preferred_airlines
     prefs.travel_style = body.travel_style
     prefs.home_city = body.home_city
+    prefs.preferred_language = body.preferred_language  # Phase 36
 
     db.add(prefs)
     await db.commit()
