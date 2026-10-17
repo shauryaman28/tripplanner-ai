@@ -666,3 +666,58 @@ def test_the_pages_list_of_languages_is_the_planners():
     source = open("src/frontend/src/lib/language.ts", encoding="utf-8").read()
     listed = re.findall(r'\{ code: "(\w+)", name: "([^"]+)", native: "([^"]+)" \}', source)
     assert listed == [(code, lang.name, lang.native) for code, lang in language.SUPPORTED.items()]
+
+
+# ── A change keeps what the plan said of the stops it keeps ────────────────
+
+
+async def test_a_stop_a_change_kept_keeps_its_local_name_and_description():
+    earlier = language.local_text_of(_plan(description="किले से समुद्र का नज़ारा।", local_name="अगुआडा किला"), "hi")
+    assert earlier == {"Fort Aguada": {"local_name": "अगुआडा किला", "description": "किले से समुद्र का नज़ारा।"}}
+    with patch.object(language, "_call_model", AsyncMock(side_effect=fake_translate)) as model:
+        done = await language.localise(_plan(), "hi", ATTRACTIONS, earlier=earlier)
+    assert done.draft["days"][0]["morning"]["local_name"] == "अगुआडा किला"
+    assert done.draft["days"][0]["morning"]["description"] == "किले से समुद्र का नज़ारा।"
+    assert "Fort Aguada" not in model.await_args.args[0]  # nothing to translate for it
+    # what the builder wrote this time wins
+    rewritten = await language.localise(_plan(description="नया वाक्य।"), "hi", ATTRACTIONS, earlier=earlier)
+    assert rewritten.draft["days"][0]["morning"]["description"] == "नया वाक्य।"
+
+
+def test_what_a_plan_said_in_another_language_is_not_kept():
+    tamil = _plan(description="கோட்டை.", local_name="அகுவாடா கோட்டை")
+    assert language.local_text_of(tamil, "hi") == {} and language.local_text_of(tamil, None) == {}
+    assert language.local_text_of(None, "hi") == {}
+
+
+def _without_local_text(builder_llm):
+    """A builder that writes no local name or description — as the real one did, asked to change only the hotel."""
+
+    async def build(system, user_prompt, on_token=None):
+        plan = json.loads(await builder_llm(system, user_prompt))
+        for day in plan["days"]:
+            for slot in ("morning", "afternoon", "evening"):
+                for key in ("local_name", "description"):
+                    (day.get(slot) or {}).pop(key, None)
+        return json.dumps(plan)
+
+    return build
+
+
+async def test_a_change_to_a_hindi_plan_keeps_the_words_of_the_stops_it_did_not_change():
+    with network_stubs(flight_tool=lambda *_: [flight(8_200.0)]):
+        first = await OrchestratorAgent().run({**TRIP, "raw_input": ACCEPTANCE}, trip_id=uuid.uuid4())
+        with patch.object(builder, "_call_llm", _without_local_text(fakes.fake_builder_llm)):
+            second = await OrchestratorAgent().refine(
+                "targeted_hotel", first, "होटल समुद्र तट के पास चाहिए", trip_id=uuid.uuid4()
+            )
+    before = language.local_text_of(first["draft_itinerary"], "hi")
+    after = language.local_text_of(second["draft_itinerary"], "hi")
+    assert before and after == before  # every stop kept: its name and sentence in Hindi, as they were
+
+
+async def test_an_english_change_carries_nothing_new_in_its_state():
+    with network_stubs(flight_tool=lambda *_: [flight(8_200.0)]):
+        first = await OrchestratorAgent().run({**TRIP, "raw_input": "Five days"}, trip_id=uuid.uuid4())
+        second = await OrchestratorAgent().refine("targeted_hotel", first, "a hotel by the beach", trip_id=uuid.uuid4())
+    assert not {"language", "typed_destination", "earlier_local_text"} & set(second)

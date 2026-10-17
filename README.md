@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 35 / 50 — Security Hardening**
+**Status: Phase 36 / 50 — Multi-Language Support Foundation**
 
 ---
 
@@ -80,6 +80,13 @@ and grades what comes back: whether the right searches were made with the right 
 what `estimate_budget` makes of the plan's own parts, whether anything is in the plan that the searches did not
 return, whether every day is filled, and whether a change changed only what was asked. Code measures what it can
 exactly; Claude Haiku 4.5 reads the rest, held to those measurements.
+
+A trip can be asked for in Hindi, Tamil or Bengali (Phase 36). The planner reads a request's language by its
+script and `langdetect`, puts what the traveller wrote into English for the searches (their airports and
+interests are English words), and writes the plan in the traveller's language: each stop's local name and a
+sentence on it, and the local tips — the names the plan is checked, mapped and booked by stay English. A
+language chosen in the header is saved with the traveller's preferences and plans every trip after it. A plan
+in English is made exactly as before, prompt for prompt: a recorded test says so on every commit.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -263,6 +270,8 @@ tripplanner-ai/
 │       │                                  Phase 25: each traveller's share
 │       ├── group.py                     ← Phase 25: who a place suits, the group score, taking places in turns,
 │       │                                  repairing a plan so every two days hold a stop for each traveller
+│       ├── language.py                  ← Phase 36: a request's language (script, then langdetect); translation
+│       │                                  checked string by string; a finished plan's words in its language
 │       ├── tracing.py                   ← Phase 26: LangSmith on/off from the settings; a run tagged with its trip
 │       │                                  and user; spans for a re-plan, an evaluator retry, a tool call
 │       ├── usage.py                     ← Phase 26: what the models were asked (one recorder, the innermost timer),
@@ -299,7 +308,8 @@ tripplanner-ai/
 │       └── orchestrator/
 │           ├── orchestrator.py          ← Phase 9–22: full graph with preference injection, refinement & loops,
 │           │                                  builder_token streaming, retry of one search, local tips;
-│           │                                  Phase 26: every run a trace of its trip
+│           │                                  Phase 26: every run a trace of its trip; Phase 36: the language
+│           │                                  node first, the localise node before the plan is saved
 │           └── warming.py               ← Phase 24: a trip's opening searches, made while it is being created
 ├── migrations/                          ← Alembic migrations
 │   └── versions/
@@ -308,13 +318,17 @@ tripplanner-ai/
 │       ├── 003_add_user_preferences.py  ← Phase 16: user_preferences table
 │       ├── 004_embedding_kind.py        ← Phase 23: embeddings.kind, HNSW index over summaries, re-embedding queued
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
-│       └── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
+│       ├── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
+│       ├── 007_refresh_tokens.py        ← Phase 35: refresh_tokens (their hashes, their sign-in, when used)
+│       └── 008_preferred_language.py    ← Phase 36: user_preferences.preferred_language
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (1,357 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (1,608 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 79 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 101 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── fixtures/evals/                  ← Phase 33: seven real eval records — what the API served for a scenario
+│   ├── fixtures/phase36/                ← Phase 36: every prompt an English plan sent, and the plan, recorded
+│   │                                      before the phase — what every English plan is held to
 │   ├── e2e/stub_backend.py              ← the real app with external APIs stubbed, for Playwright
 │   ├── ci/fake_gh.sh                    ← Phase 28: a stand-in for GitHub's CLI that writes down what it is asked
 │   └── fakes.py                         ← network stubs shared by integration + E2E (APIs, LLMs, map tiles);
@@ -442,9 +456,10 @@ tripplanner-ai/
 | 33 | Eval suite — fifteen trips asked of the planner over its API, on real models and providers; measured where they can be (every name against the searches, the total against `estimate_budget`, the dates and slots, what a change changed) and graded by Claude Haiku 4.5 where they cannot; a table, a history, and `--assert-min-score` for the nightly run. Its first run found "raise the budget" leading back into the same conflict — fixed ([docs/phase33_build_log.md](docs/phase33_build_log.md)) | ✅ Built, asked and measured on real providers — **not yet graded: the grader needs `ANTHROPIC_API_KEY`** | 75 unit |
 | 34 | Advanced monitoring & alerts — four Prometheus alerts (slow plans, an endpoint's errors, the cache, failing model calls) sent on by Alertmanager, each message with the numbers behind it and its own runbook section; promtool fires each from series written by hand, and a drill makes each one fire on the running stack after twelve minutes in which none may; `GET /admin/health-deep`; one dashboard with the alerts on top. Running them found three things: a cache floor that counted the last process's lookups, a pooler that is gone answered 500, and Phase 27's deliberate error paging somebody — all fixed ([docs/runbook.md](docs/runbook.md), [docs/phase34_build_log.md](docs/phase34_build_log.md)) | ✅ Done on the load test's stack with stand-ins, on one laptop — **not on a deployment** | 90 unit + 4 integration |
 | 35 | Security hardening — access tokens for an hour and rotating refresh tokens (an HttpOnly cookie for the site; used twice, the sign-in ends; sign-out ends it on the server); five sign-in attempts a minute per address — on an address a client cannot make up, which the image had let it; a length on every field the API takes and a kind for its text; passwords 8 characters to 72 bytes; security headers on every answer; a LogRedactor on every log line; the OWASP Top 10 item by item; the dependencies audited (Python clean; Next 14's advisories read one by one) ([docs/phase35_build_log.md](docs/phase35_build_log.md)) | ✅ Done on the production-like stack — **the key rotation waits for you**; not on a deployment | 73 unit + 13 integration + 4 browser |
-| 36–50 | Production & Polish | ⏳ | |
+| 36 | Multi-language support foundation — a request in Hindi, Tamil or Bengali read by its script and `langdetect`, put into English for the searches (which find no airport for "गोवा" and only the general sights for "समुद्र तट"), and planned in the traveller's language: each stop's local name and a sentence on it, the local tips, the PDF; the names a plan goes by stay English. A language chosen in the header plans every trip after it, across sign-ins. English plans: every prompt and the plan recorded before the phase and held to on every commit. Live on real models, every stop described in each of the three; a change to a plan kept its words only once code made sure of it ([docs/phase36_build_log.md](docs/phase36_build_log.md)) | ✅ Done on the production-like stack, real models — romanised Hindi and short Marathi are read wrong (DECISIONS #331) | 88 unit + 5 integration + 4 browser |
+| 37–50 | Production & Polish | ⏳ | |
 
-**Total: 1,528 unit + contract, 96 integration, 64 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,616 unit + contract, 101 integration, 68 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 

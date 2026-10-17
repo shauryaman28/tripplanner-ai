@@ -173,6 +173,9 @@ class OrchestratorState(TypedDict, total=False):
     # …and a destination typed in one of them: {"typed": "गोवा", "english": "Goa"}. The run searches with
     # the English; the trip keeps the name its traveller typed (Phase 20 draws it in its own script).
     typed_destination: dict | None
+    # …and, on a change to a plan in one of them, what that plan said of each stop in it — by the stop's
+    # name: {"Baga Beach": {"local_name": …, "description": …}}. A stop the change keeps keeps its words.
+    earlier_local_text: dict | None
 
     # Runtime helpers — never stored in DB
     publish_fn: Any | None
@@ -402,7 +405,9 @@ async def localise_node(state: OrchestratorState) -> OrchestratorState:
     if not plan_language or not draft:
         return state
     async with timed_run("localise") as timer:
-        done = await language.localise(draft, plan_language, state.get("attractions"))
+        done = await language.localise(
+            draft, plan_language, state.get("attractions"), earlier=state.get("earlier_local_text")
+        )
     await _log(
         state,
         "localise",
@@ -1575,6 +1580,8 @@ class OrchestratorAgent:
             for carried in ("language", "typed_destination"):  # Phase 36
                 if prior_state.get(carried):
                     fresh[carried] = prior_state[carried]
+            if earlier := language.local_text_of(prior_state.get("draft_itinerary"), prior_state.get("language")):
+                fresh["earlier_local_text"] = earlier
             if refinement_type == "full_replan":
                 fresh.update(raw_input=refinement_message, intent_override=True)
             else:
@@ -1665,6 +1672,11 @@ class OrchestratorAgent:
             "publish_fn": publish_fn,
             "on_complete": on_complete,
         }
+
+        # Phase 36: what the plan said of each stop in its language — kept for the stops the change keeps
+        state.pop("earlier_local_text", None)
+        if earlier := language.local_text_of(prior_state.get("draft_itinerary"), prior_state.get("language")):
+            state["earlier_local_text"] = earlier
 
         _keep_what_the_plan_uses(
             state,

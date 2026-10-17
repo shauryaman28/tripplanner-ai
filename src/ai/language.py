@@ -18,7 +18,9 @@ translate   `translate(texts, source, target)`: strings into another language, b
 localise    `localise(draft, language, attractions)`: what a finished plan says in words, in the
             plan's language — the local tips, and a description of any stop the builder wrote
             none for. Names stay as they are: a stop's name is how the plan is checked, mapped
-            and booked, and the tips' places are matched to the plan's stops by name.
+            and booked, and the tips' places are matched to the plan's stops by name. A stop a
+            change kept keeps its words too (`earlier`): asked to change only the hotel, the
+            builder copied the plan it was shown — its names — and wrote none of them again.
 
 What is translated is untrusted text (Phase 35, LLM01): the prompt says so, and a translation is
 held to the length of what it translates, so an answer cannot carry more than was asked.
@@ -258,6 +260,22 @@ def _tip_strings(tips: dict) -> list[tuple[tuple, str]]:
     return found
 
 
+def local_text_of(plan: dict | None, language: str | None) -> dict[str, dict]:
+    """Each stop's local name and description in `language`, by the stop's own (English) name."""
+    if language not in SUPPORTED:
+        return {}
+    found: dict[str, dict] = {}
+    for day in (plan or {}).get("days") or []:
+        for slot in SLOTS:
+            stop = day.get(slot) or {}
+            words = {
+                key: stop[key] for key in ("local_name", "description") if local_text(stop.get(key), language, 10_000)
+            }
+            if words and stop.get("activity") != FREE_TIME:
+                found.setdefault(stop["activity"], words)
+    return found
+
+
 @dataclass
 class Localised:
     draft: dict
@@ -266,12 +284,16 @@ class Localised:
     error: str | None = None
 
 
-async def localise(draft: dict, language: str, attractions: list[dict] | None = None) -> Localised:
+async def localise(
+    draft: dict, language: str, attractions: list[dict] | None = None, earlier: dict[str, dict] | None = None
+) -> Localised:
     """`draft` with its tips and every stop's description in `language`. Never raises.
 
-    The builder was asked for each stop's description in the language; a stop it gave none — a free
-    day, a stop the group repair moved in (src/ai/group.py) — is described from the attraction's own
-    description, translated. Whatever does not come back translated stays as it was: in English.
+    The builder was asked for each stop's description in the language. A stop it gave none keeps what
+    the plan before this one said of it (`earlier`: local_text_of the previous plan); failing that —
+    a free day, a stop the group repair moved in (src/ai/group.py), a new one — it is described from
+    the attraction's own description, translated. Whatever does not come back translated stays as it
+    was: in English.
     """
     plan = json.loads(json.dumps(draft))  # a copy: the draft the evaluator passed is not changed under it
     plan["language"] = language
@@ -281,6 +303,8 @@ async def localise(draft: dict, language: str, attractions: list[dict] | None = 
     for n, day in enumerate(plan.get("days") or []):
         for slot in SLOTS:
             stop = day.get(slot)
+            for key, words in ((earlier or {}).get((stop or {}).get("activity")) or {}).items():
+                stop[key] = stop.get(key) or words  # the builder's own, if it wrote it; else what the stop had
             if not stop or stop.get("description"):
                 continue
             source = FREE_TIME_WORDS if stop.get("activity") == FREE_TIME else about.get(stop.get("activity"))
