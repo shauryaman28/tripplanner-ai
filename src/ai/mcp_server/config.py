@@ -40,5 +40,9 @@ class MCPSettings(BaseSettings):
     # OpenWeatherMap (weather)
     OPENWEATHER_API_KEY: str = ""
 
+    # Google Maps Platform — the Routes API (travel times, Phase 37). Not the Gemini key: a key of a Google
+    # Cloud project with billing and the Routes API switched on (HOW_TO_RUN Step 35).
+    GOOGLE_MAPS_API_KEY: str = ""
+
 
 mcp_settings = MCPSettings()

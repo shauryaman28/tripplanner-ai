@@ -160,6 +160,7 @@ def test_the_load_tests_stack_is_never_given_a_real_key():
 
     for name in (*keys, "OPENWEATHER_API_KEY"):
         assert given[name] == "standin-not-a-key", name  # a word, not ${…}: nothing is read from anywhere
+    assert given["GOOGLE_MAPS_API_KEY"] == ""  # Phase 37: none at all — the travel times are estimated
     # every key the production-like stack takes from the repository's .env is one this file replaces
     base = (ROOT / "docker/prodlike/compose.yml").read_text()
     from_env = set(re.findall(r"^      ([A-Z_]+_(?:KEY|TOKEN)): \$\{", base, flags=re.M)) - {"OPS_TOKEN"}

@@ -1,9 +1,12 @@
-"""Typed I/O models for all 5 MCP tools.
+"""Typed I/O models for all 6 MCP tools.
 
 lat/lng added to Attraction in Phase 3 so Phase 18 map view
 can use server-side coordinates instead of client-side geocoding.
 Phase 18 also puts coordinates on Hotel and the two airports on Flight.
+Phase 37: get_travel_time — how long one journey takes, by Google's Routes API.
 """
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +40,19 @@ class AttractionInput(BaseModel):
     destination: str
     interests: list[str] = Field(..., description="e.g. ['history', 'street food']")
     limit: int = Field(5, ge=1, le=20)
+
+
+# Phase 37: how a traveller gets from one stop to the next. Google's Routes API has no auto-rickshaw: an
+# auto-rickshaw and a taxi are both asked as a car (DRIVE), a walk as a walk (WALK).
+TravelMode = Literal["walk", "auto-rickshaw", "taxi"]
+
+
+class TravelTimeInput(BaseModel):
+    origin_lat: float = Field(..., ge=-90, le=90)
+    origin_lng: float = Field(..., ge=-180, le=180)
+    dest_lat: float = Field(..., ge=-90, le=90)
+    dest_lng: float = Field(..., ge=-180, le=180)
+    mode: TravelMode = "taxi"
 
 
 class WeatherInput(BaseModel):
@@ -103,6 +119,16 @@ class Attraction(BaseModel):
     interests: list[str] = Field(default_factory=list)
 
 
+class TravelTime(BaseModel):
+    """One journey, as Google's Routes API reckons it — without live traffic: the time between two places
+    that do not move, cached for a day (the roadmap's premise, and Google's cheaper SKU)."""
+
+    minutes: int
+    km: float
+    mode: TravelMode
+    source: Literal["google"] = "google"
+
+
 class DayForecast(BaseModel):
     date: str
     condition: str
@@ -151,5 +177,5 @@ CACHE_REPORT = "tripplanner.cache"
 # The tools, and the caches they keep (the name in a cache key: mcp:<cache>[:version]:<digest>) — listed
 # for the caller, which counts calls and lookups by these names and wants each counter to exist before
 # its first event (src/telemetry/metrics.py says why). A test holds both lists to what the server has.
-TOOL_NAMES = ("search_flights", "search_hotels", "get_attractions", "get_weather", "estimate_budget")
-CACHES = ("flights", "hotels", "attractions", "weather", "geocode")
+TOOL_NAMES = ("search_flights", "search_hotels", "get_attractions", "get_weather", "estimate_budget", "get_travel_time")
+CACHES = ("flights", "hotels", "attractions", "weather", "geocode", "travel")

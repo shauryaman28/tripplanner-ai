@@ -32,7 +32,7 @@ from app.models.user_preferences import PLAN_LANGUAGES
 from app.pdf.document import _stop_row, build_pdf
 from app.pdf.plan import build_plan
 from app.schemas.user_preferences import PreferencesRead, PreferencesUpdate
-from src.ai import language, llm
+from src.ai import language, llm, schedule
 from src.ai.builder import builder
 from src.ai.builder.builder import ItineraryDraft, _build_user_prompt, _keep_local_text, _language_block
 from src.ai.itinerary import FREE_TIME
@@ -512,14 +512,33 @@ async def test_the_localise_node_logs_what_it_translated():
 # ── Whole plans, on the stubs ──────────────────────────────────────────────
 
 
+def _without_the_clock(plan: dict) -> dict:
+    """A plan without what Phase 37 added on purpose to every stop — its times (src/ai/schedule.py)."""
+    plan = json.loads(json.dumps(plan))
+    for day in plan["days"]:
+        for slot in ("morning", "afternoon", "evening"):
+            for key in schedule.CLOCK_KEYS:
+                (day.get(slot) or {}).pop(key, None)
+    return plan
+
+
 async def test_english_sees_zero_change():
     """Every prompt an English plan sends to every model, the plan it makes, and the keys of its state:
-    what they were on the commit before Phase 36 (tests/fixtures/phase36/capture_english.py)."""
+    what they were on the commit before Phase 36 (tests/fixtures/phase36/capture_english.py).
+
+    Phase 37 gave every plan its clock — each stop's times — in code, after the models: the prompts are still
+    those, byte for byte, and the plan is still that one, with its times added (DECISIONS #341)."""
     recorded = json.loads(capture_english.OUT.read_text())
     now = json.loads(json.dumps(await capture_english.capture(), ensure_ascii=False, sort_keys=True))
     for trip in recorded:
         assert now[trip]["asked"] == recorded[trip]["asked"], trip
-        assert now[trip]["draft_itinerary"] == recorded[trip]["draft_itinerary"], trip
+        assert _without_the_clock(now[trip]["draft_itinerary"]) == recorded[trip]["draft_itinerary"], trip
+        assert all(
+            stop.get("start_time") and stop.get("end_time")
+            for day in now[trip]["draft_itinerary"]["days"]
+            for stop in (day.get(slot) for slot in ("morning", "afternoon", "evening"))
+            if stop
+        ), trip
         assert now[trip]["state_keys"] == recorded[trip]["state_keys"], trip
 
 

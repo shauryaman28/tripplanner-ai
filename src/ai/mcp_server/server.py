@@ -35,6 +35,7 @@ from src.ai.mcp_server.models import CACHE_REPORT, ToolError
 from src.ai.mcp_server.tools import (
     estimate_budget,
     get_attractions,
+    get_travel_time,
     get_weather,
     search_flights,
     search_hotels,
@@ -44,7 +45,7 @@ from src.telemetry import logs, traces
 
 logger = logging.getLogger(__name__)
 
-TOOLS = (search_flights, search_hotels, get_attractions, get_weather, estimate_budget)
+TOOLS = (search_flights, search_hotels, get_attractions, get_weather, estimate_budget, get_travel_time)
 
 
 def _sent_with_call() -> dict[str, Any]:

@@ -208,6 +208,7 @@ def test_the_limits_on_record_are_the_providers_own():
         "opentripmap": Limit(10, 1),
         "openweather": Limit(60, 60),
         "nominatim": Limit(1, 1),
+        "google_routes": Limit(3000, 60),  # Phase 37: the Routes API's 3,000 route-matrix elements a minute
     }
 
 
@@ -467,7 +468,14 @@ async def test_running_a_tool_in_a_thread_changes_nothing_a_caller_can_see():
     threaded = {tool.name: tool for tool in await mcp.list_tools()}
     unthreaded = {tool.name: tool for tool in await plain.list_tools()}
 
-    assert list(threaded) == ["search_flights", "search_hotels", "get_attractions", "get_weather", "estimate_budget"]
+    assert list(threaded) == [
+        "search_flights",
+        "search_hotels",
+        "get_attractions",
+        "get_weather",
+        "estimate_budget",
+        "get_travel_time",  # Phase 37
+    ]
     for name, tool in threaded.items():
         assert tool.inputSchema == unthreaded[name].inputSchema
         assert tool.outputSchema == unthreaded[name].outputSchema

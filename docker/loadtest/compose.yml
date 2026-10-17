@@ -22,6 +22,8 @@ services:
       LITEAPI_API_KEY: standin-not-a-key
       OPENTRIPMAP_API_KEY: standin-not-a-key
       OPENWEATHER_API_KEY: standin-not-a-key
+      # Phase 37: none — travel times are estimated, and no request leaves for Google (it has no stand-in here)
+      GOOGLE_MAPS_API_KEY: ""
       # One request in ten is traced while the load runs — docs/load-test-report.md says why.
       OTEL_TRACES_SAMPLE_RATIO: ${LOADTEST_TRACE_RATIO:-0.1}
       # Phase 35: every visitor of a load test comes from one address, on purpose — the per-address limits

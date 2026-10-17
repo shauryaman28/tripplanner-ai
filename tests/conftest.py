@@ -45,6 +45,17 @@ def no_fallback_llm():
 
 
 @pytest.fixture(autouse=True)
+def no_travel_time_tool():
+    """Phase 37: the builder asks the travel-time tool for every stop — through the MCP client, which would start
+    the tool server. A test that wants Google's answers stubs it; every other plan's travel times are estimated."""
+    from src.ai.mcp_server.models import ToolError
+
+    not_configured = ToolError(error="no travel-time tool in tests", code="API_NOT_CONFIGURED")
+    with patch("src.ai.builder.builder.call_tool", AsyncMock(return_value=not_configured)) as tool:
+        yield tool
+
+
+@pytest.fixture(autouse=True)
 def no_translation_model():
     """Phase 36: a request in Hindi is translated by a model (src/ai/language.py). A test that wants a translation
     stubs it — tests/fakes.py's `network_stubs` does; one that does not finds the request kept as it was typed."""
