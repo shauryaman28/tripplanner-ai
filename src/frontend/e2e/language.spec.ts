@@ -40,8 +40,12 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(/\/trips$/);
 }
 
+// the save is waited for on its own clock: a menu that does not save fails here, not when the whole test runs out
 const saved = (page: Page) =>
-  page.waitForResponse((r) => r.url().endsWith("/api/users/preferences") && r.request().method() === "PUT" && r.status() === 200);
+  page.waitForResponse(
+    (r) => r.url().endsWith("/api/users/preferences") && r.request().method() === "PUT" && r.status() === 200,
+    { timeout: 15_000 },
+  );
 
 test("the plan language is chosen in the header, and is still chosen after signing out and in again", async ({ page }) => {
   await page.goto("/login");

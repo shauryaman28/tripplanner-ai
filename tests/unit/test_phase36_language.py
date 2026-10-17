@@ -82,7 +82,13 @@ def test_three_requests_in_each_language_are_read_as_that_language(expected, tex
         ("मदुरै", "hi", "a place name alone"),
         ("ஊட்டி", "ta", "Tamil script is Tamil"),
         ("Goa में 5 दिन, beaches पसंद हैं", "hi", "mixed, most letters Devanagari"),
+        ("हिमालय पर्वत यात्रा", "hi", "a few Hindi words: langdetect says Marathi, 40 times in 40 unseeded"),
+        ("गोवा यात्रा बजट होटल", "hi", "Hindi keywords: langdetect says Marathi (0.857)"),
+        ("काशी विश्वनाथ गंगा घाट", "hi", "Hindi keywords: langdetect says Marathi (0.607)"),
         ("गोव्यात ५ दिवसांची सहल, बजेट ₹५०,०००", "mr", "Marathi — read, not planned in"),
+        ("मला पुण्याहून कोकणात फिरायला जायचे आहे", "mr", "Marathi, with words of its own (मला, आहे)"),
+        ("हामी चितवन जान चाहन्छौं", "ne", "Nepali that langdetect calls Marathi: its own words say Nepali"),
+        ("मुंबई ते पुणे प्रवास", "hi", "KNOWN FAILURE: Marathi with no word of its own is read as Hindi"),
         ("काठमाडौंबाट पोखरा तीन दिनको यात्रा", "ne", "Nepali — read, not planned in"),
         ("গুৱাহাটীৰ পৰা শিলং তিনি দিনৰ ভ্ৰমণ", "as", "Assamese: langdetect says Bengali; its letters ৰ ৱ say not"),
         ("గోవాలో ఐదు రోజుల పర్యటన", "te", "Telugu — read, not planned in"),
@@ -177,10 +183,12 @@ async def test_into_another_language_a_string_must_be_in_its_script():
 
 async def test_many_strings_are_sent_in_calls_of_at_most_forty():
     model = AsyncMock(side_effect=fake_translate)
-    texts = [f"Tip {n}." for n in range(language.MAX_PER_CALL + 5)]
+    texts = [f"Tip {n}." for n in range(45)]  # a number, not the setting: a test of the setting must not grow with it
     with patch.object(language, "_call_model", model):
         out = await language.translate(texts, "en", "bn")
-    assert model.await_count == 2 and all(text and text.startswith("বাংলা: ") for text in out)
+    sent = [json.loads(call.args[0].rsplit("Strings (JSON): ", 1)[1]) for call in model.await_args_list]
+    assert [len(batch) for batch in sent] == [40, 5]
+    assert all(text and text.startswith("বাংলা: ") for text in out)
 
 
 async def test_the_model_is_given_room_for_a_long_answer():

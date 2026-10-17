@@ -212,16 +212,18 @@ def test_migration_008_adds_the_language_and_comes_back_down():
             {"id": user, "email": f"{user.hex[:12]}@example.com"},
         )
     try:
-        with pytest.raises(IntegrityError), engine.begin() as db:  # the database holds to the four, too
-            db.execute(
-                text("INSERT INTO user_preferences (user_id, preferred_language) VALUES (:id, 'fr')"), {"id": user}
-            )
         command.downgrade(config, "007")
         try:
             assert "preferred_language" not in columns()
         finally:
             command.upgrade(config, "head")
         assert columns()["preferred_language"] == "YES"
+        # …and the column the migration made holds to the four (checked after it was made again: before, it
+        # would be whatever an earlier run of the migration had left)
+        with pytest.raises(IntegrityError), engine.begin() as db:
+            db.execute(
+                text("INSERT INTO user_preferences (user_id, preferred_language) VALUES (:id, 'fr')"), {"id": user}
+            )
     finally:
         with engine.begin() as db:
             db.execute(text("DELETE FROM users WHERE id = :id"), {"id": user})

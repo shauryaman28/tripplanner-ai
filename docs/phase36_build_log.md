@@ -9,7 +9,7 @@ Four things are worth knowing before reading on.
 
 - **The models did not need the translation; the tools did.** Gemini and Groq's small model parsed the roadmap's request — and requests in Tamil and Bengali — as typed exactly as well as translated. What reads only English is the code under them: the flight tool found no airport for "गोवा" or "மதுரை", and the attraction search turned "समुद्र तट" (beaches) and "खाना" (food) into the general sights. That is what the translation is for (#332).
 - **English sees zero change, and that is recorded, not claimed.** Before any of the phase's code was written, two English trips were run through the whole planner and every prompt sent to every model was saved with the plan and the run's state. Every commit is held to that record: the same prompts, byte for byte (#336).
-- **`langdetect` alone would have planned "Goa" in Somali and "गोवा" in Marathi.** It is right about whole sentences and wrong about most of what travellers actually type. The script of the text decides first (#331).
+- **`langdetect` alone would have planned "Goa" in Somali, "गोवा" in Marathi — and Hindi keywords in English.** It is right about whole sentences and wrong about much of what travellers actually type: "हिमालय पर्वत यात्रा" is Marathi to it 40 times in 40 (found by the break-on-purpose run). The script of the text decides first, and Marathi or Nepali needs a word of its own (#331).
 - **Found live: asked to change only the hotel, the builder dropped every stop's Hindi.** It copied the plan it was shown — the names — and wrote no local name or description again. Code now keeps the words of every stop a change keeps (#339).
 
 ## What was built
@@ -82,6 +82,18 @@ Every plan passed the evaluator; no stop's name was in another script. Samples (
 
 **The rate limit.** Five of the six runs had a model call turned away by Groq's free tier — 8,000 tokens a minute on `gpt-oss-120b` — because six plans were asked for in three minutes. Every one was asked again and answered; the English run (E) was turned away too. It is not the language, but the language costs tokens: the builder's call for a plan in Hindi, Tamil or Bengali was 4,460–5,715 tokens against 3,915 for English (+14 % to +46 %).
 
+### The check, again, on the fix (17 October, 17:26–17:31)
+
+The stack rebuilt with the change fix, and `python scripts/language_check.py --prodlike --all`
+(`docs/phase36_live/evening_check.txt`): A, B, C and F held every check — **F, the change typed in Hindi, kept
+the words of all ten stops it kept**, and every stop had its Hindi name. D made no plan: its builder call waited
+out Groq's per-minute limit past the builder's 30 s deadline (`LLM_TIMEOUT`, and Phase 31 does not build again
+after a model that did not answer), the fifth plan in three minutes. The script crashed on a plan not made; it
+now says so as a check, and runs can be chosen (`--runs DE`). D and E again on their own a minute later: D
+planned in 14.5 s, its builder in 8.1 s, every stop in Hindi; 12 of 12. Without a rate limit in the way, the
+builder took 6.9–9.3 s for a plan in another language and 7.3 s for the English one in this run; the
+translation 0.8–1.9 s, the localisation 2.2–3.3 s.
+
 ### The PDF
 
 A plan in Hindi printed (`docs/phase36_pdf_hindi.png`): each stop's English name, its Hindi name and its sentence under it, conjuncts joined and vowel signs placed (त्र, र्त, स्तं, द्र), the free day in Hindi.
@@ -90,7 +102,7 @@ A plan in Hindi printed (`docs/phase36_pdf_hindi.png`): each stop's English name
 
 | | New | Total |
 |---|---|---|
-| Unit + contract | 88 (`test_phase36_language.py`) — and 6 earlier ones that now expect the two new steps or the new field | 1,616 |
+| Unit + contract | 94 (`test_phase36_language.py`) — and 6 earlier ones that now expect the two new steps or the new field | 1,622 |
 | Integration | 5 (`test_phase36_language_integration.py`) — and 3 earlier ones updated | 101 |
 | Browser | 4 (`e2e/language.spec.ts`) | 68 |
 
@@ -98,7 +110,42 @@ The three detection inputs per language of the roadmap are `REQUESTS` in the uni
 
 ## Break it on purpose
 
-(See below — run on a scratch copy.)
+On a scratch copy of the repository (its own database `tripplanner_m36`, Redis number 13, and, for the site,
+its own stub backend and Next server on ports 8136 and 3136), each breakage alone, the tests run after it:
+unit first, the integration suite for those that need the database, the browser test for the site's.
+
+**First round: 43 of 46 caught.** Caught: every way of reading the language wrongly (Latin letters read, one
+word left to langdetect, Assamese as Bengali, Marathi as Hindi), every way a translation could be let in
+wrongly (still in its own script, in no letter of the target, longer than it should be, a list of another
+length), the prompt not calling the text untrusted, the model given no room; the tips left in English, the
+evaluator's draft changed under it, a surprise failing the plan, a free day undescribed; an English plan
+logging a row, the choice ignored, the trip's language not carried, a group's interests not translated, the
+state's list changed in place, the connection held through a translation, any saved language believed, the
+typed destination renamed or kept when the plan moved; the plan never localised, a change request not read,
+a full replan forgetting its language, a change not localised; every English plan asked for Hindi, an English
+description kept on a Hindi plan, a model's description kept on an English one, null keys saved on every plan,
+a model's language believed, a plan not saying its language; the choice not saved (integration), any language
+taken by the API, the translator not counted, the timeline unlabelled, the PDF's local text not drawn or read;
+and on the site, a stop's words not shown, the tips not marked, the menu not saving, no badge.
+
+Survived, and what was done:
+
+| Breakage | Why it survived | Now |
+|---|---|---|
+| translate: every string in one call (`MAX_PER_CALL` 40 → 4000) | the test sent `MAX_PER_CALL + 5` strings — it grew with the setting it tested | 45 strings, and the sizes of the calls asserted (40 and 5): caught |
+| db: the column takes anything | the test tried a bad language before migrating down and up again — on the constraint an earlier run had left, not the one the migration makes | tried after the round trip: caught |
+| read: `langdetect` unseeded | the tests' texts are ones it is sure of | **still survives** — and led to the next finding |
+| (site: the menu does not save) | caught, but only when the whole test ran out (120 s) | the save is waited for 15 s on its own: caught as that |
+
+**Found by looking for a text that unseeded `langdetect` reads differently:** "गोवा यात्रा बजेट होटल" — Hindi
+keywords — came back Marathi 15 times in 40, and "हिमालय पर्वत यात्रा" Marathi 40 times in 40, seeded or
+not. A Hindi traveller who typed keywords was planned in English. Marathi and Nepali now need a word of their
+own in the text (#331).
+
+**Second round: 7 of 8 caught** — the three above again, the menu again (failing in 15 s), and four breakages
+of the new rule (Marathi believed with no word of its own, the other language's words ignored, Nepali's endings
+unknown, Marathi's words unknown). The unseeded `langdetect` still survives: with the words deciding Marathi
+and Nepali, no text was found whose answer its coin changes. In all, 49 of the 50 breakages caught.
 
 ## Done criterion checklist
 
@@ -111,7 +158,7 @@ The three detection inputs per language of the roadmap are `REQUESTS` in the uni
 
 ## Known limits
 
-- **Romanised Hindi is English to the planner** ("Goa mein 5 din"), and planned in English. A short request in Marathi (under 12 letters) is read as Hindi. (#331)
+- **Romanised Hindi is English to the planner** ("Goa mein 5 din"), and planned in English. A request in Marathi under 12 letters, or with no word only Marathi has ("मुंबई ते पुणे प्रवास"), is read as Hindi and planned in Hindi. (#331)
 - **The site's own words are English.** Headings, buttons, the progress panel's messages, the tips' section names: a plan's language is not the site's language.
 - **Marathi, Nepali, Assamese, Telugu, Urdu** are read and named, and planned in English.
 - **A plan in another language costs more tokens** (up to ~46 % more for the builder) and one more short model call each way; on Groq's free tier, plans close together reach its per-minute limit sooner.

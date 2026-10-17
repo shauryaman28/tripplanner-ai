@@ -9,7 +9,10 @@ read        `read(text)`: which language a request is in. Only a text written mo
             anywhere to be translated. Of a text that is, `langdetect` says which language of its
             script it is in: Hindi, or Marathi or Nepali, all three written in Devanagari. A text
             of a few letters is too short for that ("गोवा" is Marathi to it, with 0.99999), so
-            under FEW_LETTERS the script decides — Devanagari is read as Hindi.
+            under FEW_LETTERS the script decides — Devanagari is read as Hindi. And a request of
+            a few Hindi words is Marathi to it too ("हिमालय पर्वत यात्रा", 40 times in 40): it is
+            believed about Marathi or Nepali only when the text has a word only that language
+            uses (आहे, आणि, मला…; छ, लाई, -न्छु…). Without one, Devanagari is Hindi.
 translate   `translate(texts, source, target)`: strings into another language, by one model call
             (src/ai/llm.ask — Gemini, and Groq's small model when Gemini cannot answer). Each
             string comes back translated or not at all: one that is not in the language it was
@@ -64,6 +67,16 @@ _ASSAMESE_LETTERS = frozenset("ৰৱ")
 
 FEW_LETTERS = 12  # fewer letters than this, and the script says the language, not langdetect
 
+# Words only Marathi or Nepali uses, of those a traveller's request is made of — and Nepali's verb endings
+# (चाहन्छु, जान्छौं) and postpositions written onto a word (काठमाडौंबाट, मलाई). Hindi has none of them.
+_OWN_WORDS = {
+    "mr": frozenset(
+        "आहे आहेत आणि मला आम्हाला आम्ही आमची माझी माझ्या मध्ये साठी नाही करायचे जायचे जायचं पहायचे बघायचे हवे हवी सहल".split()
+    ),
+    "ne": frozenset("छ छन् छु र लाई मलाई हामी हाम्रो पनि घुम्न गर्न गर्ने".split()),
+}
+_OWN_ENDINGS = {"mr": ("मध्ये", "च्या"), "ne": ("न्छ", "न्छु", "न्छौं", "न्छन्", "बाट", "लाई")}
+
 
 @dataclass(frozen=True)
 class Reading:
@@ -117,6 +130,15 @@ def _langdetect(text: str) -> tuple[str, float] | None:
     return best.lang, best.prob
 
 
+def _own_words(text: str) -> set[str]:
+    """The languages besides Hindi that have a word of their own in a Devanagari text (see _OWN_WORDS)."""
+    words = [word for word in text.split() if word]
+    words = ["".join(char for char in word if _script(char) == "DEVANAGARI") for word in words]
+    return {
+        code for code, own in _OWN_WORDS.items() if any(w in own or w.endswith(_OWN_ENDINGS[code]) for w in words if w)
+    }
+
+
 def read(text: str | None) -> Reading:
     """Which language `text` is in — see the module docstring for how, and for what is not read."""
     counts = letters_by_script(text or "")
@@ -134,7 +156,15 @@ def read(text: str | None) -> Reading:
     if guess is None:
         return Reading(main, script)
     code, probability = guess
-    if code == main or code in _ALSO_IN_SCRIPT.get(script, ()) or main is None:
+    if code in _ALSO_IN_SCRIPT.get(script, ()):
+        # Marathi or Nepali only on a word of its own; langdetect's guess, unless the words say the other
+        evidence = _own_words(text)
+        if code in evidence:
+            return Reading(code, script, round(probability, 4))
+        if evidence:
+            return Reading(evidence.pop(), script)
+        return Reading(main, script)
+    if code == main or main is None:
         return Reading(code, script, round(probability, 4))
     # langdetect named a language of another script — most of its letters are not in this one, and
     # what it was led by is the rest: the text's own script is the better guess.
