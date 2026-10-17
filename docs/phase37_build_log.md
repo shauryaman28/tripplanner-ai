@@ -82,6 +82,11 @@ The hotel the sandbox found is in the north and the attractions spread over the 
 
 Ten Goa journeys (`docs/phase37_live/osrm_check.txt`): the road 1.31–3.17 times the straight line (median 1.6); a car about 50 km/h of road. The first guess — 1.35 and town speeds of 22–28 km/h — made Fort Aguada to Baga 33 minutes where the router said 13; now 20 (13, and five to find the auto-rickshaw). The airport to Fort Aguada: 14 km as the crow flies, 44 by road around the Zuari; the estimate says 26 km — no straight line knows about the river.
 
+### On the page and in the PDF
+
+`docs/phase37_day_card.png` — a day on the site, its far stop's way there a row of its own ("Taxi · about 56 min ·
+23.6 km from Goa Grand"); `docs/phase37_pdf_times.png` — the same in the PDF, a short visit marked.
+
 ## Tests
 
 | | New | Total |
@@ -94,7 +99,28 @@ The roadmap's three structure tests: `test_every_stop_of_a_plan_has_its_times`, 
 
 ## Break it on purpose
 
-(Below — run on a scratch copy.)
+On a scratch copy of the repository (its own database `tripplanner_m37`, Redis number 14, and its own stub backend
+and Next server on ports 8137 and 3137 for the site), each breakage alone, the tests run after it: unit, then the
+integration suite for those that need the tool server or Redis, the browser test for the site's.
+
+**The first attempt stopped at its baseline** — a unit test failed on the copy and passed here: it had been asking
+the real Groq (#347). Fixed, and run again.
+
+**First round: 37 of 38 caught.** The tool (asked without a key, nothing cached, cached an hour, traffic asked for,
+a walk asked as a drive, no route taken for one, a refused key called a provider error, a metre's difference asked
+again, seconds read as minutes); Google's limit lifted; the tool not offered by the server; the clock (no travel
+note, a note on every stop, a day past 22:00, the way there not travelled, the landing ignored, Google's answer
+ignored, two stops at once, a model's times believed, a stop with no time given times, the wrong hotel woken up in,
+10:01 instead of 10:05, a flight on another day believed); the estimate (the straight line for the road, no time to
+find a taxi, a walk of 5 km); the builder (no clock, the tool never asked, the landing not told, a null note saved on
+every stop); the PDF (no times, no travel line, an estimate not said); the site, in the browser (no times, no travel
+row, an estimate not said); the cache report without the travel cache (integration).
+
+| Survived | Why | Now |
+|---|---|---|
+| key check: a 400 taken for a working key | the test checked only that a 400 was not accepted — and with the breakage it still was not, as "not what a working key gets"; what was lost was the hint that says what to look at | the test reads the hint: caught (second round, 1 of 1) |
+
+In all, 38 of 38 caught.
 
 ## Done criterion checklist
 

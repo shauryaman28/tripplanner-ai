@@ -480,6 +480,8 @@ def test_the_key_check_asks_google_one_journey_and_a_400_is_a_refusal(status, ac
     assert sent[0].method == "POST" and sent[0].headers["X-Goog-Api-Key"] == "AIza-test"
     assert len(body["origins"]) == len(body["destinations"]) == 1  # one element of the free 10,000 a month
     assert ok is accepted and "AIza-test" not in said
+    if status in (400, 403):  # a refusal says what to look at, not only that it failed
+        assert "is the Routes API enabled for its project, and billing on?" in said, said
 
 
 # ── The builder is told when the first day can begin (DECISIONS #340) ──────
