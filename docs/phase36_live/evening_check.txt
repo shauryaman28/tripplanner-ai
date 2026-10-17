@@ -1,0 +1,102 @@
+# python scripts/language_check.py --prodlike --all — 17 October, 17:26:03 to 17:29:15 IST (the image with the change fix)
+http://localhost:8200
+
+A. The roadmap's request, in Hindi
+     planned in 31.7 s
+  ✓ the request's language was read
+  ✓ planned in hi, decided by the request  — hi, by the request; translated: {'raw_input': '5-day trip to Goa, budget ₹50,000', 'destination': 'Goa'}
+  ✓ the plan says it is in Hindi  — language: hi
+  ✓ every stop is described in Hindi  — 10 of 10
+  ✓ every place has its name in Hindi's script  — 10 of 10
+  ✓ every name the plan goes by is still English
+  ✓ the local tips are in Hindi  — लचीलेपन के लिए स्कूटर किराए पर लें; नवंबर में ट्रैफिक कम होता है और अध
+  ✓ nothing the localise step was given stayed English  — kept_in_english: 0
+  ✓ the trip keeps the destination as it was typed  — गोवा
+     e.g. Excavated site in Chandor → चंदोर में उत्खनित स्थल: इतिहास प्रेमियों के लिए चंदोर में प्राचीन अवशेषों का अन्वेषण करें।
+
+B. A request in Tamil
+     planned in 33.7 s
+  ✓ the request's language was read
+  ✓ planned in ta, decided by the request  — ta, by the request; translated: {'raw_input': 'Three-day tour from Chennai to Madurai, want to see temples', 'destination': 'Madurai'}
+  ✓ the plan says it is in Tamil  — language: ta
+  ✓ every stop is described in Tamil  — 9 of 9
+  ✓ every place has its name in Tamil's script  — 9 of 9
+  ✓ every name the plan goes by is still English
+  ✓ the local tips are in Tamil  — குறுகிய தூரப் பயணங்களுக்கு ஆட்டோ-ரிக்‌ஷாக்கள் மலிவானவை; நீண்ட தூரங்களு
+  ✓ nothing the localise step was given stayed English  — kept_in_english: 0
+  ✓ the trip keeps the destination as it was typed  — மதுரை
+     e.g. Sri Meenakshi Amman Temple → ஸ்ரீ மீனாட்சி அம்மன் கோவில்: மதுரையில் பிரபலமான ஆன்மீக கோவில், வரலாற்று சிறப்பும் பிரார்த்தனையும் அனுபவிக்கலா
+
+C. A request in Bengali
+     planned in 37.8 s
+  ✓ the request's language was read
+  ✓ planned in bn, decided by the request  — bn, by the request; translated: {'raw_input': 'I want to spend three days in Kolkata, seeing old houses, the museum, and sweet shops', 'destination': 'Kolkata'}
+  ✓ the plan says it is in Bengali  — language: bn
+  ✓ every stop is described in Bengali  — 9 of 9
+  ✓ every place has its name in Bengali's script  — 9 of 9
+  ✓ every name the plan goes by is still English
+  ✓ the local tips are in Bengali  — দ্রুত উত্তর-দক্ষিণ যাতায়াতের জন্য কলকাতা মেট্রো ব্যবহার করুন এবং পুরা
+  ✓ nothing the localise step was given stayed English  — kept_in_english: 0
+  ✓ the trip keeps the destination as it was typed  — কলকাতা
+     e.g. Medical College and Hospital, Kolkata → মেডিকেল কলেজ ও হাসপাতাল, কলকাতা: ইতিহাসিক মেডিকেল কলেজ ও হাসপাতাল ঘুরে দেখুন এবং তার পুরনো স্থাপত্য উপভোগ করুন।
+
+F. The Hindi plan, changed by a request typed in Hindi
+  ✓ the request's language was read
+  ✓ planned in hi, decided by the request  — hi, by the request; translated: {'refinement_request': 'I want a hotel near the beach'}
+  ✓ the plan says it is in Hindi  — language: hi
+  ✓ every stop is described in Hindi  — 10 of 10
+  ✓ every place has its name in Hindi's script  — 10 of 10
+  ✓ every name the plan goes by is still English
+  ✓ the local tips are in Hindi  — सुविधा के लिए एक स्कूटर किराए पर लें; नवंबर में यातायात हल्का होता है 
+  ✓ nothing the localise step was given stayed English  — kept_in_english: 0
+  ✓ the trip keeps the destination as it was typed  — गोवा
+     e.g. Excavated site in Chandor → चंदोर में उत्खनित स्थल: इतिहास प्रेमियों के लिए चंदोर में प्राचीन अवशेषों का अन्वेषण करें।
+  ✓ every stop it kept kept its words  — 10 of 10
+
+D. Hindi chosen, the request in English
+     planned in 37.8 s
+  ✓ the request's language was read
+  ✓ planned in hi, decided by the preference  — hi, by the preference; translated: {}
+Traceback (most recent call last):
+  File "/Users/shauryaman28/Desktop/SS/tripplanner-ai/scripts/language_check.py", line 195, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/shauryaman28/Desktop/SS/tripplanner-ai/scripts/language_check.py", line 174, in main
+    in_language(checks, http, trip_id, rows, "hi", typed=None)
+  File "/Users/shauryaman28/Desktop/SS/tripplanner-ai/scripts/language_check.py", line 85, in in_language
+    plan = http.get(f"/trips/{trip_id}/itinerary").json()["structured_data"]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+KeyError: 'structured_data'
+
+# D made no plan: its builder call waited out Groq's per-minute limit past the 30 s deadline (LLM_TIMEOUT).
+# The script crashed on that; it now reports it as a check. D and E again, on their own — 17:30:31 to 17:31:16:
+#   D: planned in 14.5 s (builder 8.1 s), 9 of 9 stops in Hindi, 12 passed with E, 0 failed
+
+# The runs' steps, from agent_runs (destination | step | status | ms | tokens):
+गोवा | language | completed | 1123 | 209
+गोवा | itinerary_builder | completed | 7780 | 5738
+गोवा | localise | completed | 2160 | 971
+गोवा | orchestrator | completed | 31483 | 
+மதுரை | language | completed | 1052 | 207
+மதுரை | itinerary_builder | completed | 9309 | 5546
+மதுரை | localise | completed | 3258 | 1205
+மதுரை | orchestrator | completed | 32759 | 
+কলকাতা | language | completed | 842 | 215
+কলকাতা | itinerary_builder | failed | 1239 | 
+কলকাতা | itinerary_builder | completed | 6866 | 5428
+কলকাতা | localise | completed | 2490 | 848
+কলকাতা | orchestrator | completed | 37400 | 
+गोवा | language | completed | 1899 | 186
+गोवा | itinerary_builder | failed | 8241 | 
+गोवा | itinerary_builder | completed | 27259 | 5229
+गोवा | localise | completed | 2883 | 943
+गोवा | orchestrator | completed | 40448 | 
+Jaipur | language | completed | 0 | 
+Jaipur | itinerary_builder | failed | 30019 | 
+Jaipur | orchestrator | failed | 37482 | 
+Jaipur | language | completed | 0 | 
+Jaipur | itinerary_builder | completed | 8079 | 5090
+Jaipur | localise | completed | 2713 | 1007
+Jaipur | orchestrator | completed | 14477 | 
+Udaipur | itinerary_builder | completed | 7297 | 4348
+Udaipur | orchestrator | completed | 27685 | 
