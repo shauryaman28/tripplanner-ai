@@ -1,0 +1,31 @@
+models: gemini-3.5-flash-lite → openai/gpt-oss-20b
+
+[hi] translate 1.6s
+  hi  गोवा में 5 दिन की यात्रा, बजट ₹50,000
+     → 5-day trip to Goa, budget ₹50,000
+  hi  मुझे जयपुर में तीन दिन घूमना है, किले और बाज़ार देखने हैं
+     → I want to visit Jaipur for three days, see the forts and markets
+  hi  मैं अपने परिवार के साथ केरल जाना चाहता हूँ, बजट 1 लाख रुपये
+     → I want to go to Kerala with my family, budget 1 lakh rupees
+
+[ta] translate 1.2s
+  ta  கோவாவில் 5 நாள் பயணம், பட்ஜெட் ₹50,000
+     → 5-day trip to Goa, budget ₹50,000
+  ta  சென்னையிலிருந்து மதுரைக்கு மூன்று நாள் சுற்றுலா, கோயில்கள் பார்க்க வேண்டும்
+     → Three-day tour from Chennai to Madurai, want to see temples
+  ta  ஊட்டியில் குடும்பத்துடன் நான்கு நாட்கள் தங்க விரும்புகிறேன்
+     → I want to stay in Ooty with my family for four days
+
+[bn] translate 3.8s
+  bn  গোয়ায় ৫ দিনের ভ্রমণ, বাজেট ₹৫০,০০০
+     → 5 days trip to Goa, budget ₹50,000
+  bn  কলকাতা থেকে দার্জিলিং তিন দিনের জন্য যেতে চাই, পাহাড় আর চা বাগান দেখতে
+     → I want to go from Kolkata to Darjeeling for three days, to see the mountains and tea gardens
+  bn  আমি পরিবারের সাথে পুরীতে সমুদ্র সৈকতে চার দিন কাটাতে চাই
+     → I want to spend four days at the sea beach in Puri with my family
+
+intent, translated: 5-day trip to Goa, budget ₹50,000
+  {"destination": "Goa", "budget": 50000.0, "interests": ["sightseeing"]}  (3.7s)
+
+intent, as typed (before Phase 36): गोवा में 5 दिन की यात्रा, बजट ₹50,000
+  {"destination": "Goa", "budget": 50000.0, "interests": ["sightseeing"]}  (1.2s)
