@@ -55,6 +55,22 @@ export interface ActivitySlot {
   // Phase 36 — only on a plan in Hindi, Tamil or Bengali (StructuredItinerary.language): in that language
   local_name?: string | null; // the place's name as the language writes it; `activity` stays the English one
   description?: string | null; // a sentence on the stop (on a free day: what the page says of one, translated)
+  // Phase 37 — the stop's clock (lib/schedule.ts); absent on itineraries made before it
+  start_time?: string | null;  // "HH:MM"
+  end_time?: string | null;
+  travel_from_previous_minutes?: number | null;
+  travel?: TravelNote | null;  // only when the way there was more than 10 km
+  short_visit?: boolean | null;  // less than half the usual time here — the way there took the rest
+  no_time_left?: boolean | null;  // the day was over before the traveller could be here (a late landing)
+}
+
+/** The way to a stop more than 10 km from where the traveller was (Phase 37). */
+export interface TravelNote {
+  from: string;
+  minutes: number;
+  km?: number | null;
+  mode: "walk" | "auto-rickshaw" | "taxi";
+  source: "google" | "estimate";
 }
 
 export interface HotelSlot {

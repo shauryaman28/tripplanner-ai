@@ -14,11 +14,15 @@ The roadmap's acceptance, and where each is held:
 import json
 import logging
 import random
+import re
 import uuid
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.pdf.document import _stop_row
+from app.pdf.plan import TRAVEL_MODES, build_plan
 from src.ai import schedule
 from src.ai.builder import builder
 from src.ai.itinerary import FREE_TIME, SLOTS
@@ -387,3 +391,55 @@ def test_the_new_keys_of_a_stop_are_left_out_while_unset():
     dumped = slot.model_dump()
     assert dumped["start_time"] == "09:00" and dumped["travel_from_previous_minutes"] == 12
     assert {"travel", "short_visit", "no_time_left"}.isdisjoint(dumped)
+
+
+# ── The PDF, and the page's words for a journey ────────────────────────────
+
+
+TIMED = {
+    "total_cost": 0,
+    "days": [
+        {
+            "day": 1,
+            "date": "2030-01-10",
+            "morning": {"activity": "Fort Aguada", "cost": 0, "lat": 15.49, "lng": 73.77, "category": "history",
+                        "start_time": "10:05", "end_time": "12:00", "travel_from_previous_minutes": 46, "short_visit": True,
+                        "travel": {"from": "the airport", "minutes": 46, "km": 18.9, "mode": "taxi", "source": "estimate"}},
+            "evening": {"activity": "Basilica", "cost": 0, "lat": 15.5, "lng": 73.91, "start_time": "18:00",
+                        "end_time": "19:15", "travel": {"from": "Fort Aguada", "minutes": 75, "km": 22.4, "mode": "taxi",
+                        "source": "google"}},
+        }
+    ],
+}  # fmt: skip
+
+
+def _pdf(structured_data: dict):
+    return build_plan(destination="Goa", start_date=date(2030, 1, 10), end_date=date(2030, 1, 10), travellers=1,
+                      budget=50_000, interests=None, structured_data=structured_data)  # fmt: skip
+
+
+def test_the_pdf_prints_each_stops_times_and_the_way_there():
+    morning, evening = _pdf(TIMED).days[0].stops
+    assert (morning.start_time, morning.end_time, morning.short_visit) == ("10:05", "12:00", True)
+    assert morning.travel == "Taxi · about 46 min · 18.9 km from the airport"  # an estimate says so
+    assert evening.travel == "Taxi · 1 h 15 min · 22.4 km from Fort Aguada"  # Google's does not
+    lines = [paragraph.getPlainText() for paragraph in _stop_row(1, morning)[1]]
+    assert lines[0] == "MORNING · 10:05–12:00" and "Taxi · about 46 min · 18.9 km from the airport" in lines
+    assert "A short visit — getting here takes much of this part of the day." in lines
+
+
+def test_an_itinerary_made_before_this_phase_prints_as_it_did():
+    old = {
+        "total_cost": 0,
+        "days": [{"day": 1, "date": "2030-01-10", "morning": {"activity": "Fort Aguada", "lat": 15.49, "lng": 73.77}}],
+    }
+    (stop_,) = _pdf(old).days[0].stops
+    assert (stop_.start_time, stop_.travel, stop_.short_visit) == (None, None, False)
+    assert [paragraph.getPlainText() for paragraph in _stop_row(1, stop_)[1]] == ["MORNING", "Fort Aguada"]
+
+
+def test_the_page_and_the_pdf_name_the_ways_alike():
+    source = open("src/frontend/src/lib/schedule.ts", encoding="utf-8").read()
+    block = source[source.index("TRAVEL_MODES") : source.index("};", source.index("TRAVEL_MODES"))]
+    assert dict(re.findall(r'"?([a-z-]+)"?: "([^"]+)"', block)) == TRAVEL_MODES
+    assert '${note.source === "google" ? "" : "about "}' in source  # an estimate is "about", there too

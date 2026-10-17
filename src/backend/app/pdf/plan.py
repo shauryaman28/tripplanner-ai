@@ -60,6 +60,12 @@ class Stop:
     # Phase 36, a plan in Hindi, Tamil or Bengali: the place's name and a sentence on it, in that language
     local_name: str | None = None
     description: str | None = None
+    # Phase 37: its clock — "HH:MM" each; the way there when it was past 10 km; a stop with too little time
+    start_time: str | None = None
+    end_time: str | None = None
+    travel: str | None = None  # "Taxi · 46 min · 18.9 km from the airport"
+    short_visit: bool = False
+    no_time_left: bool = False
 
 
 @dataclass(frozen=True)
@@ -292,6 +298,11 @@ def _read_day(raw: dict, index: int) -> Day:
                 suits=() if free_time else _names(entry.get("suits")),
                 local_name=None if free_time else _text(entry.get("local_name")),
                 description=_text(entry.get("description")),
+                start_time=_text(entry.get("start_time")),
+                end_time=_text(entry.get("end_time")),
+                travel=None if free_time else travel_words(entry.get("travel")),
+                short_visit=entry.get("short_visit") is True,
+                no_time_left=entry.get("no_time_left") is True,
             )
         )
 
@@ -558,6 +569,25 @@ def stay_facts(stay: Stay) -> list[str]:
         stay.address,
     )
     return [fact for fact in facts if fact]
+
+
+TRAVEL_MODES = {"walk": "Walk", "auto-rickshaw": "Auto-rickshaw", "taxi": "Taxi"}
+
+
+def travel_words(note: object) -> str | None:
+    """A travel note as the page says it (lib/schedule.ts, a test keeps the two in step): "Taxi · 46 min ·
+    18.9 km from the airport" — "about 46 min" when it is an estimate."""
+    if not isinstance(note, dict) or not isinstance(note.get("minutes"), int) or not _text(note.get("from")):
+        return None
+    hours, rest = divmod(note["minutes"], 60)
+    took = f"{rest} min" if not hours else f"{hours} h" if not rest else f"{hours} h {rest} min"
+    about = "" if note.get("source") == "google" else "about "
+    far = f" · {note['km']:g} km" if isinstance(note.get("km"), (int, float)) else ""
+    return f"{TRAVEL_MODES.get(note.get('mode'), 'Taxi')} · {about}{took}{far} from {note['from']}"
+
+
+def stop_times(stop: Stop) -> str | None:
+    return f"{stop.start_time}–{stop.end_time}" if stop.start_time and stop.end_time else None
 
 
 def stop_facts(stop: Stop) -> list[str]:

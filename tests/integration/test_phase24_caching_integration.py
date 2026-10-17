@@ -27,8 +27,15 @@ import redis
 
 from src.ai.mcp_client.client import call_tool
 from src.ai.mcp_server import cache
-from src.ai.mcp_server.models import AttractionInput, FlightSearchInput, HotelSearchInput, ToolError, WeatherInput
-from src.ai.mcp_server.tools import get_attractions, get_weather, search_flights, search_hotels
+from src.ai.mcp_server.models import (
+    AttractionInput,
+    FlightSearchInput,
+    HotelSearchInput,
+    ToolError,
+    TravelTimeInput,
+    WeatherInput,
+)
+from src.ai.mcp_server.tools import get_attractions, get_travel_time, get_weather, search_flights, search_hotels
 from src.ai.orchestrator.warming import start_cache_warming
 from tests.fakes import FakeProviders, providers_faked, tool_server
 from tests.integration.test_pipeline_integration import _login, _run_finished, _stack
@@ -92,6 +99,8 @@ def test_every_cache_expires_when_the_spec_says_read_back_from_redis(tool_cache)
         lambda: get_attractions(AttractionInput(destination="Goa", interests=["beach", "history"], limit=5)),
         lambda: get_weather(WeatherInput(destination="Goa", date_range=f"{SOON} to {SOON}")),
         lambda: get_weather(WeatherInput(destination="Goa", date_range=f"{START} to {END}")),
+        # Phase 37: a journey — "cache results for 24h"
+        lambda: get_travel_time(TravelTimeInput(origin_lat=15.49, origin_lng=73.77, dest_lat=15.55, dest_lng=73.75)),
     ]
 
     with providers_faked(providers):
@@ -110,17 +119,25 @@ def test_every_cache_expires_when_the_spec_says_read_back_from_redis(tool_cache)
         "attractions": 1,
         "weather": 2,  # a forecast and a climate estimate
         "geocode": 1,
+        "travel": 1,
     }
-    spec = {"flights": 300, "hotels": 900, "attractions": 21_600, "weather": 3_600, "geocode": 2_592_000}
+    spec = {
+        "flights": 300,
+        "hotels": 900,
+        "attractions": 21_600,
+        "weather": 3_600,
+        "geocode": 2_592_000,
+        "travel": 86_400,
+    }
     for family, seconds in spec.items():
         for key in keys[family]:
             assert seconds - 10 <= tool_cache.ttl(key) <= seconds, (key, tool_cache.ttl(key))
 
     # …which is what the script the run guide points at reports
     report = cache_ttls.report(tool_cache)
-    assert [family.name for family in report] == ["flights", "hotels", "attractions", "weather", "geocode"]
+    assert [family.name for family in report] == ["flights", "hotels", "attractions", "weather", "travel", "geocode"]
     assert all(family.ok for family in report)
-    assert cache_ttls.SPEC == {name: spec[name] for name in ("flights", "hotels", "attractions", "weather")}
+    assert cache_ttls.SPEC == {name: spec[name] for name in ("flights", "hotels", "attractions", "weather", "travel")}
 
 
 def test_a_key_that_never_expires_or_outlives_the_spec_is_reported(tool_cache):
