@@ -8,6 +8,9 @@ afterwards must change nothing in the file — that is the claim "English sees z
 
 Run again in Phase 37, on purpose (DECISIONS #340): the builder's prompt has one line more — when
 the first day can begin — and every stop its clock. Nothing else in the file changed.
+
+And in Phase 38 (DECISIONS #348): every day its weather, and the run's state the trip's forecast. The prompts
+are unchanged — a dry trip's builder is told nothing of the weather.
 """
 
 from __future__ import annotations

@@ -134,6 +134,8 @@ class DayForecast(BaseModel):
     condition: str
     temp_high_c: float
     temp_low_c: float
+    # Phase 38: OWM's forecast, or the month's typical day ("… (climate estimate)") past its five days
+    source: Literal["forecast", "climate"] = "forecast"
 
 
 class BudgetEstimate(BaseModel):

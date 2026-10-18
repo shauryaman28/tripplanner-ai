@@ -315,6 +315,10 @@ def _stay_row(stay: Stay) -> list:
 def _day_card(day: Day) -> Card:
     """One day: its colour down the side, then the flight, each stop and the stay — the page's day card."""
     title = [_p(f"Day {day.number}", EYEBROW), _p(format_weekday(day.date) or f"Day {day.number}", DAY_TITLE)]
+    if day.weather:  # Phase 38
+        title.append(_p(day.weather + (" (climate estimate)" if day.weather_estimate else ""), META))
+    if day.weather_note:
+        title.append(_p(day.weather_note, META))
     rows = [[title, "", _amount(day.cost, "stay + activities") if day.cost > 0 else ""]]
     if day.flight:
         rows.append(_flight_row(day.flight))

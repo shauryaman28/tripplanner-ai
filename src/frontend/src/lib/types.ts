@@ -111,6 +111,17 @@ export interface DaySchedule {
   evening: ActivitySlot | null;
   hotel: HotelSlot | null;
   flight: FlightInfo | null;
+  weather?: DayWeather | null;  // Phase 38 — absent on itineraries made before it, and on a day with no forecast
+  weather_note?: string | null;  // a rainy day with no indoor place to give it
+}
+
+/** A day's weather (Phase 38, lib/weather.ts). */
+export interface DayWeather {
+  condition: string;
+  kind: "sunny" | "cloudy" | "rainy" | "snowy";
+  temp_high_c?: number | null;
+  temp_low_c?: number | null;
+  estimate: boolean;  // the month's typical day, not a forecast
 }
 
 /** What the DestinationIntelligenceAgent knew about the place (Phase 22) — a model's knowledge, not a search result. */

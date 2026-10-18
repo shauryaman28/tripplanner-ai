@@ -91,6 +91,13 @@
        "source": "estimate"
       },
       "travel_from_previous_minutes": 32
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     },
     {
@@ -119,6 +126,13 @@
       "start_time": "08:30",
       "suits": [],
       "travel_from_previous_minutes": 30
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     },
     {
@@ -147,6 +161,13 @@
       "start_time": "08:00",
       "suits": null,
       "travel_from_previous_minutes": null
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     },
     {
@@ -167,6 +188,13 @@
       "start_time": "08:00",
       "suits": null,
       "travel_from_previous_minutes": null
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     }
    ],
@@ -282,7 +310,8 @@
    "raw_input",
    "replan_attempts",
    "start_date",
-   "turn"
+   "turn",
+   "weather"
   ]
  },
  "solo": {
@@ -370,6 +399,13 @@
        "source": "estimate"
       },
       "travel_from_previous_minutes": 32
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     },
     {
@@ -405,6 +441,13 @@
        "source": "estimate"
       },
       "travel_from_previous_minutes": 39
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     },
     {
@@ -425,6 +468,13 @@
       "start_time": "08:00",
       "suits": null,
       "travel_from_previous_minutes": null
+     },
+     "weather": {
+      "condition": "Clear",
+      "estimate": false,
+      "kind": "sunny",
+      "temp_high_c": 30.0,
+      "temp_low_c": 22.0
      }
     }
    ],
@@ -484,7 +534,8 @@
    "raw_input",
    "replan_attempts",
    "start_date",
-   "turn"
+   "turn",
+   "weather"
   ]
  }
 }

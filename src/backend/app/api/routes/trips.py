@@ -1275,6 +1275,7 @@ _AGENT_LABELS: dict[str, str] = {
     "itinerary_builder": "Built day-by-day itinerary",
     "evaluator": "Validated itinerary correctness",
     "localise": "Wrote the plan in the traveller's language",  # Phase 36
+    "weather": "Read the weather for the trip",  # Phase 38
     "persist": "Saved itinerary to database",
     "escalate": "Budget conflict — offered alternatives to user",
     "builder_failed": "Itinerary build failed after maximum retries",
@@ -1411,6 +1412,9 @@ def _run_detail(agent_name: str, output: dict, run_status: str) -> dict[str, Any
 
     if agent_name == "localise":
         return {"translated": output.get("translated"), "kept_in_english": output.get("kept_in_english")}
+
+    if agent_name == "weather":  # Phase 38
+        return {"days": output.get("days"), "rainy": output.get("rainy"), "estimated": output.get("estimated")}
 
     if agent_name == "intent_parsing":
         return {
