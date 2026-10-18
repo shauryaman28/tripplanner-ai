@@ -51,6 +51,18 @@ def no_fallback_llm():
 
 
 @pytest.fixture(autouse=True)
+def no_weather_tool():
+    """Phase 38: the orchestrator asks the weather tool for every plan — through the MCP client, which would start
+    the tool server. A test that wants weather stubs it (tests/fakes.py's `network_stubs` does); the rest plan
+    without any, as before this phase."""
+    from src.ai.mcp_server.models import ToolError
+
+    not_configured = ToolError(error="no weather tool in tests", code="API_NOT_CONFIGURED")
+    with patch("src.ai.orchestrator.orchestrator.call_tool", AsyncMock(return_value=not_configured)) as tool:
+        yield tool
+
+
+@pytest.fixture(autouse=True)
 def no_travel_time_tool():
     """Phase 37: the builder asks the travel-time tool for every stop — through the MCP client, which would start
     the tool server. A test that wants Google's answers stubs it; every other plan's travel times are estimated."""

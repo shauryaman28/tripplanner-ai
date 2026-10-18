@@ -30,6 +30,10 @@ Phase 36: a plan in Hindi, Tamil or Bengali (trip_meta["language"]). The model a
 Phase 37: the checked draft is given its clock (src/ai/schedule.py) — each stop's start and end, the way
           there from the travel-time tool (Google's Routes API) or an estimate, a travel note past 10 km.
           In code, after the model: the prompt is unchanged.
+Phase 38: the weather (src/ai/weather.py). A trip with a rainy day: the model is told each day's weather
+          and each attraction's setting, and asked for an indoor place on a rainy day; code makes sure of it
+          (weather.repair), or says the day has none to give. Every day of the plan carries its weather.
+          A dry trip's prompt is as it was.
 """
 
 from __future__ import annotations
@@ -45,7 +49,7 @@ from typing import ClassVar
 from pydantic import BaseModel, ValidationError, field_validator, model_serializer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai import group, language, pricing, schedule
+from src.ai import group, language, pricing, schedule, weather
 from src.ai.itinerary import FREE_TIME, SLOTS, LocalIntelligence, PerPersonBreakdown
 from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
 from src.ai.mcp_client.client import call_tool
@@ -119,7 +123,7 @@ class HotelSlot(BaseModel):
     _cost = field_validator("cost_per_night", mode="before")(_none_is_zero)
 
 
-class DaySchedule(BaseModel):
+class DaySchedule(_OnlyWhenSet):
     day: int
     date: str
     morning: ActivitySlot | None = None
@@ -127,6 +131,12 @@ class DaySchedule(BaseModel):
     evening: ActivitySlot | None = None
     hotel: HotelSlot | None = None
     flight: dict | None = None
+    # Phase 38 — set by code, never by the model: the day's weather (src/ai/weather.attach), and on a rainy day
+    # with no indoor place to give it, the note that says so
+    weather: dict | None = None
+    weather_note: str | None = None
+
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("weather", "weather_note")
 
 
 class ItineraryDraft(_OnlyWhenSet):
@@ -288,10 +298,23 @@ def _language_block(code: str | None) -> str:
 _ATTRACTION_KEYS = ("name", "category", "rating", "description", "lat", "lng")
 
 
-def _for_prompt(attractions: list[dict], members: list[dict] | None) -> list[dict]:
-    """The attractions as the model sees them — with who each suits, on a group trip."""
+def _for_prompt(attractions: list[dict], members: list[dict] | None, rainy: bool = False) -> list[dict]:
+    """The attractions as the model sees them — with who each suits, on a group trip; and, on a trip with a
+    rainy day (Phase 38), whether each is indoor or outdoor."""
     keys = (*_ATTRACTION_KEYS, group.SUITS) if group.is_group(members) else _ATTRACTION_KEYS
-    return [{key: attraction[key] for key in keys if key in attraction} for attraction in attractions]
+    shown = [{key: attraction[key] for key in keys if key in attraction} for attraction in attractions]
+    if rainy:
+        for place, attraction in zip(shown, attractions, strict=True):
+            place["setting"] = weather.setting(attraction.get("category"))
+    return shown
+
+
+def _trip_dates(start: str | None, end: str | None) -> list[str]:
+    try:
+        first, last = date.fromisoformat(start), date.fromisoformat(end)
+    except (TypeError, ValueError):
+        return []
+    return [date.fromordinal(n).isoformat() for n in range(first.toordinal(), last.toordinal() + 1)]
 
 
 def _days_line(start: str | None, end: str | None) -> str:
@@ -333,7 +356,9 @@ def _build_user_prompt(
     flights: list[dict],
     hotels: list[dict],
     attractions: list[dict],
+    forecast: dict[str, dict] | None = None,
 ) -> str:
+    rain = weather.block(_trip_dates(trip_meta.get("start_date"), trip_meta.get("end_date")), forecast or {})
     return (
         f"Trip: {trip_meta.get('destination')} "
         f"from {trip_meta.get('start_date')} to {trip_meta.get('end_date')}, "
@@ -342,7 +367,9 @@ def _build_user_prompt(
         f"{_landing_line(trip_meta.get('start_date'), flights)}\n"
         f"Available flights (JSON): {json.dumps(flights)}\n\n"
         f"Available hotels (JSON): {json.dumps(hotels)}\n\n"
-        f"Available attractions (JSON): {json.dumps(_for_prompt(attractions, trip_meta.get('group_members')))}\n\n"
+        f"Available attractions (JSON): "
+        f"{json.dumps(_for_prompt(attractions, trip_meta.get('group_members'), bool(rain)))}\n\n"
+        f"{rain}"
         f"{_group_block(trip_meta.get('group_members'))}"
         f"{_preferences_block(trip_meta.get('preferences'))}"
         f"{_request_block(trip_meta.get('request'), trip_meta.get('previous_plan'))}"
@@ -499,15 +526,17 @@ async def build_itinerary(
     hotels: list[dict],
     attractions: list[dict],
     on_token: OnToken | None = None,
+    forecast: dict[str, dict] | None = None,
 ) -> ItineraryDraft | BuilderError:
     """One draft from the model, checked. `on_token` sees the reply while it is being written;
 
     what it sees is unchecked text — only the returned draft has passed the checks below.
+    `forecast` (Phase 38): the trip's weather by date (weather.by_date).
     """
     if not flights and not hotels and not attractions:
         return BuilderError(error="No source data available to build an itinerary.", code="NO_SOURCE_DATA")
 
-    user_prompt = _build_user_prompt(trip_meta, flights, hotels, attractions)
+    user_prompt = _build_user_prompt(trip_meta, flights, hotels, attractions, forecast)
 
     try:
         async with asyncio.timeout(BUILD_DEADLINE_S):
@@ -533,6 +562,10 @@ async def build_itinerary(
         return BuilderError(error="Builder reply was not a JSON object.", code="JSON_PARSE_ERROR")
     for written_by_code in _WRITTEN_BY_CODE:
         parsed.pop(written_by_code, None)  # what goes there is never the model's to write
+    for day in parsed.get("days") if isinstance(parsed.get("days"), list) else []:
+        if isinstance(day, dict):  # Phase 38: a day's weather and its note are code's too
+            day.pop("weather", None)
+            day.pop("weather_note", None)
 
     # Shape first: every check below can then rely on it instead of guarding against
     # a slot that is a string or a day that is a list.
@@ -555,6 +588,12 @@ async def build_itinerary(
         if moved := group.rebalance(draft, attractions, members):
             logger.info("Group plan rebalanced: %s", "; ".join(moved))
             _normalise_free_time(draft)
+
+    # Phase 38: the model was asked for an indoor place on every rainy day. Whether it gave one is not left
+    # to it: an unused indoor place is moved in, or the day says it has none.
+    if forecast and (moved := weather.repair(draft, attractions, forecast)):
+        logger.info("Rainy days given an indoor place: %s", "; ".join(moved))
+        _normalise_free_time(draft)
 
     if not _validate_budget_math(draft, flights):
         return BuilderError(
@@ -620,15 +659,19 @@ class ItineraryBuilder:
         turn: int = 1,
         on_token: OnToken | None = None,
         local_intelligence: dict | None = None,
+        forecast: list[dict] | None = None,
     ) -> dict:
         """Phase 15: `turn` parameter forwarded to log_agent_run. Defaults to 1.
 
         Phase 20: `on_token` receives the model's reply piece by piece while it is written.
         Phase 22: `local_intelligence` (the DestinationIntelligenceAgent's output) is put into the
         draft under that key once the draft has passed its checks.
+        Phase 38: `forecast` — the weather tool's days — goes into the prompt when a day is rainy, into the
+        repair, and onto each day of the plan.
         """
         async with timed_run("itinerary_builder") as timer:
-            result = await build_itinerary(trip_meta, flights, hotels, attractions, on_token=on_token)
+            by_date = weather.by_date(forecast)  # Phase 38: the weather tool's days
+            result = await build_itinerary(trip_meta, flights, hotels, attractions, on_token=on_token, forecast=by_date)
             if isinstance(result, ItineraryDraft):
                 result.local_intelligence = _checked_intelligence(local_intelligence)
                 _add_group_and_shares(result, trip_meta, flights, attractions)
@@ -636,6 +679,7 @@ class ItineraryBuilder:
                     result.language = trip_meta["language"]
                 plan = result.model_dump()  # Phase 37: the clock, once the draft has passed every check
                 timing = await schedule.add_times(plan, _ask_travel_time)
+                weather.attach(plan, by_date)  # Phase 38: each day its weather
                 result = ItineraryDraft(**plan)
 
         if isinstance(result, BuilderError):

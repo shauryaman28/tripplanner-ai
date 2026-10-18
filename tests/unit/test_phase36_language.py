@@ -518,7 +518,8 @@ async def test_english_sees_zero_change():
 
     Recorded before Phase 36, which held them; recorded again in Phase 37, on purpose and decided first
     (DECISIONS #340): the builder's prompt has one line more — when the first day can begin — and every stop
-    of the plan has its clock. A change to either since is a change, and goes in DECISIONS first."""
+    of the plan has its clock; and in Phase 38 (#348), every day its weather, the prompts unchanged. A change
+    to any of it since is a change, and goes in DECISIONS first."""
     recorded = json.loads(capture_english.OUT.read_text())
     now = json.loads(json.dumps(await capture_english.capture(), ensure_ascii=False, sort_keys=True))
     for trip in recorded:

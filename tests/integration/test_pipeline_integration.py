@@ -140,9 +140,9 @@ async def test_plan_then_refine_end_to_end(db_session):
         # ── Phases 9 + 13: every decision node logged, in order, with a duration ──
         names = [r["agent_name"] for r in runs]
         assert names[:4] == ["intent_parsing", "preferences", "flight_agent", "budget_decision"]
-        # fanned out concurrently — with the fourth agent beside them since Phase 22
-        assert set(names[4:7]) == {"hotel_agent", "activities_agent", "destination_intelligence"}
-        assert names[7:] == ["itinerary_builder", "evaluator", "persist", "preference_extractor", "orchestrator"]
+        # fanned out concurrently — with the fourth agent beside them since Phase 22, and the weather since Phase 38
+        assert set(names[4:8]) == {"hotel_agent", "activities_agent", "destination_intelligence", "weather"}
+        assert names[8:] == ["itinerary_builder", "evaluator", "persist", "preference_extractor", "orchestrator"]
         assert all(r["duration_ms"] is not None and r["turn"] == 1 for r in runs)
         assert all(r["status"] == "completed" for r in runs)
 

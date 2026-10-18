@@ -432,7 +432,8 @@ async def test_saved_preferences_reach_flight_and_activities_agents():
 
     logged = [o for o in db._added if isinstance(o, AgentRun)]
     # the three searches are mocked; the fourth agent (Phase 22) is real and logs its own row
-    assert [r.agent_name for r in logged] == ["preferences", "destination_intelligence"]
+    # (Phase 38: and the weather, read beside the searches — a row of its own)
+    assert [r.agent_name for r in logged] == ["preferences", "destination_intelligence", "weather"]
     assert logged[0].output["loaded"] is True
 
 

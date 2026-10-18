@@ -311,6 +311,34 @@ async def fake_translate(prompt: str) -> str:
     return json.dumps([one(text) for text in texts], ensure_ascii=False)
 
 
+# ── Weather (Phase 38) ─────────────────────────────────────────────────────
+
+# Which days of a trip the stand-in weather tool forecasts rain for, by destination: {destination: day numbers}.
+# Anywhere else it is clear every day. Kodaikanal has six days of forecast and a seventh of climate estimate —
+# the real tool's five days are counted from today, which a test's trip, a year out, never is.
+RAINY_DAYS: dict[str, set[int]] = {"Cherrapunji": {1, 2, 3, 4, 5, 6, 7}, "Kodaikanal": {2}, "Alleppey": {2}}
+CLOUDY_DAYS: dict[str, set[int]] = {"Kodaikanal": {3}}
+FORECAST_DAYS = {"Kodaikanal": 5}
+
+
+async def fake_weather(_name: str, params: dict) -> list[dict]:
+    """Stand-in for the get_weather tool: one day a date of the trip, clear unless RAINY_DAYS or CLOUDY_DAYS say
+    otherwise — and, past FORECAST_DAYS, the climate estimate, as the real tool gives past OWM's five days."""
+    first, last = (date.fromisoformat(part.strip()) for part in params["date_range"].split(" to "))
+    rainy = RAINY_DAYS.get(params["destination"], set())
+    cloudy = CLOUDY_DAYS.get(params["destination"], set())
+    forecast = FORECAST_DAYS.get(params["destination"], 99)
+    days = []
+    for n in range((last - first).days + 1):
+        condition = "Rain" if n + 1 in rainy else "Clouds" if n + 1 in cloudy else "Clear"
+        source = "forecast"
+        if n + 1 > forecast:
+            condition, source = f"{'Rainy' if n + 1 in rainy else 'Sunny'} (climate estimate)", "climate"
+        days.append({"date": str(first + timedelta(days=n)), "condition": condition, "temp_high_c": 30.0,
+                     "temp_low_c": 22.0, "source": source})  # fmt: skip
+    return days
+
+
 # ── Embeddings (Phases 14, 23) ─────────────────────────────────────────────
 
 # Words that say nothing about what a text is about — the summary's own scaffolding among them.
@@ -399,6 +427,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         "activities": AsyncMock(return_value=ATTRACTIONS),
         "warm": AsyncMock(return_value=[]),
         "travel": AsyncMock(return_value=ToolError(error="no key in the stubs", code="API_NOT_CONFIGURED")),
+        "weather": AsyncMock(side_effect=fake_weather),
     }
     with (
         patch("src.ai.agents.flight_agent.call_tool", tools["flight"]),
@@ -409,6 +438,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
         patch("src.ai.language._call_model", fake_translate),  # Phase 36
         patch("src.ai.builder.builder.call_tool", tools["travel"]),  # Phase 37: no key — every time estimated
+        patch("src.ai.orchestrator.orchestrator.call_tool", tools["weather"]),  # Phase 38
         patch("src.ai.agents.destination_intelligence._call_llm", fake_intelligence_llm),
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
         patch("src.ai.embeddings.embedder._call_embed", AsyncMock(side_effect=fake_embed)),

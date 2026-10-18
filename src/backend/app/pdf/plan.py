@@ -108,6 +108,11 @@ class Day:
     stay: Stay | None
     flight: Flight | None
     activities_cost: float
+    # Phase 38: the day's weather in words ("Rain · 29° / 23°"), whether it is the month's typical day, and on a
+    # rainy day with nothing indoors, the note that says so
+    weather: str | None = None
+    weather_estimate: bool = False
+    weather_note: str | None = None
 
     @property
     def stay_cost(self) -> float:
@@ -313,6 +318,9 @@ def _read_day(raw: dict, index: int) -> Day:
         stay=_read_stay(raw.get("hotel")),
         flight=_read_flight(raw.get("flight")),
         activities_cost=sum(_amount(entry.get("cost")) for entry in slots.values()),
+        weather=weather_words(raw.get("weather")),
+        weather_estimate=isinstance(raw.get("weather"), dict) and raw["weather"].get("estimate") is True,
+        weather_note=_text(raw.get("weather_note")),
     )
 
 
@@ -569,6 +577,19 @@ def stay_facts(stay: Stay) -> list[str]:
         stay.address,
     )
     return [fact for fact in facts if fact]
+
+
+# What each kind of weather is called — the page's words (lib/weather.ts; a test keeps the two alike).
+WEATHER_LABELS = {"sunny": "Sunny", "cloudy": "Partly cloudy", "rainy": "Rain", "snowy": "Snow"}
+
+
+def weather_words(weather: object) -> str | None:
+    """A day's weather as the page says it: "Rain · 29° / 23°" (Phase 38)."""
+    if not isinstance(weather, dict) or not (_text(weather.get("kind")) or _text(weather.get("condition"))):
+        return None
+    label = WEATHER_LABELS.get(weather.get("kind")) or _text(weather.get("condition"))
+    high, low = _number(weather.get("temp_high_c")), _number(weather.get("temp_low_c"))
+    return f"{label} · {round(high)}° / {round(low)}°" if high is not None and low is not None else label
 
 
 TRAVEL_MODES = {"walk": "Walk", "auto-rickshaw": "Auto-rickshaw", "taxi": "Taxi"}

@@ -26,6 +26,8 @@ drive one situation:
                                                  not like the others, for similar trips and search (Phase 23)
     Pondicherry                                  the local-tips model does not answer: a plan without tips (Phase 22)
     Gokarna                                      no local tips with the plan; they come with the first change to it
+    Kodaikanal                                   day 2 rainy, day 3 partly cloudy, the rest sunny; days 6 and on a
+                                                 climate estimate (Phase 38 — tests/fakes.py, fake_weather)
     Shimla, Manali                               every search is down; they answer when the trip is retried
     anywhere else                                everything is found; a second hotel search finds a different hotel
 

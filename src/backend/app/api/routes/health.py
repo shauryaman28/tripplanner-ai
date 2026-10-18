@@ -11,7 +11,7 @@ GET /ready   (Phase 27)
 → the same body; 200 when both are ok, 503 otherwise — a platform's health check.
 
 GET /version (Phase 28)
-→ { "version": "0.37.0", "commit": "3f2a…" | null } — what is running here.
+→ { "version": "0.38.0", "commit": "3f2a…" | null } — what is running here.
 """
 
 import logging

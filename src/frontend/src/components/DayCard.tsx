@@ -1,6 +1,21 @@
 "use client";
 
-import { BedDouble, CarTaxiFront, Footprints, Landmark, Moon, PlaneLanding, Sun, Sunrise, Users, type LucideIcon } from "lucide-react";
+import {
+  BedDouble,
+  CarTaxiFront,
+  CloudRain,
+  CloudSun,
+  Footprints,
+  Landmark,
+  Moon,
+  PlaneLanding,
+  Snowflake,
+  Sun,
+  Sunrise,
+  Umbrella,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 
 import { flightPart, stayPart, stopPart, type PlanSection } from "@/lib/changes";
@@ -8,6 +23,7 @@ import { formatClock, formatDuration, formatINR, formatWeekday, namesInWords } f
 import { HOTEL_STYLE, SLOT_LABELS, dayStops, dayStyle, hotelPinId, type DayStop, type PinStyle, type SlotName } from "@/lib/map";
 import { categoryMeta, describeRating } from "@/lib/places";
 import { stopTimes, travelWords } from "@/lib/schedule";
+import { weatherWords, type WeatherKind } from "@/lib/weather";
 import type { ActivitySlot, DaySchedule } from "@/lib/types";
 import { Pin, UpdatedTag, UpdatingTag, partClass } from "./ui";
 
@@ -26,6 +42,7 @@ interface Props {
 const NOTHING_CHANGED: ReadonlySet<string> = new Set();
 
 const SLOT_ICONS: Record<SlotName, LucideIcon> = { morning: Sunrise, afternoon: Sun, evening: Moon };
+const WEATHER_ICONS: Record<WeatherKind, LucideIcon> = { sunny: Sun, cloudy: CloudSun, rainy: CloudRain, snowy: Snowflake };
 
 function Row({
   icon: Icon,
@@ -210,6 +227,28 @@ function ActivityRow({
   );
 }
 
+/** Phase 38 — the day's weather under its date: an icon, the words, and "climate estimate" past the forecast. */
+function DayWeatherLine({ day }: { day: DaySchedule }) {
+  const words = weatherWords(day.weather);
+  if (!day.weather || !words) return null;
+  const Icon = WEATHER_ICONS[day.weather.kind] ?? CloudSun;
+  return (
+    <p data-weather={day.weather.kind} className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-600">
+      <Icon className="h-4 w-4 text-ink-500" aria-hidden />
+      <span>{words}</span>
+      {day.weather.estimate && (
+        <span
+          data-climate-estimate
+          className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-600"
+          title="Past the five-day forecast: a typical day of the month here"
+        >
+          climate estimate
+        </span>
+      )}
+    </p>
+  );
+}
+
 export default function DayCard({ day, onShowOnMap, updating = null, changed = NOTHING_CHANGED, language }: Props) {
   const stops = dayStops(day);
   const { hotel, flight } = day;
@@ -240,6 +279,7 @@ export default function DayCard({ day, onShowOnMap, updating = null, changed = N
           <div>
             <p className="eyebrow">Day {day.day}</p>
             <h3 className="mt-0.5 font-display text-xl font-medium text-ink-900">{formatWeekday(day.date)}</h3>
+            <DayWeatherLine day={day} />
           </div>
           {dayCost > 0 && (
             <p className="text-right">
@@ -248,6 +288,14 @@ export default function DayCard({ day, onShowOnMap, updating = null, changed = N
             </p>
           )}
         </header>
+
+        {/* Phase 38: rain forecast, and nothing indoors to give the day */}
+        {day.weather_note && (
+          <p data-weather-note className="mt-2 flex items-start gap-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn-ink">
+            <Umbrella className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            {day.weather_note}
+          </p>
+        )}
 
         <ul className="mt-1 divide-y divide-ink-100">
           {flight && (

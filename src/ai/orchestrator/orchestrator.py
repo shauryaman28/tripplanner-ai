@@ -45,7 +45,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
-from src.ai import group, language, tracing
+from src.ai import group, language, tracing, weather
 from src.ai.agents.activities_agent import ActivitiesAgent
 from src.ai.agents.budget_alternatives import conflict_alternatives, plain_options
 from src.ai.agents.budget_decision import BudgetDecision, make_budget_decision, replan_flight_budget
@@ -67,6 +67,7 @@ from src.ai.builder.builder import ItineraryBuilder
 from src.ai.embeddings.embedder import PENDING_RETRY_MODEL
 from src.ai.itinerary import FREE_TIME, SLOTS
 from src.ai.llm import ask, parse_json_object
+from src.ai.mcp_client.client import call_tool
 from src.ai.usage import Usage
 from src.ai.utils.embeddings import generate_embeddings
 from src.ai.utils.failures import can_retry, failure_words
@@ -155,6 +156,9 @@ class OrchestratorState(TypedDict, total=False):
     # Phase 22: what the DestinationIntelligenceAgent knew about the place (None: nothing — and why)
     local_intelligence: dict | None
     intelligence_error: dict | None
+
+    # Phase 38: the weather tool's days for the trip — OWM's forecast, or the month's typical day (None: none)
+    weather: list[dict] | None
 
     draft_itinerary: dict | None
     builder_error: dict | None
@@ -685,6 +689,42 @@ async def _local_tips(state: OrchestratorState) -> dict:
     return {"local_intelligence": result.get("local_intelligence"), "intelligence_error": result.get("error")}
 
 
+async def _weather(state: OrchestratorState) -> dict:
+    """The trip's weather, day by day (Phase 38) → {"weather": [...] | None}.
+
+    Like the local tips it never fails a plan: without it the plan is made as it was before this phase.
+    The cache warmer asked the same question while the trip was being created (Phase 24), so this is
+    usually a cache hit. A trip whose weather it already has keeps it — a change to the hotel does not
+    change the forecast.
+    """
+    if state.get("weather"):
+        return {}
+    start, end = state.get("start_date"), state.get("end_date")
+    params = {"destination": (state.get("destination") or "").strip(), "date_range": f"{start} to {end}"}
+    async with timed_run("weather") as timer:
+        try:
+            result = await call_tool("get_weather", params)
+        except Exception as exc:  # call_tool answers errors as ToolErrors; anything else is not the plan's undoing
+            result = {"error": str(exc), "code": "TOOL_EXCEPTION"}
+    found = result if isinstance(result, list) else None
+    error = None if found is not None else (result.model_dump() if hasattr(result, "model_dump") else result)
+    days = weather.by_date(found)
+    await _log(
+        state,
+        "weather",
+        input=params,
+        output={
+            "days": len(days),
+            "rainy": weather.rainy_dates(days),
+            "estimated": sum(1 for day in days.values() if day.get("source") == "climate"),
+            "error": error,
+        },
+        duration_ms=timer.duration_ms,
+        status="completed" if found is not None else "failed",
+    )
+    return {"weather": found or None}
+
+
 # ── Nodes ─────────────────────────────────────────────────────────────────
 
 
@@ -883,12 +923,12 @@ async def hotel_activities_node(state: OrchestratorState) -> OrchestratorState:
 
     Phase 22: the DestinationIntelligenceAgent runs beside them. It runs here,
     not beside the flight search, because a trip the budget check stops has no
-    use for local tips (DECISIONS #133).
+    use for local tips (DECISIONS #133). Phase 38: the weather too, for the same reason.
     """
-    hotel_updates, activities_updates, tips = await asyncio.gather(
-        _search_hotels(state), _search_activities(state), _local_tips(state)
+    hotel_updates, activities_updates, tips, forecast = await asyncio.gather(
+        _search_hotels(state), _search_activities(state), _local_tips(state), _weather(state)
     )
-    return {**state, **hotel_updates, **activities_updates, **tips}
+    return {**state, **hotel_updates, **activities_updates, **tips, **forecast}
 
 
 async def escalate_node(state: OrchestratorState) -> OrchestratorState:
@@ -1010,6 +1050,7 @@ async def build_itinerary_node(state: OrchestratorState) -> OrchestratorState:
         turn=state.get("turn", 1),
         on_token=stream.push if stream else None,
         local_intelligence=state.get("local_intelligence"),  # Phase 22: attached to the draft as it is
+        forecast=state.get("weather"),  # Phase 38: the day-by-day weather
     )
     if stream:
         await stream.flush()

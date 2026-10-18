@@ -43,7 +43,7 @@ Phase 25 — what an attraction search finds, and for which interest:
 import logging
 import math
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from itertools import zip_longest
 
 import httpx
@@ -298,7 +298,6 @@ _CLIMATE: dict[str, dict[int, tuple[float, float, str]]] = {
         12: (31, 23, "Sunny"),
     },
 }
-_CLIMATE_DEFAULT: dict[int, tuple[float, float, str]] = {m: (32, 25, "Partly Cloudy") for m in range(1, 13)}
 
 
 class OutsideCoverage(Exception):
@@ -436,7 +435,14 @@ def _otm_kind_to_category(kinds: str) -> str:
 
 
 def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayForecast]:
-    climate = _CLIMATE.get(destination.strip().lower(), _CLIMATE_DEFAULT)
+    """A typical day of the month, for a place the table knows — and nothing for one it does not.
+
+    Phase 38: until now a place the table did not know was "Partly Cloudy", 32° and 25°, all year — Leh
+    in January too. Shown on every day of a plan, a guess like that is worse than no forecast.
+    """
+    climate = _CLIMATE.get(destination.strip().lower())
+    if climate is None:
+        return []
     out = []
     for i in range(num_days):
         day = start + timedelta(days=i)
@@ -447,6 +453,7 @@ def _climate_forecast(destination: str, start: date, num_days: int) -> list[DayF
                 condition=f"{cond} (climate estimate)",
                 temp_high_c=high,
                 temp_low_c=low,
+                source="climate",
             )
         )
     return out
@@ -897,12 +904,17 @@ def _places_near(lat: float, lon: float, kinds: str, limit: int, rate: int) -> l
 
 def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
     """
-    Return weather forecast.
+    Return the trip's weather, one entry a day.
 
     - Within OWM's 5-day window  → real OWM API data
-    - Beyond 5 days (trip planning future dates) → climate estimate
-      labelled "(climate estimate)" so callers know the source
+    - Beyond it → climate estimate, labelled "(climate estimate)" and `source="climate"` so callers know
     Caches for 1 hour.
+
+    Phase 38: the trip's own days, up to 15 (the longest trip) — OWM's forecast for those it reaches, the
+    climate estimate for the rest; until now a trip starting soon got OWM's days counted from today, and
+    nothing past them. A day's condition is its daytime's (08:00–21:00 where the place is): rain for six
+    hours of it is a rainy day; otherwise the condition most of its readings have. A place the climate
+    table does not know gets no estimate at all — not a guess (`_climate_forecast`).
     """
     # --- validation ---
     if not input.destination.strip():
@@ -926,7 +938,8 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
             code="INVALID_DATE_RANGE",
         )
 
-    num_days = max(1, min(7, (end_date - start_date).days + 1))
+    num_days = max(1, min(MAX_WEATHER_DAYS, (end_date - start_date).days + 1))
+    trip_days = [start_date + timedelta(days=i) for i in range(num_days)]
     days_until_start = (start_date - date.today()).days
 
     # --- cache ---
@@ -936,68 +949,78 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
         if cached is not None:
             return [DayForecast(**d) for d in cached]
 
-        # --- beyond OWM window → climate estimate ---
-        if days_until_start > 4:
-            forecasts = _climate_forecast(input.destination, start_date, num_days)
-            set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
-            return forecasts
-
-        # --- real OWM API call ---
-        try:
-            resp = send(
-                "openweather",
-                lambda: httpx.get(
-                    "https://api.openweathermap.org/data/2.5/forecast",
-                    params={
-                        "q": f"{input.destination},IN",
-                        "appid": mcp_settings.OPENWEATHER_API_KEY,
-                        "units": "metric",
-                        "cnt": 40,
-                    },
-                    timeout=10,
-                ),
-            )
-            data = resp.json()
-
-            # Group 3-hour readings by day — accumulate max/min temperature
-            days: dict[str, dict] = {}
-            for item in data.get("list", []):
-                dt = datetime.fromtimestamp(item["dt"])
-                dk = dt.date().isoformat()
-                if dk not in days:
-                    days[dk] = {
-                        "condition": item["weather"][0]["main"],
-                        "t_max": item["main"]["temp_max"],
-                        "t_min": item["main"]["temp_min"],
-                    }
-                else:
-                    days[dk]["t_max"] = max(days[dk]["t_max"], item["main"]["temp_max"])
-                    days[dk]["t_min"] = min(days[dk]["t_min"], item["main"]["temp_min"])
-
-            forecasts = [
-                DayForecast(
-                    date=dk,
-                    condition=info["condition"],
-                    temp_high_c=round(info["t_max"], 1),
-                    temp_low_c=round(info["t_min"], 1),
+        # --- OWM's forecast, for the days it reaches (none, when the trip starts past its window) ---
+        forecast: dict[str, DayForecast] = {}
+        if days_until_start <= 4:
+            try:
+                resp = send(
+                    "openweather",
+                    lambda: httpx.get(
+                        "https://api.openweathermap.org/data/2.5/forecast",
+                        params={
+                            "q": f"{input.destination},IN",
+                            "appid": mcp_settings.OPENWEATHER_API_KEY,
+                            "units": "metric",
+                            "cnt": 40,
+                        },
+                        timeout=10,
+                    ),
                 )
-                for dk, info in list(days.items())[:num_days]
-            ]
-            set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
-            return forecasts
+                forecast = _owm_days(resp.json())
+            except RateLimited as exc:
+                return _rate_limited(exc)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 404:
+                    return ToolError(
+                        error=f"City not found in OpenWeatherMap: {input.destination}",
+                        code="NOT_FOUND",
+                    )
+                return ToolError(error=f"OWM API error: HTTP {exc.response.status_code}", code="OWM_ERROR")
+            except Exception as exc:
+                logger.exception("Unexpected error in get_weather")
+                return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
 
-        except RateLimited as exc:
-            return _rate_limited(exc)
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
-                return ToolError(
-                    error=f"City not found in OpenWeatherMap: {input.destination}",
-                    code="NOT_FOUND",
-                )
-            return ToolError(error=f"OWM API error: HTTP {exc.response.status_code}", code="OWM_ERROR")
-        except Exception as exc:
-            logger.exception("Unexpected error in get_weather")
-            return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+        # --- …and the climate estimate for the days it does not ---
+        climate = {d.date: d for d in _climate_forecast(input.destination, start_date, num_days)}
+        forecasts = [
+            forecast.get(day.isoformat()) or climate[day.isoformat()]
+            for day in trip_days
+            if day.isoformat() in forecast or day.isoformat() in climate
+        ]
+        set_cached_sync(cache_key, [d.model_dump() for d in forecasts], TTL_WEATHER)
+        return forecasts
+
+
+MAX_WEATHER_DAYS = 15  # the longest trip: 14 nights (app/schemas/trip.py)
+DAYTIME_HOURS = range(8, 21)  # the readings a day's plans are made for (OWM's are 3 hours apart)
+WET_CONDITIONS = ("Thunderstorm", "Rain", "Drizzle")  # OWM's `main` values that mean rain — the wettest first
+WET_READINGS = 2  # six hours of daytime rain make a rainy day
+
+
+def _owm_days(data: dict) -> dict[str, DayForecast]:
+    """OWM's 3-hourly forecast as one entry a day, by the place's own clock (its `city.timezone`, in seconds)."""
+    offset = timedelta(seconds=int((data.get("city") or {}).get("timezone") or 0))
+    readings: dict[str, list[tuple[int, str, float, float]]] = {}
+    for item in data.get("list", []):
+        at = datetime.fromtimestamp(item["dt"], tz=timezone.utc) + offset
+        readings.setdefault(at.date().isoformat(), []).append(
+            (at.hour, item["weather"][0]["main"], item["main"]["temp_max"], item["main"]["temp_min"])
+        )
+    days: dict[str, DayForecast] = {}
+    for day, found in readings.items():
+        daytime = [main for hour, main, _, _ in found if hour in DAYTIME_HOURS] or [main for _, main, _, _ in found]
+        wet = [main for main in daytime if main in WET_CONDITIONS]
+        if len(wet) >= WET_READINGS:
+            condition = min(wet, key=WET_CONDITIONS.index)
+        else:
+            condition = max(dict.fromkeys(daytime), key=daytime.count)  # the commonest; the earliest of a tie
+        days[day] = DayForecast(
+            date=day,
+            condition=condition,
+            temp_high_c=round(max(high for _, _, high, _ in found), 1),
+            temp_low_c=round(min(low for _, _, _, low in found), 1),
+        )
+    return days
 
 
 # ── Tool: get_travel_time (Phase 37) ───────────────────────────────────────

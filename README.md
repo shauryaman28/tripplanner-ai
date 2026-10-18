@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 37 / 50 — Advanced Itinerary Features**
+**Status: Phase 38 / 50 — Weather-Aware Itinerary**
 
 ---
 
@@ -94,6 +94,11 @@ a place is usually visited — and how long the way there takes, asked of Google
 tool (`get_travel_time`, cached a day) or estimated from the straight line when it cannot be asked. A stop
 more than 10 km from the last has a travel note; no day runs past 22:00; the first starts after the flight
 lands. In code, after the model: the builder is told only when the first day can begin.
+
+The weather is part of the plan (Phase 38): OpenWeatherMap's forecast for the days it reaches, the month's typical
+day past them — said to be an estimate — and nothing at all for a place there is no climate for, rather than a
+guess. A rainy day gets an indoor place (a museum, a restaurant, a temple): the builder is asked for one, and code
+moves an unused one in when it did not, or says the day has none to give. Every day card has its weather.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -281,6 +286,8 @@ tripplanner-ai/
 │       │                                  checked string by string; a finished plan's words in its language
 │       ├── schedule.py                  ← Phase 37: a day's clock — each stop's start and end, the way there
 │       │                                  (Google's, or an estimate), a travel note past 10 km, 08:00–22:00
+│       ├── weather.py                   ← Phase 38: a condition's kind, a place's setting (indoor or outdoor), the
+│       │                                  rainy-day rule for the builder, the repair, each day's weather
 │       ├── tracing.py                   ← Phase 26: LangSmith on/off from the settings; a run tagged with its trip
 │       │                                  and user; spans for a re-plan, an evaluator retry, a tool call
 │       ├── usage.py                     ← Phase 26: what the models were asked (one recorder, the innermost timer),
@@ -332,9 +339,9 @@ tripplanner-ai/
 │       ├── 007_refresh_tokens.py        ← Phase 35: refresh_tokens (their hashes, their sign-in, when used)
 │       └── 008_preferred_language.py    ← Phase 36: user_preferences.preferred_language
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (1,654 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (1,689 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 104 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 106 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── fixtures/evals/                  ← Phase 33: seven real eval records — what the API served for a scenario
 │   ├── fixtures/phase36/                ← Phase 36: every prompt an English plan sent, and the plan, recorded
@@ -468,9 +475,10 @@ tripplanner-ai/
 | 35 | Security hardening — access tokens for an hour and rotating refresh tokens (an HttpOnly cookie for the site; used twice, the sign-in ends; sign-out ends it on the server); five sign-in attempts a minute per address — on an address a client cannot make up, which the image had let it; a length on every field the API takes and a kind for its text; passwords 8 characters to 72 bytes; security headers on every answer; a LogRedactor on every log line; the OWASP Top 10 item by item; the dependencies audited (Python clean; Next 14's advisories read one by one) ([docs/phase35_build_log.md](docs/phase35_build_log.md)) | ✅ Done on the production-like stack — **the key rotation waits for you**; not on a deployment | 73 unit + 13 integration + 4 browser |
 | 36 | Multi-language support foundation — a request in Hindi, Tamil or Bengali read by its script and `langdetect`, put into English for the searches (which find no airport for "गोवा" and only the general sights for "समुद्र तट"), and planned in the traveller's language: each stop's local name and a sentence on it, the local tips, the PDF; the names a plan goes by stay English. A language chosen in the header plans every trip after it, across sign-ins. English plans: every prompt and the plan recorded before the phase and held to on every commit. Live on real models, every stop described in each of the three; a change to a plan kept its words only once code made sure of it ([docs/phase36_build_log.md](docs/phase36_build_log.md)) | ✅ Done on the production-like stack, real models — romanised Hindi, and Marathi without a word of its own, are read wrong (DECISIONS #331) | 94 unit + 5 integration + 4 browser |
 | 37 | Advanced itinerary features — every stop's start and end in its part of the day, as long as such a place takes; the way there from each stop to the next asked of Google's Routes API through a new tool, cached a day (the Distance Matrix API can no longer be switched on), or estimated from the straight line — measured against OpenStreetMap's router — and said to be; a travel note past 10 km; no day past 22:00; the first day after the flight lands, which the builder is now told. Found: a plan with three stops on a day that ended at the airport at 22:42, and a test that had been asking the real Groq ([docs/phase37_build_log.md](docs/phase37_build_log.md)) | ✅ Done on the production-like stack, real models, travel times estimated — **Google's times wait for your Maps key** | 40 unit + 3 integration + 2 browser |
-| 38–50 | Production & Polish | ⏳ | |
+| 38 | Weather-aware itinerary — the trip's own days from the weather tool (it counted OpenWeatherMap's from today, stopped after them, and read a day by its midnight), the forecast where it reaches and the month's typical day after, said to be one, and no guess for a place with no climate; a rainy day — six hours of daytime rain — gets an indoor place, asked of the model and made sure of by code, or a note to keep the plans flexible; a sunny day is planned as before; an icon, the high and low and a "climate estimate" badge on every day card and in the PDF. Live: rain forecast in Goa for the trip's first day, and the model put a restaurant on it ([docs/phase38_build_log.md](docs/phase38_build_log.md)) | ✅ Done on the production-like stack, real forecast | 35 unit + 2 integration + 2 browser |
+| 39–50 | Production & Polish | ⏳ | |
 
-**Total: 1,662 unit + contract, 104 integration, 70 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,697 unit + contract, 106 integration, 72 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
