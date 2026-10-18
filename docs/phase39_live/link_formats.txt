@@ -1,0 +1,22 @@
+# Which link fills the booking site in — each opened in headless Chromium (Playwright) on 18 October 2026, 22:5x IST,
+# and what the page then showed, read from its inputs and its text. The route DEL → GOI, 20 to 23 November 2026.
+
+## Google Flights
+https://www.google.com/flights?q=DEL+GOI+2026-11-20                          (the roadmap's)
+    "New Delhi to Goa | Google Flights" — Where from? New Delhi, Where to? Goa, Departure Fri, Nov 20,
+    Return Tue, Nov 24 — a day back it made up; 1 traveller
+https://www.google.com/travel/flights?q=Flights to GOI from DEL on 2026-11-20 through 2026-11-23&curr=INR&hl=en
+    New Delhi → Goa, Departure Fri, Nov 20, Return Mon, Nov 23                  ← the form used
+…the same, "… for 2 adults"                     → "Round trip 2 Economy"
+"One way flights to GOI from DEL on 2026-11-20 for 3 adults"  → "One way 3 Economy", Departure Fri, Nov 20, no return
+https://www.google.com/travel/flights?hl=en&curr=INR#flt=DEL.GOI.2026-11-20*GOI.DEL.2026-11-23;c:INR;e:1;px:2;sd:1;t:f
+    "Find Cheap Flights Worldwide…" — no search at all: Where from? Bareilly (where the browser seemed to be)
+
+## Booking.com
+https://www.booking.com/searchresults.html?ss=Goa&checkin=2026-11-20&checkout=2026-11-23&group_adults=2&no_rooms=1&group_children=0&selected_currency=INR
+    with headless Chromium's own user agent: redirected to a bare results page, the search dropped (today's dates,
+    no destination) — Booking.com's check of a browser it takes for a robot (the URL then carries `chal_t=`)
+    with an ordinary Chrome user agent: "Hotels in Goa", Fri 20 Nov — Mon 23 Nov, 2 adults · 0 children · 1 room
+…ss=Taj Fort Aguada Resort & Spa, Goa           → "Search results: Taj Fort Aguada Resort & Spa, Goa", that hotel first
+…ss=Alaya Stays 1 BHK with Balcony & Pool - Veera Marina, Goa (a LiteAPI sandbox name), group_adults=3
+    → that place first; 3 adults · 0 children
