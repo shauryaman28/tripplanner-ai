@@ -513,8 +513,8 @@ def _attach_source_data(draft: dict, flights: list[dict], hotels: list[dict], at
                 slot[group.SUITS] = source.get(group.SUITS)  # Phase 25: None unless this is a group trip
 
         hotel = day.get("hotel")
-        if hotel:  # Phase 39: a link the model wrote is not kept; the search's is
-            hotel["booking_url"] = None
+        # (Phase 39: `booking_url` too — the search's, written over whatever the model put there; the hotel is
+        # always one the search found, the data-scope check above says so)
         if hotel and (source := hotel_by_name.get(hotel["name"])):
             hotel.update({k: source.get(k) for k in ("stars", "rating", "address", "lat", "lng", "booking_url")})
 
