@@ -1,4 +1,4 @@
-# Which link fills the booking site in — each opened in headless Chromium (Playwright) on 18 October 2026, 22:5x IST,
+# Which link fills the booking site in — each opened in headless Chromium (Playwright) on 18 October 2026, after 22:53 IST and before any of the phase's code,
 # and what the page then showed, read from its inputs and its text. The route DEL → GOI, 20 to 23 November 2026.
 
 ## Google Flights
