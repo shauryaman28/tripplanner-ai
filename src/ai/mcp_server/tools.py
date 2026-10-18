@@ -1,8 +1,9 @@
 """
-Phase 3 — all 5 MCP tools wired to real external APIs.
+Phase 3 — all 5 MCP tools wired to real external APIs; Phase 37 — a sixth, get_travel_time.
 
 Providers: Duffel (flights), LiteAPI (hotels), OpenTripMap (attractions),
-OpenWeatherMap (weather), Nominatim / OpenStreetMap (geocoding, no key).
+OpenWeatherMap (weather), Nominatim / OpenStreetMap (geocoding, no key),
+Google Maps Platform's Routes API (travel times).
 
 Rules:
 - Missing API key  → ToolError(code="API_NOT_CONFIGURED")  — server never crashes
@@ -12,6 +13,7 @@ Rules:
     hotels     15 min   search_hotels
     attractions 6 hr    get_attractions
     weather     1 hr    get_weather
+    travel     24 hr    get_travel_time (Phase 37: the time between two places that do not move)
 - estimate_budget is pure logic — no network, no cache needed
 
 Phase 24 — how a request reaches a provider:
@@ -39,6 +41,7 @@ Phase 25 — what an attraction search finds, and for which interest:
 """
 
 import logging
+import math
 import re
 from datetime import date, datetime, timedelta
 from itertools import zip_longest
@@ -60,6 +63,8 @@ from src.ai.mcp_server.models import (
     Hotel,
     HotelSearchInput,
     ToolError,
+    TravelTime,
+    TravelTimeInput,
     WeatherInput,
 )
 from src.ai.mcp_server.outbound import send
@@ -993,6 +998,89 @@ def get_weather(input: WeatherInput) -> list[DayForecast] | ToolError:
         except Exception as exc:
             logger.exception("Unexpected error in get_weather")
             return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+
+
+# ── Tool: get_travel_time (Phase 37) ───────────────────────────────────────
+
+ROUTES_MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
+ROUTES_FIELDS = "originIndex,destinationIndex,duration,distanceMeters,condition,status"
+TTL_TRAVEL = 86_400  # 24 hr
+# Google has no auto-rickshaw: it is asked as a car, as a taxi is (src/ai/mcp_server/models.py)
+_GOOGLE_MODES = {"walk": "WALK", "auto-rickshaw": "DRIVE", "taxi": "DRIVE"}
+
+
+def _waypoint(lat: float, lng: float) -> dict:
+    return {"waypoint": {"location": {"latLng": {"latitude": lat, "longitude": lng}}}}
+
+
+def get_travel_time(input: TravelTimeInput) -> TravelTime | ToolError:
+    """How long one journey takes, by Google's Routes API: a route matrix of one origin and one destination.
+
+    The legacy Distance Matrix API cannot be switched on for a new project since October 2026; the Routes
+    API's route matrix is its successor. No traffic is asked for (`routingPreference` is left at Google's
+    TRAFFIC_UNAWARE): the time between two places that do not move, which is what a day's cache can hold —
+    and the Essentials SKU, 10,000 elements a month free, where traffic would be the Pro one. One journey
+    is one element. The coordinates are rounded to five decimals (about a metre) for the cache key.
+    Caches for 24 hours.
+    """
+    if not mcp_settings.GOOGLE_MAPS_API_KEY:
+        return ToolError(
+            error="Google Maps Routes API not configured. Set GOOGLE_MAPS_API_KEY in .env.",
+            code="API_NOT_CONFIGURED",
+        )
+
+    where = {name: round(value, 5) for name, value in input.model_dump().items() if name != "mode"}
+    cache_key = make_cache_key("travel", {**where, "mode": input.mode})
+    with single_flight(cache_key):
+        cached = get_cached_sync(cache_key)
+        if cached is not None:
+            return TravelTime(**cached)
+
+        try:
+            resp = send(
+                "google_routes",
+                lambda: httpx.post(
+                    ROUTES_MATRIX_URL,
+                    headers={"X-Goog-Api-Key": mcp_settings.GOOGLE_MAPS_API_KEY, "X-Goog-FieldMask": ROUTES_FIELDS},
+                    json={
+                        "origins": [_waypoint(where["origin_lat"], where["origin_lng"])],
+                        "destinations": [_waypoint(where["dest_lat"], where["dest_lng"])],
+                        "travelMode": _GOOGLE_MODES[input.mode],
+                    },
+                    timeout=10,
+                ),
+            )
+            elements = resp.json()
+        except RateLimited as exc:
+            return _rate_limited(exc)
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in (401, 403):
+                return ToolError(
+                    error=f"Google refused the key (HTTP {status}): is the Routes API enabled for its project?",
+                    code="API_NOT_AUTHORIZED",
+                )
+            return ToolError(error=f"Google Routes API error: HTTP {status}", code="PROVIDER_ERROR")
+        except Exception as exc:
+            logger.exception("Unexpected error in get_travel_time")
+            return ToolError(error=f"Unexpected error: {exc}", code="UNKNOWN_ERROR")
+
+        element = elements[0] if isinstance(elements, list) and elements and isinstance(elements[0], dict) else {}
+        if element.get("condition") != "ROUTE_EXISTS":
+            return ToolError(error="Google knows no route between these two places.", code="NO_ROUTE")
+        try:
+            seconds = float(str(element.get("duration") or "0s").removesuffix("s"))
+        except ValueError:
+            return ToolError(
+                error=f"Google sent a duration this cannot read: {element.get('duration')!r}", code="PROVIDER_ERROR"
+            )
+        travel = TravelTime(
+            minutes=max(1, math.ceil(seconds / 60)),
+            km=round((element.get("distanceMeters") or 0) / 1000, 1),
+            mode=input.mode,
+        )
+        set_cached_sync(cache_key, travel.model_dump(), TTL_TRAVEL)
+        return travel
 
 
 # ── Tool: estimate_budget ──────────────────────────────────────────────────

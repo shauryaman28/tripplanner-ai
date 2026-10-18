@@ -128,6 +128,7 @@ services:
       LITEAPI_API_KEY: ${LITEAPI_API_KEY:-}
       OPENTRIPMAP_API_KEY: ${OPENTRIPMAP_API_KEY:-}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
     volumes:
       - certs:/certs:ro  # the stand-in's own certificate authority, and nothing else
     ports:

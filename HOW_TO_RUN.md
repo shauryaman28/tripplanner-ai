@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–36
+# How to Run & Verify — Phases 1–37
 
 ## What changed vs the original codebase?
 
@@ -35,6 +35,7 @@
 | 34 | `core/deep_health.py` (new: Postgres, Redis, the tool server, LangSmith — each asked with a deadline), `routes/admin.py` (`GET /admin/health-deep`; the embedding backlog as one function), `deps.py` (`may_check_health`), `main.py` (the embedding queue counted every 15 s; an `OSError` may be the database away), `db/errors.py` (a name that does not resolve, a network with no route: the database is away), `preflight.py`, `telemetry/metrics.py` (`embedding_queue_depth`, `mcp_cache_window_lookups`), `docker/observability/` (`compose.yml`, `prometheus.yml`, the dashboard), `scripts/observability.py` + `observability_check.py` + `trace_receiver.py`, `.github/workflows/ci.yml` (promtool and amtool) — see `docs/phase34_build_log.md` | `docker/observability/alerts/` (the four rules and promtool's tests), `docker/observability/alertmanager.yml`, `scripts/alert_receiver.py`, `scripts/alert_drill.py`, `docs/runbook.md`, `docs/alerts/` (every drill's record), two unit test files and one integration test file |
 | 35 | `core/headers.py`, `core/ratelimit.py`, `core/sessions.py`, `models/refresh_token.py` + migration 007, `schemas/text.py` (new), `routes/auth.py` (refresh, logout, the limits, a bounded form), `schemas/{trip,auth,user_preferences}.py` + `routes/{trips,admin}.py` + `deps.py` (every field bounded), `core/security.py` (PyJWT), `config.py`, `error_reporting.py` (key shapes), `preflight.py`, `main.py` (the headers, every log record redacted), `telemetry/logs.py` (LogRedactor), `mcp_server/server.py`, two prompts, both Dockerfiles (`FORWARDED_ALLOW_IPS`), the frontend's `api.ts` / `sse.ts` / `AppHeader.tsx` / `next.config.mjs`, `requirements.txt` + `constraints.txt` + `package.json` — see `docs/phase35_build_log.md` | `scripts/security_check.py`, `scripts/secret_audit.py`, `scripts/provider_keys.py` (new), two unit test files, one integration test file, `e2e/session.spec.ts` |
 | 36 | `src/ai/orchestrator/orchestrator.py` (the language node first, the localise node before persist; both in a change's run; the language, a typed destination and the stops' words carried), `src/ai/builder/builder.py` (local names and descriptions on a plan in another language; English untouched), `src/ai/llm.py`, `models/user_preferences.py` + `schemas/user_preferences.py` + `routes/users.py` (`preferred_language`), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `AppHeader.tsx`, `DayCard.tsx`, `LocalTips.tsx`, `ItineraryView.tsx`, `api.ts`, `types.ts`, `requirements.txt` + `constraints.txt` (langdetect) — see `docs/phase36_build_log.md` | `src/ai/language.py`, migration 008, `scripts/language_check.py`, `prompts/itinerary_builder_v10.md` + `translator_v1.md`, `src/frontend/src/lib/language.ts` + `components/PlanLanguageMenu.tsx`, `tests/fixtures/phase36/` (the English record), one unit test file, one integration test file, `e2e/language.spec.ts`, `docs/phase36_live/` |
+| 37 | `src/ai/mcp_server/tools.py` (`get_travel_time`: Google's Routes API, cached a day) + `models.py` + `config.py` (`GOOGLE_MAPS_API_KEY`) + `server.py` + `rate_limiter.py` (3,000 elements a minute), `src/ai/builder/builder.py` (the clock after the checks; the line on when day 1 begins), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `scripts/cache_ttls.py` + `provider_keys.py`, `docker/prodlike` + `docker/loadtest` compose files, `.env.example`, `tests/conftest.py` (no test reaches a real model), the Phase 36 English record (made again, DECISIONS #340) — see `docs/phase37_build_log.md` | `src/ai/schedule.py`, `scripts/schedule_check.py`, `src/frontend/src/lib/schedule.ts`, one unit test file, one integration test file, `e2e/schedule.spec.ts`, `docs/phase37_live/` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -2211,6 +2212,81 @@ the menu still says हिन्दी. Choose "As I write": an English request 
 (`language`, `decided_by`: the preference, the request, the trip), and what was translated; the `localise` row
 how many strings were put into the plan's language and how many stayed English. An English plan has neither row.
 
+## Step 35 — Verify Phase 37: a day's clock, and travel times from Google
+
+Needs the dev containers (Step 1) for the suites; for C and D the production-like stack and your `.env`. Google's
+times need a key of your own (A); everything else works without one, with the travel times estimated.
+
+### A. A Google Maps key (once)
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), make a project (or pick one) and give it a
+   billing account. Google asks for a card even though a plan's journeys stay inside the free allowance:
+   10,000 route-matrix elements a month, then $5 a thousand; a plan asks 6 to 15, and each is cached a day.
+2. Enable the **Routes API** (APIs & Services → Library). Not the Distance Matrix API: since October 2026 a new
+   project cannot enable it.
+3. Make an API key (Credentials), restrict it to the Routes API, and put it in `.env`:
+   `GOOGLE_MAPS_API_KEY=…`. Not the Gemini key, and never in a chat.
+4. `python scripts/provider_keys.py` → `✓ GOOGLE_MAPS_API_KEY    Google Maps  200 in … ms` (one real journey —
+   one element). A 400 or 403 there means the key is wrong or the Routes API is not enabled for its project.
+
+A budget alert on the project (Billing → Budgets & alerts) is worth the minute it takes.
+
+### B. The suites
+
+```bash
+pytest tests/unit/test_phase37_schedule.py -v
+RUN_INTEGRATION=1 pytest tests/integration/test_phase37_schedule_integration.py -v
+cd src/frontend && npx playwright test e2e/schedule.spec.ts
+```
+
+The roadmap's three structure tests are `test_every_stop_of_a_plan_has_its_times`,
+`test_a_stop_more_than_10_km_away_has_a_travel_note` and `test_no_day_is_longer_than_14_hours` (500 days made at
+random). The tool is tested against a stand-in that answers as Google does; the integration test runs it through
+the real tool server, with Redis as its cache.
+
+### C. Fort Aguada to Baga Beach, on Google (the roadmap's Dev B acceptance)
+
+```bash
+python scripts/schedule_check.py --route
+```
+
+The same journey asked twice: the first answer Google's (`[CACHE MISS]`), the second from the cache
+(`[CACHE HIT]`), one request to Google between them, kept for a day. Without a key: `✗ GOOGLE_MAPS_API_KEY is set
+(.env)`, and nothing is asked.
+
+### D. A plan's clock on the production-like stack
+
+```bash
+python scripts/prodlike.py up
+python scripts/schedule_check.py --prodlike
+```
+
+```
+A plan for Goa, 2026-11-27, three days — 8.2 s
+  ✓ a plan was made  — HTTP 200
+     Day 1 (2026-11-27), sleeping at Alaya Stays 1 BHK with Balcony & Pool - Veera Marina
+       morning       —–—      Explore the area
+     Day 2 (2026-11-28), sleeping at Alaya Stays 1 BHK with Balcony & Pool - Veera Marina
+       morning   09:30–11:30  Excavated site in Chandor  ← Taxi · about 1 h 26 min · 67.1 km from Alaya Stays …
+       afternoon 13:00–15:30  Betalbatim Beach  ← Taxi · about 37 min · 26 km from Excavated site in Chandor
+       evening   18:00–20:00  Rachol Fort Gate  ← Taxi · about 25 min · 16.2 km from Betalbatim Beach
+     …
+  ✓ every stop has a start and an end; no day before 08:00 or after 22:00; none overlap
+  ✓ every stop more than 10 km away has a travel note — and no other  — 6 notes, 6 far
+     the ways: estimate
+
+3 passed, 0 failed
+```
+
+That plan's flight (Duffel's sandbox) landed at 22:42: day 1 is "Explore the area" with no times — "You arrive
+late — nothing is planned for today" on the page. With the key in `.env` (and the stack started again, which
+reads it), `the ways:` says `google`, and no journey says "about".
+
+### E. In the browser
+
+Plan a trip: each stop's label has its times ("Morning · 09:05–11:05"); a stop far from the one before has a row
+of its own above it ("Taxi · 46 min · 18.9 km from the airport"); the PDF has both.
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -2268,3 +2344,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **34 (Alerts)** | In `docker/observability/alerts/rules.yml` put the cache alert's floor back as it was first written — `sum by (job, instance) (increase(mcp_cache_lookups_total[5m])) >= 10` — and run promtool (Step 32 A) → `FAILED: … the first few misses after a restart do not pass the floor …`: a backend's first four misses after a restart fire it, on the strength of the last process's lookups — what the quiet drill found (`docs/alerts/first/quiet.json`: pending at 0.21, twenty seconds after a restart). Make the error threshold `) > 0.10` → `FAILED: … an endpoint with more than 5 % of its requests failing fires …`: the endpoint at 10 % is no longer alerted on. `docker stop tripplanner_redis` with a backend running → `GET /admin/health-deep` answers 503 in under a second, `redis: ConnectionError …`, and still asks the other three; `docker start tripplanner_redis` → 200. In `src/backend/app/db/errors.py` make `_unreachable` return only `isinstance(error, OSError) and error.errno in _NO_ROUTE` → `pytest tests/unit/test_phase34_health.py -k resolve` fails; on the stack that is the app the first drill ran on, where every request with the pooler stopped was a 500 (`docs/alerts/first/errors.json`) — and the alert fired all the same, which is why it was the record, not the verdict, that showed it. Why: an alert is only as good as the condition it was proved against and the message somebody reads at night. |
 | **35 (Security)** | In `src/backend/Dockerfile` put back `--forwarded-allow-ips '*'` → `pytest tests/unit/test_phase35_security.py -k believes` fails: a proxy on a private address that appended the real client, and the client is taken to be the address the client wrote itself (`6.6.6.6`) — the sign-in limit a header away, which is what the image did until this phase. Start the stack without `FORWARDED_ALLOW_IPS` and run `python scripts/security_check.py --prodlike` → `✗ an address this machine makes up is not believed … [401, 401, 401] — this machine is a trusted proxy for this backend`: from where a platform's proxy stands, it would be (Step 33 A). In `app/core/sessions.py` make the reuse check `if False:` → `RUN_INTEGRATION=1 pytest tests/integration/test_phase35_auth_integration.py -k stolen` fails: a token used twice no longer ends the sign-in. In `app/schemas/text.py` set `PASSWORD_MAX_BYTES = 10_000` → `-k bcrypt` fails: a 73-byte password is taken, and bcrypt would check it by its first 72. `curl -sI localhost:8200/no-such-route` on the stack → the seven headers, a 404 included. Why: a protection that nothing can show working is one that nobody would notice was gone. |
 | **36 (Languages)** | In `src/ai/language.py` make `if script == "LATIN":` `if False:` → `pytest tests/unit/test_phase36_language.py -k latin` fails six times: "5 days in Goa, budget 50k" is read — as Afrikaans — and an English request would be sent to be translated. In `src/ai/builder/builder.py` ask every plan for Hindi (`_language_block(trip_meta.get('language') or 'hi')`) → `-k zero_change` fails: an English plan's prompt is no longer the one recorded before the phase. In `src/ai/orchestrator/orchestrator.py` make the typed-destination check in `_sync_trip` `if False:` → `RUN_INTEGRATION=1 pytest tests/integration/test_pipeline_integration.py -k devanagari` fails: a trip typed "गोवा" exports as `trip-goa-…pdf` — the run's translation written back over the traveller's own name. `python scripts/language_check.py --prodlike` → 11 passed. Why: the three ways this phase could hurt a traveller who never asked for it — an English plan changed, an English request sent to a model, a name they typed taken from them. |
+| **37 (Clock)** | In `src/ai/schedule.py` make `if way and way[2] > FAR_KM:` `if False:` → `pytest tests/unit/test_phase37_schedule.py -k travel_note` fails: a stop 17 km from the last has no travel note. In `src/ai/mcp_server/tools.py` replace `set_cached_sync(cache_key, travel.model_dump(), TTL_TRAVEL)` with `pass` → `-k cache_hit` fails: the second ask goes to Google again, and no `[CACHE HIT]` is logged. In `src/ai/schedule.py` make a stop's end `max(start + usual, start + MIN_VISIT)` (no `DAY_END`, no window) → `-k 14_hours` fails on one of the 500 random days: a stop ends after 22:00. `python scripts/schedule_check.py --prodlike` → 3 passed. Why: the three promises of the phase — a far stop says how to get there, Google is asked once a day for a journey, and no day is longer than 14 hours. |

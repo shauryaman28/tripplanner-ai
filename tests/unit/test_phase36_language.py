@@ -514,7 +514,11 @@ async def test_the_localise_node_logs_what_it_translated():
 
 async def test_english_sees_zero_change():
     """Every prompt an English plan sends to every model, the plan it makes, and the keys of its state:
-    what they were on the commit before Phase 36 (tests/fixtures/phase36/capture_english.py)."""
+    what they were recorded as (tests/fixtures/phase36/capture_english.py).
+
+    Recorded before Phase 36, which held them; recorded again in Phase 37, on purpose and decided first
+    (DECISIONS #340): the builder's prompt has one line more — when the first day can begin — and every stop
+    of the plan has its clock. A change to either since is a change, and goes in DECISIONS first."""
     recorded = json.loads(capture_english.OUT.read_text())
     now = json.loads(json.dumps(await capture_english.capture(), ensure_ascii=False, sort_keys=True))
     for trip in recorded:

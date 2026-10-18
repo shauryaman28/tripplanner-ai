@@ -76,6 +76,7 @@ from app.pdf.plan import (
     stay_facts,
     stay_totals,
     stop_facts,
+    stop_times,
 )
 
 # A registered TrueType face is one object shared by every document, and saving a document reads
@@ -270,10 +271,14 @@ def _stop_row(day: int, stop: Stop) -> list:
         words = [
             _p("All day", EYEBROW),
             _p("Free time", ROW_TITLE_QUIET),
-            # Phase 36: on a plan in another language, what the page says of a free day — in it
+            # Phase 36: on a plan in another language, what the page says of a free day — in it; Phase 37: a late
+            # landing's day says that instead
             _p(
                 scripts.shorten(
-                    stop.description or "Nothing booked — explore the area at your own pace.", DETAIL_LIMIT
+                    "You arrive late — nothing is planned for today."
+                    if stop.no_time_left
+                    else stop.description or "Nothing booked — explore the area at your own pace.",
+                    DETAIL_LIMIT,
                 ),
                 META,
             ),
@@ -281,7 +286,9 @@ def _stop_row(day: int, stop: Stop) -> list:
         return ["", words, ""]
 
     mark = PinMark(theme.day_style(day), label=str(stop.order)) if stop.order else PinMark(theme.UNMAPPED_STYLE)
-    body = [_p(SLOT_LABELS[stop.slot], EYEBROW), _p(scripts.shorten(stop.name, NAME_LIMIT), ROW_TITLE)]
+    times = stop_times(stop)  # Phase 37: "MORNING · 09:05–11:05"
+    label = f"{SLOT_LABELS[stop.slot]} · {times}" if times else SLOT_LABELS[stop.slot]
+    body = [_p(label, EYEBROW), _p(scripts.shorten(stop.name, NAME_LIMIT), ROW_TITLE)]
     # Phase 36: on a plan in Hindi, Tamil or Bengali, the place's name and a sentence on it, in that language
     if stop.local_name:
         body.append(_p(scripts.shorten(stop.local_name, NAME_LIMIT), ROW_TITLE_QUIET))
@@ -289,6 +296,12 @@ def _stop_row(day: int, stop: Stop) -> list:
         body.append(_p(scripts.shorten(stop.description, DETAIL_LIMIT), BODY))
     if facts := stop_facts(stop):
         body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
+    if stop.travel:  # Phase 37: the way here, when it was past 10 km
+        body.append(_p(scripts.shorten(stop.travel, DETAIL_LIMIT), META))
+    if stop.short_visit:
+        body.append(_p("A short visit — getting here takes much of this part of the day.", META))
+    if stop.no_time_left:
+        body.append(_p("No time left for this today: the day is over by the time you can be here.", META))
     return [mark, body, _amount(stop.cost, "entry fees") if stop.cost > 0 else ""]
 
 

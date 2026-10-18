@@ -31,9 +31,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(ROOT)]
 
-# The spec, in seconds: roadmap Phase 3 ("flights 5 min, hotels 15 min, attractions 6 hr, weather 1 hr").
+# The spec, in seconds: roadmap Phase 3 ("flights 5 min, hotels 15 min, attractions 6 hr, weather 1 hr"), and
+# Phase 37 ("cache results for 24h" — travel times).
 # Written out here, not imported from the tools: this is what the tools' constants are checked against.
-SPEC = {"flights": 300, "hotels": 900, "attractions": 21_600, "weather": 3_600}
+SPEC = {"flights": 300, "hotels": 900, "attractions": 21_600, "weather": 3_600, "travel": 86_400}
 # Kept by the tools as well, and not in the spec: where a place is. Places do not move.
 BEYOND_SPEC = {"geocode": 2_592_000}
 
@@ -96,6 +97,7 @@ def main() -> int:
         "hotels": tools.TTL_HOTELS,
         "attractions": tools.TTL_ATTRACTIONS,
         "weather": tools.TTL_WEATHER,
+        "travel": tools.TTL_TRAVEL,
     }
     drift = {name: (in_code[name], seconds) for name, seconds in SPEC.items() if in_code[name] != seconds}
     for name, (code, spec) in drift.items():

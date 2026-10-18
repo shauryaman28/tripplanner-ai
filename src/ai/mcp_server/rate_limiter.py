@@ -14,6 +14,8 @@ documentation (docs/phase24_build_log.md has the probes):
     opentripmap   10 a second    `x-ratelimit-limit: 10`
     openweather   60 a minute    the free plan's documented limit (no headers)
     nominatim      1 a second    the usage policy of the public server
+    google_routes  3,000 a minute  the Routes API's limit for a route matrix — 3,000 elements a minute;
+                                 one journey asked is one element (Phase 37)
 
 The window slides: no stretch of `period` seconds, wherever it starts, holds
 more than `calls` requests. That is never looser than a provider that counts
@@ -61,6 +63,7 @@ LIMITS: dict[str, Limit] = {
     "opentripmap": Limit(10, 1),
     "openweather": Limit(60, 60),
     "nominatim": Limit(1, 1),
+    "google_routes": Limit(3000, 60),
 }
 
 

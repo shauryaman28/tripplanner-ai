@@ -27,6 +27,9 @@ Phase 36: a plan in Hindi, Tamil or Bengali (trip_meta["language"]). The model a
           each stop's description and local name in that language; its `activity` stays the
           English name every check goes by. A plan in English is asked for, checked and saved
           exactly as before; see prompts/itinerary_builder_v10.md.
+Phase 37: the checked draft is given its clock (src/ai/schedule.py) — each stop's start and end, the way
+          there from the travel-time tool (Google's Routes API) or an estimate, a travel note past 10 km.
+          In code, after the model: the prompt is unchanged.
 """
 
 from __future__ import annotations
@@ -42,9 +45,10 @@ from typing import ClassVar
 from pydantic import BaseModel, ValidationError, field_validator, model_serializer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai import group, language, pricing
+from src.ai import group, language, pricing, schedule
 from src.ai.itinerary import FREE_TIME, SLOTS, LocalIntelligence, PerPersonBreakdown
 from src.ai.llm import GROQ_MODEL, content_to_text, strip_fences
+from src.ai.mcp_client.client import call_tool
 from src.ai.utils.run_logger import log_agent_run, timed_run
 
 logger = logging.getLogger(__name__)
@@ -90,8 +94,16 @@ class ActivitySlot(_OnlyWhenSet):
     # Phase 36, a plan in Hindi, Tamil or Bengali: the place's name and a sentence on it, in that language
     local_name: str | None = None
     description: str | None = None
+    # Phase 37 — set by code (src/ai/schedule.py), never by the model: when the stop starts and ends ("HH:MM"),
+    # how long the way there takes, and — past 10 km — a travel note; a stop there was too little time for
+    start_time: str | None = None
+    end_time: str | None = None
+    travel_from_previous_minutes: int | None = None
+    travel: dict | None = None
+    short_visit: bool | None = None
+    no_time_left: bool | None = None
 
-    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("local_name", "description")
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("local_name", "description", "travel", "short_visit", "no_time_left")
     _cost = field_validator("cost", mode="before")(_none_is_zero)
 
 
@@ -294,6 +306,28 @@ def _days_line(start: str | None, end: str | None) -> str:
     )
 
 
+def _landing_line(start: str | None, flights: list[dict]) -> str:
+    """Phase 37 — when the first day can begin: the plan's flight lands on it ('' when it lands before 07:00).
+
+    The model chose stops for a day that ended at the airport: told nothing of the flight, it filled day 1
+    as it fills every day (DECISIONS #340). The clock still marks what does not fit (src/ai/schedule.py).
+    """
+    landed, _ = schedule.landing(_cheapest_flight(flights), str(start))
+    if landed is None or landed + schedule.LANDING_MINUTES <= schedule.DAY_START:
+        return ""
+    free = landed + schedule.LANDING_MINUTES
+    if free > schedule.DAY_END - schedule.MIN_VISIT:
+        return (
+            f"The flight lands at {schedule.hhmm(landed)} on {start}, too late for anything that day: day 1 gets "
+            'only the one "Explore the area" slot.\n'
+        )
+    return (
+        f"The flight lands at {schedule.hhmm(landed)} on {start}: the traveller is free from about "
+        f"{schedule.hhmm(free)}. On day 1 use only the parts of the day that end after that (morning 08:00–12:00, "
+        "afternoon 13:00–17:00, evening 18:00–22:00), and set the others to null.\n"
+    )
+
+
 def _build_user_prompt(
     trip_meta: dict,
     flights: list[dict],
@@ -304,7 +338,8 @@ def _build_user_prompt(
         f"Trip: {trip_meta.get('destination')} "
         f"from {trip_meta.get('start_date')} to {trip_meta.get('end_date')}, "
         f"{trip_meta.get('group_size', 1)} traveller(s).\n"
-        f"{_days_line(trip_meta.get('start_date'), trip_meta.get('end_date'))}\n"
+        f"{_days_line(trip_meta.get('start_date'), trip_meta.get('end_date'))}"
+        f"{_landing_line(trip_meta.get('start_date'), flights)}\n"
         f"Available flights (JSON): {json.dumps(flights)}\n\n"
         f"Available hotels (JSON): {json.dumps(hotels)}\n\n"
         f"Available attractions (JSON): {json.dumps(_for_prompt(attractions, trip_meta.get('group_members')))}\n\n"
@@ -554,6 +589,13 @@ def _add_group_and_shares(draft: ItineraryDraft, trip_meta: dict, flights: list[
         draft.group = group.summary(plan, attractions, members, trip_meta.get("group_searches"))
 
 
+async def _ask_travel_time(params: dict) -> dict | None:
+    """The travel-time tool's answer for one journey (Phase 37), or None when it has none — no key, a provider
+    down, no route: the schedule then estimates it."""
+    answer = await call_tool("get_travel_time", params)
+    return answer if isinstance(answer, dict) and isinstance(answer.get("minutes"), int) else None
+
+
 def _checked_intelligence(local_intelligence: dict | None) -> LocalIntelligence | None:
     """The agent's output as the draft holds it. Anything that is not its shape is left out, not fatal."""
     if not local_intelligence:
@@ -592,12 +634,15 @@ class ItineraryBuilder:
                 _add_group_and_shares(result, trip_meta, flights, attractions)
                 if trip_meta.get("language") in language.SUPPORTED:  # Phase 36
                     result.language = trip_meta["language"]
+                plan = result.model_dump()  # Phase 37: the clock, once the draft has passed every check
+                timing = await schedule.add_times(plan, _ask_travel_time)
+                result = ItineraryDraft(**plan)
 
         if isinstance(result, BuilderError):
             output = {"draft": None, "error": result.model_dump()}
             status = "failed"
         else:
-            output = {"draft": result.model_dump(), "error": None}
+            output = {"draft": result.model_dump(), "error": None, "travel": timing}
             status = "completed"
 
         if db is not None and trip_id is not None:

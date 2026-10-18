@@ -38,6 +38,7 @@ from src.ai import tracing
 from src.ai.agents import destination_intelligence, preference_extractor
 from src.ai.agents.refinement_classifier import RefinementClassification
 from src.ai.builder import builder as builder_module
+from src.ai.mcp_server.models import ToolError
 from src.ai.orchestrator import orchestrator as orchestrator_module
 from src.ai.trace_tree import SERVER_INFO, Runs, Span
 
@@ -397,6 +398,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         "hotel": AsyncMock(side_effect=hotel_tool or (lambda *_: HOTELS)),
         "activities": AsyncMock(return_value=ATTRACTIONS),
         "warm": AsyncMock(return_value=[]),
+        "travel": AsyncMock(return_value=ToolError(error="no key in the stubs", code="API_NOT_CONFIGURED")),
     }
     with (
         patch("src.ai.agents.flight_agent.call_tool", tools["flight"]),
@@ -406,6 +408,7 @@ def network_stubs(flight_tool, hotel_tool=None):
         patch("src.ai.orchestrator.orchestrator._extract_intent", AsyncMock(return_value={})),
         patch("src.ai.builder.builder._call_llm", fake_builder_llm),
         patch("src.ai.language._call_model", fake_translate),  # Phase 36
+        patch("src.ai.builder.builder.call_tool", tools["travel"]),  # Phase 37: no key — every time estimated
         patch("src.ai.agents.destination_intelligence._call_llm", fake_intelligence_llm),
         patch("src.ai.agents.preference_extractor._call_llm", AsyncMock(side_effect=RuntimeError("no key"))),
         patch("src.ai.embeddings.embedder._call_embed", AsyncMock(side_effect=fake_embed)),
@@ -434,7 +437,7 @@ def provider_answer(status: int, body=None, headers: dict | None = None, url: st
 
 
 class FakeProviders:
-    """Stand-ins for httpx.get / httpx.post that answer as the five providers do. Safe to call from threads.
+    """Stand-ins for httpx.get / httpx.post that answer as the six providers do. Safe to call from threads.
 
     requests      the provider of every request received, in order
     answers       (provider, status) of every answer given
@@ -448,6 +451,9 @@ class FakeProviders:
                   it asks for that are at least as popular as it asks, nearest — first listed — first,
                   and a kind the provider does not know is answered 400, as the real one answers
     searches      the (kinds, rate, limit) of every attraction search received
+    routes        Phase 37 — the body of every route matrix asked of Google; it answers with a time and a
+                  distance worked out from the coordinates (ROUTE_SPEED_KMH, 1.3 times the straight line),
+                  or, with `route_condition` set, with that condition and no route
     """
 
     HOSTS = {
@@ -456,7 +462,9 @@ class FakeProviders:
         "api.opentripmap.com": "opentripmap",
         "api.openweathermap.org": "openweather",
         "nominatim.openstreetmap.org": "nominatim",
+        "routes.googleapis.com": "google_routes",
     }
+    ROUTE_SPEED_KMH = {"DRIVE": 30.0, "WALK": 5.0}
 
     def __init__(self) -> None:
         self.requests: list[str] = []
@@ -468,14 +476,21 @@ class FakeProviders:
         self.hotels: list[tuple[str, float]] = [("Goa Grand", 18_000.0), ("Sea Breeze", 26_000.0)]  # for the stay
         self.catalogue: list[tuple[str, str, int]] | None = None
         self.searches: list[tuple[str, int, int]] = []
+        self.routes: list[dict] = []
+        self.route_headers: list[dict] = []
+        self.route_condition = "ROUTE_EXISTS"
         self._arrivals: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
     def get(self, url: str, **request) -> httpx.Response:
         return self._answer(url, request.get("params") or {})
 
-    def post(self, url: str, **_request) -> httpx.Response:
-        return self._answer(url, {})
+    def post(self, url: str, **request) -> httpx.Response:
+        if httpx.URL(url).host == "routes.googleapis.com":
+            with self._lock:
+                self.routes.append(request.get("json") or {})
+                self.route_headers.append(request.get("headers") or {})
+        return self._answer(url, request.get("json") or {})
 
     def counts(self) -> Counter:
         """How many requests each provider has received."""
@@ -509,6 +524,8 @@ class FakeProviders:
             self.on_request(provider)
         if status == 200 and provider == "opentripmap" and self.catalogue is not None:
             return self._places(url, params)
+        if status == 200 and provider == "google_routes":
+            return provider_answer(200, self._route(params), url=url)
         return provider_answer(status, self._body(provider) if status == 200 else None, url=url)
 
     def _places(self, url: str, params: dict) -> httpx.Response:
@@ -525,6 +542,21 @@ class FakeProviders:
             if asked & set(kinds.split(",")) and popularity % 4 >= rate
         ]
         return provider_answer(200, found[:limit], url=url)
+
+    def _route(self, body: dict) -> list[dict]:
+        """A route matrix of one element, as the Routes API answers it."""
+        from src.ai.schedule import straight_km
+
+        def point(side: str) -> tuple[float, float]:
+            at = body[side][0]["waypoint"]["location"]["latLng"]
+            return at["latitude"], at["longitude"]
+
+        element = {"originIndex": 0, "destinationIndex": 0, "condition": self.route_condition}
+        if self.route_condition == "ROUTE_EXISTS":
+            km = straight_km(point("origins"), point("destinations")) * 1.3
+            seconds = round(km / self.ROUTE_SPEED_KMH[body["travelMode"]] * 3600)
+            element.update(duration=f"{seconds}s", distanceMeters=round(km * 1000), status={})
+        return [element]
 
     def _body(self, provider: str):
         if provider == "duffel":
@@ -569,7 +601,13 @@ def memory_cache():
 @contextmanager
 def providers_faked(providers: FakeProviders):
     """Every provider the tools reach is `providers`, and every API key is set."""
-    keys = MagicMock(DUFFEL_ACCESS_TOKEN="t", LITEAPI_API_KEY="k", OPENTRIPMAP_API_KEY="k", OPENWEATHER_API_KEY="k")
+    keys = MagicMock(
+        DUFFEL_ACCESS_TOKEN="t",
+        LITEAPI_API_KEY="k",
+        OPENTRIPMAP_API_KEY="k",
+        OPENWEATHER_API_KEY="k",
+        GOOGLE_MAPS_API_KEY="g",
+    )
     with (
         patch("src.ai.mcp_server.tools.httpx.get", providers.get),
         patch("src.ai.mcp_server.tools.httpx.post", providers.post),

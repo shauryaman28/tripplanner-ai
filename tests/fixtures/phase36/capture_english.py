@@ -5,6 +5,9 @@
 Run on the commit before Phase 36 (55e1b2a): the file it wrote is the record that
 tests/unit/test_phase36_language.py holds every later English plan to. Running it again
 afterwards must change nothing in the file — that is the claim "English sees zero change".
+
+Run again in Phase 37, on purpose (DECISIONS #340): the builder's prompt has one line more — when
+the first day can begin — and every stop its clock. Nothing else in the file changed.
 """
 
 from __future__ import annotations

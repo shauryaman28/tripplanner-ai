@@ -1,0 +1,14 @@
+# Ten Goa journeys: OpenStreetMap's public router (OSRM, car profile, no traffic) against schedule.estimate as it was then
+# (ROAD_FACTOR 1.35, town speeds). 18 October 2026, 01:14 IST. Afterwards: ROAD_FACTOR 1.6 (the median here), 50 km/h.
+{"from": "Fort Aguada", "to": "Baga Beach", "straight_km": 7.4, "osrm_road_km": 10.4, "osrm_car_min": 13, "estimate_km": 9.9, "estimate_min": 33, "mode": "auto-rickshaw"}
+{"from": "Calangute", "to": "Anjuna", "straight_km": 3.6, "osrm_road_km": 9.0, "osrm_car_min": 13, "estimate_km": 4.9, "estimate_min": 19, "mode": "auto-rickshaw"}
+{"from": "Panaji", "to": "Dona Paula", "straight_km": 4.7, "osrm_road_km": 6.9, "osrm_car_min": 8, "estimate_km": 6.3, "estimate_min": 23, "mode": "auto-rickshaw"}
+{"from": "Baga Beach", "to": "Basilica of Bom Jesus", "straight_km": 18.2, "osrm_road_km": 24.7, "osrm_car_min": 29, "estimate_km": 24.5, "estimate_min": 58, "mode": "taxi"}
+{"from": "Goa airport (GOI)", "to": "Fort Aguada", "straight_km": 13.9, "osrm_road_km": 44.0, "osrm_car_min": 49, "estimate_km": 18.7, "estimate_min": 46, "mode": "taxi"}
+{"from": "Panaji", "to": "Basilica of Bom Jesus", "straight_km": 9.0, "osrm_road_km": 12.1, "osrm_car_min": 14, "estimate_km": 12.2, "estimate_min": 39, "mode": "auto-rickshaw"}
+{"from": "Goa airport (GOI)", "to": "Colva", "straight_km": 14.9, "osrm_road_km": 33.6, "osrm_car_min": 39, "estimate_km": 20.1, "estimate_min": 49, "mode": "taxi"}
+{"from": "Colva", "to": "Palolem", "straight_km": 31.9, "osrm_road_km": 41.7, "osrm_car_min": 43, "estimate_km": 43.0, "estimate_min": 98, "mode": "taxi"}
+{"from": "Anjuna", "to": "Panaji", "straight_km": 13.1, "osrm_road_km": 22.7, "osrm_car_min": 28, "estimate_km": 17.7, "estimate_min": 43, "mode": "taxi"}
+{"from": "Goa airport (GOI)", "to": "Calangute", "straight_km": 19.9, "osrm_road_km": 43.3, "osrm_car_min": 48, "estimate_km": 26.8, "estimate_min": 63, "mode": "taxi"}
+road/straight: mean 1.87, min 1.31, max 3.17
+osrm car speed km/h: [48.0, 41.5, 51.8, 51.1, 53.9, 51.9, 51.7, 58.2, 48.6, 54.1]

@@ -1,12 +1,13 @@
 "use client";
 
-import { BedDouble, Footprints, Landmark, Moon, PlaneLanding, Sun, Sunrise, Users, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { BedDouble, CarTaxiFront, Footprints, Landmark, Moon, PlaneLanding, Sun, Sunrise, Users, type LucideIcon } from "lucide-react";
+import { Fragment, type ReactNode } from "react";
 
 import { flightPart, stayPart, stopPart, type PlanSection } from "@/lib/changes";
 import { formatClock, formatDuration, formatINR, formatWeekday, namesInWords } from "@/lib/format";
 import { HOTEL_STYLE, SLOT_LABELS, dayStops, dayStyle, hotelPinId, type DayStop, type PinStyle, type SlotName } from "@/lib/map";
 import { categoryMeta, describeRating } from "@/lib/places";
+import { stopTimes, travelWords } from "@/lib/schedule";
 import type { ActivitySlot, DaySchedule } from "@/lib/types";
 import { Pin, UpdatedTag, UpdatingTag, partClass } from "./ui";
 
@@ -136,7 +137,10 @@ function ActivityRow({
         part={stopPart(day, slot)}
         updating={updating}
       >
-        {language && activity.description ? (
+        {activity.no_time_left ? (
+          // Phase 37: the flight lands too late for anything that day
+          <p className="mt-0.5 text-xs text-ink-500">You arrive late — nothing is planned for today.</p>
+        ) : language && activity.description ? (
           <p lang={language} data-local-text className="mt-0.5 text-sm text-ink-600">
             {activity.description}
           </p>
@@ -149,12 +153,13 @@ function ActivityRow({
 
   const category = categoryMeta(activity.category);
   const rating = describeRating(activity.rating);
+  const times = stopTimes(activity); // Phase 37
 
   return (
     <Row
       icon={SLOT_ICONS[slot]}
       tone="bg-ink-100 text-ink-600"
-      eyebrow={SLOT_LABELS[slot]}
+      eyebrow={times ? `${SLOT_LABELS[slot]} · ${times}` : SLOT_LABELS[slot]}
       title={activity.activity}
       part={stopPart(day, slot)}
       updating={updating}
@@ -166,6 +171,12 @@ function ActivityRow({
       }
     >
       <InTheirLanguage activity={activity} language={language} />
+      {activity.short_visit && (
+        <p className="mt-1 text-xs font-medium text-warn-ink">A short visit — getting here takes much of this part of the day.</p>
+      )}
+      {activity.no_time_left && (
+        <p className="mt-1 text-xs font-medium text-warn-ink">No time left for this today: the day is over by the time you can be here.</p>
+      )}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-600">
         {category && (
           <span className="flex items-center gap-1">
@@ -262,15 +273,25 @@ export default function DayCard({ day, onShowOnMap, updating = null, changed = N
           )}
 
           {stops.map((stop) => (
-            <ActivityRow
-              key={stop.id}
-              day={day.day}
-              stop={stop}
-              onShowOnMap={onShowOnMap}
-              updating={updating === "activities"}
-              changed={changed.has(stopPart(day.day, stop.slot))}
-              language={language}
-            />
+            <Fragment key={stop.id}>
+              {/* Phase 37: the way to a stop more than 10 km from where the traveller was */}
+              {stop.activity.travel && (
+                <li data-travel={stop.id} className="flex items-center gap-3.5 py-2 pl-[3px] text-xs text-ink-600">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-ink-50 text-ink-500">
+                    {stop.activity.travel.mode === "walk" ? <Footprints className="h-3.5 w-3.5" aria-hidden /> : <CarTaxiFront className="h-3.5 w-3.5" aria-hidden />}
+                  </span>
+                  <span>{travelWords(stop.activity.travel)}</span>
+                </li>
+              )}
+              <ActivityRow
+                day={day.day}
+                stop={stop}
+                onShowOnMap={onShowOnMap}
+                updating={updating === "activities"}
+                changed={changed.has(stopPart(day.day, stop.slot))}
+                language={language}
+              />
+            </Fragment>
           ))}
 
           {hotel && (
