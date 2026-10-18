@@ -111,7 +111,7 @@ class ActivitySlot(_OnlyWhenSet):
     _cost = field_validator("cost", mode="before")(_none_is_zero)
 
 
-class HotelSlot(BaseModel):
+class HotelSlot(_OnlyWhenSet):
     name: str
     cost_per_night: float = 0.0
     stars: int | None = None
@@ -121,6 +121,7 @@ class HotelSlot(BaseModel):
     lng: float | None = None
     booking_url: str | None = None  # Phase 39 — copied from the search, never the model's
 
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("booking_url",)
     _cost = field_validator("cost_per_night", mode="before")(_none_is_zero)
 
 

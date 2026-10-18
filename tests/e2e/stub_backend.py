@@ -28,6 +28,8 @@ drive one situation:
     Gokarna                                      no local tips with the plan; they come with the first change to it
     Kodaikanal                                   day 2 rainy, day 3 partly cloudy, the rest sunny; days 6 and on a
                                                  climate estimate (Phase 38 — tests/fakes.py, fake_weather)
+    Tirthan                                      the flight and the hotel have no booking link (Phase 39); everywhere
+                                                 else each has the one the real tools make, from what was searched
     Shimla, Manali                               every search is down; they answer when the trip is retried
     anywhere else                                everything is found; a second hotel search finds a different hotel
 
@@ -69,6 +71,7 @@ if __name__ == "__main__":
     empty_all_tables()
     fakes.stream_pause = STREAM_PAUSE
 
+    from src.ai import booking
     from src.ai.mcp_server.models import ToolError
 
     HOTEL_DOWN = {"Hampi", "Badami"}
@@ -131,8 +134,40 @@ if __name__ == "__main__":
             raise RuntimeError("Error code: 503 - the model is not answering")
         return await fakes.fake_intelligence_llm(system, user_prompt)
 
+    NO_LINKS = {"Tirthan"}
+
+    def with_flight_links(tool):
+        """Each flight its Google Flights link, as the real tool makes it (src/ai/booking.py) — Phase 39."""
+
+        def search(name: str, params: dict):
+            found = tool(name, params)
+            if isinstance(found, list) and params.get("destination") not in NO_LINKS:
+                found = [
+                    f | {"booking_url": booking.flight_link(f["origin"]["code"], f["destination"]["code"], params.get("date"),
+                                                            params.get("return_date"), params.get("passengers", 1))}
+                    for f in found
+                ]  # fmt: skip
+            return found
+
+        return search
+
+    def with_hotel_links(tool):
+        """Each hotel its Booking.com link, as the real tool makes it — Phase 39."""
+
+        def search(name: str, params: dict):
+            found = tool(name, params)
+            if isinstance(found, list) and params.get("destination") not in NO_LINKS:
+                found = [
+                    h | {"booking_url": booking.hotel_link(h["name"], params["destination"], params.get("check_in"),
+                                                           params.get("check_out"), params.get("guests", 1))}
+                    for h in found
+                ]  # fmt: skip
+            return found
+
+        return search
+
     with (
-        network_stubs(flight_tool=flight_tool, hotel_tool=hotel_tool) as tools,
+        network_stubs(flight_tool=with_flight_links(flight_tool), hotel_tool=with_hotel_links(hotel_tool)) as tools,
         patch("src.ai.agents.destination_intelligence._call_llm", tips_model),
     ):
         tools["activities"].side_effect = activities_tool
