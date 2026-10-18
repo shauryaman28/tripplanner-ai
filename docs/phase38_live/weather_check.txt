@@ -1,0 +1,34 @@
+# python scripts/weather_check.py --prodlike — 18 October 2026, 13:48:58 IST: Goa, 19 to 25 October, on the
+# production-like stack: real Gemini and Groq, OpenWeatherMap's forecast, Duffel's and LiteAPI's sandboxes.
+http://localhost:8200
+A plan for Goa, 2026-10-19 to 2026-10-25 — 30.7 s
+  ✓ a plan was made  — HTTP 200
+     Day 1 2026-10-19  Rain · 32° / 23°
+         indoor  Sugandha
+     Day 2 2026-10-20  Sunny · 34° / 23°
+         outdoor Excavated site in Chandor
+         indoor  Ashvek Vintage world- Car Museum
+     Day 3 2026-10-21  Partly cloudy · 36° / 23°
+         outdoor Betalbatim Beach
+         indoor  Bollywood Cafe Bar & Restaurant
+     Day 4 2026-10-22  Partly cloudy · 35° / 24°
+         outdoor Bondla Wildlife Sanctuary
+         indoor  Big Foot Cross Museum
+     Day 5 2026-10-23  Partly cloudy · 35° / 24°
+         outdoor Rachol Fort Gate
+         outdoor Arossim Beach
+     Day 6 2026-10-24  Partly cloudy · 32° / 26° (climate estimate)
+         outdoor Cavelossim Beach
+     Day 7 2026-10-25  Partly cloudy · 32° / 26° (climate estimate)
+  ✓ every day has its weather
+  ✓ the forecast's days first, the estimate's after  — [False, False, False, False, False, True, True]
+  ✓ every rainy day has an indoor stop, or says why not  — rainy days: [1]
+  ✓ the weather step logged what it found  — {'days': 7, 'error': None, 'rainy': ['2026-10-19'], 'estimated': 2}
+
+5 passed, 0 failed
+
+# The backend's log for that trip: the cache warmer asked first, the plan's own ask was a cache hit —
+#   08:18:59 UTC  [CACHE MISS] mcp:weather:18955d2121b3fd6060be04660e3a0930
+#   08:19:18 UTC  [CACHE HIT]  mcp:weather:18955d2121b3fd6060be04660e3a0930
+# and no "Rainy days given an indoor place" line: the model put the indoor stop on the rainy day itself — Sugandha,
+# a restaurant (category food), the only stop of that day.
