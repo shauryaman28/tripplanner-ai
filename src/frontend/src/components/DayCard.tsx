@@ -25,6 +25,7 @@ import { categoryMeta, describeRating } from "@/lib/places";
 import { stopTimes, travelWords } from "@/lib/schedule";
 import { weatherWords, type WeatherKind } from "@/lib/weather";
 import type { ActivitySlot, DaySchedule } from "@/lib/types";
+import BookButton from "./BookButton";
 import { Pin, UpdatedTag, UpdatingTag, partClass } from "./ui";
 
 interface Props {
@@ -37,6 +38,8 @@ interface Props {
   changed?: ReadonlySet<string>;
   /** Phase 36: the language the plan is written in ("hi", "ta", "bn") — what is in it is marked with it. */
   language?: string;
+  /** Phase 39: the first night of this stay — the card that carries "Book hotel" (the others need not repeat it). */
+  firstNight?: boolean;
 }
 
 const NOTHING_CHANGED: ReadonlySet<string> = new Set();
@@ -249,7 +252,14 @@ function DayWeatherLine({ day }: { day: DaySchedule }) {
   );
 }
 
-export default function DayCard({ day, onShowOnMap, updating = null, changed = NOTHING_CHANGED, language }: Props) {
+export default function DayCard({
+  day,
+  onShowOnMap,
+  updating = null,
+  changed = NOTHING_CHANGED,
+  language,
+  firstNight = true,
+}: Props) {
   const stops = dayStops(day);
   const { hotel, flight } = day;
   const dayCost = stops.reduce((sum, stop) => sum + (stop.activity.cost ?? 0), 0) + (hotel?.cost_per_night ?? 0);
@@ -317,6 +327,7 @@ export default function DayCard({ day, onShowOnMap, updating = null, changed = N
               }
             >
               {flightFacts.length > 0 && <p className="mt-0.5 text-xs text-ink-600">{flightFacts.join(" · ")}</p>}
+              <BookButton url={flight.booking_url} label="Book flight" site="Google Flights" />
             </Row>
           )}
 
@@ -373,6 +384,7 @@ export default function DayCard({ day, onShowOnMap, updating = null, changed = N
                 <span className="text-sm font-semibold text-ink-900">{formatINR(hotel.cost_per_night)}</span> per night
               </p>
               {hotelFacts.length > 0 && <p className="mt-0.5 text-xs text-ink-600">{hotelFacts.join(" · ")}</p>}
+              {firstNight && <BookButton url={hotel.booking_url} label="Book hotel" site="Booking.com" />}
             </Row>
           )}
         </ul>

@@ -119,6 +119,7 @@ class HotelSlot(BaseModel):
     address: str | None = None
     lat: float | None = None
     lng: float | None = None
+    booking_url: str | None = None  # Phase 39 — copied from the search, never the model's
 
     _cost = field_validator("cost_per_night", mode="before")(_none_is_zero)
 
@@ -511,8 +512,10 @@ def _attach_source_data(draft: dict, flights: list[dict], hotels: list[dict], at
                 slot[group.SUITS] = source.get(group.SUITS)  # Phase 25: None unless this is a group trip
 
         hotel = day.get("hotel")
+        if hotel:  # Phase 39: a link the model wrote is not kept; the search's is
+            hotel["booking_url"] = None
         if hotel and (source := hotel_by_name.get(hotel["name"])):
-            hotel.update({k: source.get(k) for k in ("stars", "rating", "address", "lat", "lng")})
+            hotel.update({k: source.get(k) for k in ("stars", "rating", "address", "lat", "lng", "booking_url")})
 
         day["flight"] = None  # the model does not pick flights; the one flight shown is set below
 
