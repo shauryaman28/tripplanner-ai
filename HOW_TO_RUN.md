@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–37
+# How to Run & Verify — Phases 1–38
 
 ## What changed vs the original codebase?
 
@@ -36,6 +36,7 @@
 | 35 | `core/headers.py`, `core/ratelimit.py`, `core/sessions.py`, `models/refresh_token.py` + migration 007, `schemas/text.py` (new), `routes/auth.py` (refresh, logout, the limits, a bounded form), `schemas/{trip,auth,user_preferences}.py` + `routes/{trips,admin}.py` + `deps.py` (every field bounded), `core/security.py` (PyJWT), `config.py`, `error_reporting.py` (key shapes), `preflight.py`, `main.py` (the headers, every log record redacted), `telemetry/logs.py` (LogRedactor), `mcp_server/server.py`, two prompts, both Dockerfiles (`FORWARDED_ALLOW_IPS`), the frontend's `api.ts` / `sse.ts` / `AppHeader.tsx` / `next.config.mjs`, `requirements.txt` + `constraints.txt` + `package.json` — see `docs/phase35_build_log.md` | `scripts/security_check.py`, `scripts/secret_audit.py`, `scripts/provider_keys.py` (new), two unit test files, one integration test file, `e2e/session.spec.ts` |
 | 36 | `src/ai/orchestrator/orchestrator.py` (the language node first, the localise node before persist; both in a change's run; the language, a typed destination and the stops' words carried), `src/ai/builder/builder.py` (local names and descriptions on a plan in another language; English untouched), `src/ai/llm.py`, `models/user_preferences.py` + `schemas/user_preferences.py` + `routes/users.py` (`preferred_language`), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `AppHeader.tsx`, `DayCard.tsx`, `LocalTips.tsx`, `ItineraryView.tsx`, `api.ts`, `types.ts`, `requirements.txt` + `constraints.txt` (langdetect) — see `docs/phase36_build_log.md` | `src/ai/language.py`, migration 008, `scripts/language_check.py`, `prompts/itinerary_builder_v10.md` + `translator_v1.md`, `src/frontend/src/lib/language.ts` + `components/PlanLanguageMenu.tsx`, `tests/fixtures/phase36/` (the English record), one unit test file, one integration test file, `e2e/language.spec.ts`, `docs/phase36_live/` |
 | 37 | `src/ai/mcp_server/tools.py` (`get_travel_time`: Google's Routes API, cached a day) + `models.py` + `config.py` (`GOOGLE_MAPS_API_KEY`) + `server.py` + `rate_limiter.py` (3,000 elements a minute), `src/ai/builder/builder.py` (the clock after the checks; the line on when day 1 begins), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `scripts/cache_ttls.py` + `provider_keys.py`, `docker/prodlike` + `docker/loadtest` compose files, `.env.example`, `tests/conftest.py` (no test reaches a real model), the Phase 36 English record (made again, DECISIONS #340) — see `docs/phase37_build_log.md` | `src/ai/schedule.py`, `scripts/schedule_check.py`, `src/frontend/src/lib/schedule.ts`, one unit test file, one integration test file, `e2e/schedule.spec.ts`, `docs/phase37_live/` |
+| 38 | `src/ai/mcp_server/tools.py` (`get_weather`: the trip's days, up to 15; the daytime, by the place's clock; the climate past the forecast, and none for a place with no climate) + `models.py` (`DayForecast.source`), `src/ai/builder/builder.py` (the rainy-day paragraph and each attraction's setting; the repair; each day's weather), `src/ai/orchestrator/orchestrator.py` (the weather read beside the searches), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `tests/fakes.py` (a stand-in forecast), `tests/conftest.py`, the Phase 36 English record (made again, DECISIONS #348) — see `docs/phase38_build_log.md` | `src/ai/weather.py`, `scripts/weather_check.py`, `src/frontend/src/lib/weather.ts`, one unit test file, one integration test file, `e2e/weather.spec.ts`, `docs/phase38_live/` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -2287,6 +2288,60 @@ reads it), `the ways:` says `google`, and no journey says "about".
 Plan a trip: each stop's label has its times ("Morning · 09:05–11:05"); a stop far from the one before has a row
 of its own above it ("Taxi · 46 min · 18.9 km from the airport"); the PDF has both.
 
+## Step 36 — Verify Phase 38: the weather a plan is made for
+
+Needs the dev containers (Step 1) for the suites; for B the production-like stack and your `.env`
+(`OPENWEATHER_API_KEY` — the free plan's 60 a minute is plenty).
+
+### A. The suites
+
+```bash
+pytest tests/unit/test_phase38_weather.py -v
+RUN_INTEGRATION=1 pytest tests/integration/test_phase38_weather_integration.py -v
+cd src/frontend && npx playwright test e2e/weather.spec.ts
+```
+
+The roadmap's rainy-day fixture is `RAINY_DAY_TWO` in the unit tests; `test_a_rainy_day_gets_an_indoor_stop_and_a_sunny_days_beach_stays`
+runs it through the builder with a stand-in model that ignores the weather — as a real one may — and code gives the
+rainy day its indoor place. The browser test plans a week in Kodaikanal on the stub backend: a sunny, a rainy and a
+partly cloudy day, each with its icon, and the "climate estimate" badge on days 6 and 7.
+
+### B. A real week, from tomorrow
+
+```bash
+python scripts/prodlike.py up
+python scripts/weather_check.py --prodlike            # Goa; --destination Mumbai --days 7 for another
+```
+
+```
+A plan for Goa, 2026-10-19 to 2026-10-25 — 30.7 s
+  ✓ a plan was made  — HTTP 200
+     Day 1 2026-10-19  Rain · 32° / 23°
+         indoor  Sugandha
+     Day 2 2026-10-20  Sunny · 34° / 23°
+         outdoor Excavated site in Chandor
+         indoor  Ashvek Vintage world- Car Museum
+     …
+     Day 6 2026-10-24  Partly cloudy · 32° / 26° (climate estimate)
+         outdoor Cavelossim Beach
+  ✓ every day has its weather
+  ✓ the forecast's days first, the estimate's after  — [False, False, False, False, False, True, True]
+  ✓ every rainy day has an indoor stop, or says why not  — rainy days: [1]
+  ✓ the weather step logged what it found  — {'days': 7, 'error': None, 'rainy': ['2026-10-19'], 'estimated': 2}
+
+5 passed, 0 failed
+```
+
+The weather changes by the hour, and so does what the check finds: a dry week has no rainy day to test the rule on
+(the check says `rainy days: none`). `python scripts/prodlike.py logs | grep "Rainy days given"` shows when code
+moved an indoor place in because the model had not; when the model did it itself, nothing is logged. A place the
+climate table does not know (anywhere but Goa, Mumbai, Delhi, Jaipur, Kerala) has no weather past the forecast.
+
+### C. In the browser
+
+Plan a trip: each day card has its weather under the date; a day past the forecast says "climate estimate"; a rainy
+day with nothing indoors says to keep the plans flexible. The PDF has the same lines.
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -2345,3 +2400,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **35 (Security)** | In `src/backend/Dockerfile` put back `--forwarded-allow-ips '*'` → `pytest tests/unit/test_phase35_security.py -k believes` fails: a proxy on a private address that appended the real client, and the client is taken to be the address the client wrote itself (`6.6.6.6`) — the sign-in limit a header away, which is what the image did until this phase. Start the stack without `FORWARDED_ALLOW_IPS` and run `python scripts/security_check.py --prodlike` → `✗ an address this machine makes up is not believed … [401, 401, 401] — this machine is a trusted proxy for this backend`: from where a platform's proxy stands, it would be (Step 33 A). In `app/core/sessions.py` make the reuse check `if False:` → `RUN_INTEGRATION=1 pytest tests/integration/test_phase35_auth_integration.py -k stolen` fails: a token used twice no longer ends the sign-in. In `app/schemas/text.py` set `PASSWORD_MAX_BYTES = 10_000` → `-k bcrypt` fails: a 73-byte password is taken, and bcrypt would check it by its first 72. `curl -sI localhost:8200/no-such-route` on the stack → the seven headers, a 404 included. Why: a protection that nothing can show working is one that nobody would notice was gone. |
 | **36 (Languages)** | In `src/ai/language.py` make `if script == "LATIN":` `if False:` → `pytest tests/unit/test_phase36_language.py -k latin` fails six times: "5 days in Goa, budget 50k" is read — as Afrikaans — and an English request would be sent to be translated. In `src/ai/builder/builder.py` ask every plan for Hindi (`_language_block(trip_meta.get('language') or 'hi')`) → `-k zero_change` fails: an English plan's prompt is no longer the one recorded before the phase. In `src/ai/orchestrator/orchestrator.py` make the typed-destination check in `_sync_trip` `if False:` → `RUN_INTEGRATION=1 pytest tests/integration/test_pipeline_integration.py -k devanagari` fails: a trip typed "गोवा" exports as `trip-goa-…pdf` — the run's translation written back over the traveller's own name. `python scripts/language_check.py --prodlike` → 11 passed. Why: the three ways this phase could hurt a traveller who never asked for it — an English plan changed, an English request sent to a model, a name they typed taken from them. |
 | **37 (Clock)** | In `src/ai/schedule.py` make `if way and way[2] > FAR_KM:` `if False:` → `pytest tests/unit/test_phase37_schedule.py -k travel_note` fails: a stop 17 km from the last has no travel note. In `src/ai/mcp_server/tools.py` replace `set_cached_sync(cache_key, travel.model_dump(), TTL_TRAVEL)` with `pass` → `-k cache_hit` fails: the second ask goes to Google again, and no `[CACHE HIT]` is logged. In `src/ai/schedule.py` make a stop's end `max(start + usual, start + MIN_VISIT)` (no `DAY_END`, no window) → `-k 14_hours` fails on one of the 500 random days: a stop ends after 22:00. `python scripts/schedule_check.py --prodlike` → 3 passed. Why: the three promises of the phase — a far stop says how to get there, Google is asked once a day for a journey, and no day is longer than 14 hours. |
+| **38 (Weather)** | In `src/ai/weather.py` make the repair skip every day (`if not forecast or kind(forecast.get("condition")) != "rainy":` → `if True:`) → `pytest tests/unit/test_phase38_weather.py -k indoor_stop_and_a_sunny` fails: the stand-in model ignores the rain, as a real one may, and nothing gives the rainy day its museum. In `src/ai/mcp_server/tools.py` set `MAX_WEATHER_DAYS = 7` → `-k fortnight` fails: a two-week trip gets a week of weather. In `_climate_forecast` put back the guess (`if climate is None:` → a `"Partly Cloudy"` table) → `-k no_guess` fails: Leh in January is 32°. `python scripts/weather_check.py --prodlike` → 5 passed. Why: rain must reach the plan, a long trip must have all its days, and a day card must not say what nobody knows. |
