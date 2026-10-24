@@ -48,7 +48,7 @@ from itertools import zip_longest
 
 import httpx
 
-from src.ai import pricing
+from src.ai import booking, pricing
 from src.ai.mcp_server.cache import get_cached_sync, make_cache_key, set_cached_sync, single_flight
 from src.ai.mcp_server.config import mcp_settings
 from src.ai.mcp_server.models import (
@@ -563,6 +563,16 @@ def search_flights(input: FlightSearchInput) -> list[Flight] | ToolError:
         # Soft preference: list.sort is stable, so preferred carriers move to the front
         # while price order is preserved within each group. Nothing is dropped.
         flights.sort(key=lambda f: f.airline.upper() not in preferred)
+    # Phase 39: where each is booked — the route and the days as searched, after the cache (an answer from it
+    # gets its link too)
+    for f in flights:
+        f.booking_url = booking.flight_link(
+            (f.origin.code if f.origin else origin),
+            (f.destination.code if f.destination else destination),
+            input.date,
+            input.return_date,
+            input.passengers,
+        )
     return flights
 
 
@@ -687,6 +697,8 @@ def search_hotels(input: HotelSearchInput) -> list[Hotel] | ToolError:
             error=f"No hotels within ₹{input.budget_per_night:,.0f}/night in {input.destination}.{hint}",
             code="NO_RESULTS",
         )
+    for h in hotels:  # Phase 39: where each is booked — after the cache, as the flights' links are
+        h.booking_url = booking.hotel_link(h.name, input.destination, input.check_in, input.check_out, input.guests)
     return hotels
 
 

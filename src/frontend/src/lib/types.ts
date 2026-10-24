@@ -81,6 +81,7 @@ export interface HotelSlot {
   address?: string | null;
   lat?: number | null;
   lng?: number | null;
+  booking_url?: string | null;  // Phase 39 — this hotel on Booking.com, the nights and guests filled in
 }
 
 export interface Airport {
@@ -101,6 +102,7 @@ export interface FlightInfo {
   stops?: number;
   origin?: Airport | null;
   destination?: Airport | null;
+  booking_url?: string | null;  // Phase 39 — this route on Google Flights, the days and travellers filled in
 }
 
 export interface DaySchedule {

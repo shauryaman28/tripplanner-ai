@@ -95,6 +95,7 @@ class Flight(BaseModel):
     stops: int
     origin: Airport | None = None  # Phase 18 — map info markers
     destination: Airport | None = None
+    booking_url: str | None = None  # Phase 39 — this route, these days, these travellers on Google Flights
 
 
 class Hotel(BaseModel):
@@ -105,6 +106,7 @@ class Hotel(BaseModel):
     address: str
     lat: float | None = None  # for the Phase 18 map view
     lng: float | None = None
+    booking_url: str | None = None  # Phase 39 — this hotel, these nights, these guests on Booking.com
 
 
 class Attraction(BaseModel):
