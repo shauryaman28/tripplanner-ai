@@ -14,6 +14,7 @@ import io
 import math
 import threading
 from datetime import date
+from xml.sax.saxutils import escape
 
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.enums import TA_RIGHT
@@ -139,6 +140,14 @@ def _p(text: str, style: ParagraphStyle) -> Paragraph:
     return scripts.paragraph(xml, style, shaped)
 
 
+def _link(words: str, url: str) -> Paragraph:
+    """Phase 39 — a link a reader can click in the PDF. The words are ours; the address is one the planner made
+    (plan.py lets no other through), and is escaped as an attribute either way."""
+    return Paragraph(
+        f'<a href="{escape(url, {chr(34): "&quot;"})}" color="{theme.DAY_COLORS[0]}"><u>{escape(words)}</u></a>', META
+    )
+
+
 def _amount(value: float, note: str = "") -> list[Paragraph]:
     return [_p(format_inr(value), AMOUNT), *([_p(note, AMOUNT_NOTE)] if note else [])]
 
@@ -262,6 +271,8 @@ def _flight_row(flight: Flight) -> list:
     ]
     if facts:
         body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
+    if flight.booking_url:  # Phase 39
+        body.append(_link("Book this flight on Google Flights", flight.booking_url))
     price = _amount(flight.price, "return") if flight.price is not None else ""
     return [PinMark(theme.AIRPORT_STYLE, icon="plane"), body, price]
 
@@ -309,6 +320,8 @@ def _stay_row(stay: Stay) -> list:
     body = [_p("Stay", EYEBROW), _p(scripts.shorten(stay.name, NAME_LIMIT), ROW_TITLE)]
     if facts := stay_facts(stay):
         body.append(_p(scripts.shorten(" · ".join(facts), DETAIL_LIMIT), META))
+    if stay.booking_url:  # Phase 39: on the stay's first night
+        body.append(_link("Book this hotel on Booking.com", stay.booking_url))
     return [PinMark(theme.HOTEL_STYLE, icon="bed"), body, _amount(stay.cost_per_night, "per night")]
 
 

@@ -1,4 +1,4 @@
-# How to Run & Verify — Phases 1–38
+# How to Run & Verify — Phases 1–39
 
 ## What changed vs the original codebase?
 
@@ -37,6 +37,7 @@
 | 36 | `src/ai/orchestrator/orchestrator.py` (the language node first, the localise node before persist; both in a change's run; the language, a typed destination and the stops' words carried), `src/ai/builder/builder.py` (local names and descriptions on a plan in another language; English untouched), `src/ai/llm.py`, `models/user_preferences.py` + `schemas/user_preferences.py` + `routes/users.py` (`preferred_language`), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `AppHeader.tsx`, `DayCard.tsx`, `LocalTips.tsx`, `ItineraryView.tsx`, `api.ts`, `types.ts`, `requirements.txt` + `constraints.txt` (langdetect) — see `docs/phase36_build_log.md` | `src/ai/language.py`, migration 008, `scripts/language_check.py`, `prompts/itinerary_builder_v10.md` + `translator_v1.md`, `src/frontend/src/lib/language.ts` + `components/PlanLanguageMenu.tsx`, `tests/fixtures/phase36/` (the English record), one unit test file, one integration test file, `e2e/language.spec.ts`, `docs/phase36_live/` |
 | 37 | `src/ai/mcp_server/tools.py` (`get_travel_time`: Google's Routes API, cached a day) + `models.py` + `config.py` (`GOOGLE_MAPS_API_KEY`) + `server.py` + `rate_limiter.py` (3,000 elements a minute), `src/ai/builder/builder.py` (the clock after the checks; the line on when day 1 begins), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `scripts/cache_ttls.py` + `provider_keys.py`, `docker/prodlike` + `docker/loadtest` compose files, `.env.example`, `tests/conftest.py` (no test reaches a real model), the Phase 36 English record (made again, DECISIONS #340) — see `docs/phase37_build_log.md` | `src/ai/schedule.py`, `scripts/schedule_check.py`, `src/frontend/src/lib/schedule.ts`, one unit test file, one integration test file, `e2e/schedule.spec.ts`, `docs/phase37_live/` |
 | 38 | `src/ai/mcp_server/tools.py` (`get_weather`: the trip's days, up to 15; the daytime, by the place's clock; the climate past the forecast, and none for a place with no climate) + `models.py` (`DayForecast.source`), `src/ai/builder/builder.py` (the rainy-day paragraph and each attraction's setting; the repair; each day's weather), `src/ai/orchestrator/orchestrator.py` (the weather read beside the searches), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `tests/fakes.py` (a stand-in forecast), `tests/conftest.py`, the Phase 36 English record (made again, DECISIONS #348) — see `docs/phase38_build_log.md` | `src/ai/weather.py`, `scripts/weather_check.py`, `src/frontend/src/lib/weather.ts`, one unit test file, one integration test file, `e2e/weather.spec.ts`, `docs/phase38_live/` |
+| 39 | `src/ai/mcp_server/tools.py` (a link on every flight and hotel, after the cache) + `models.py` (`booking_url`), `src/ai/builder/builder.py` (the plan's links copied from the search; a model's dropped; none saved as null), `pdf/plan.py` + `pdf/document.py` (clickable, the stay's on its first night, only the two searches), the frontend's `DayCard.tsx` + `ItineraryView.tsx` + `types.ts`, `tests/e2e/stub_backend.py` (links as the real tools make them; none for Tirthan) — see `docs/phase39_build_log.md` | `src/ai/booking.py`, `scripts/booking_check.py` + `booking_open.js`, `src/frontend/src/lib/booking.ts` + `components/BookButton.tsx`, one unit test file, one integration test file, `e2e/booking.spec.ts`, `docs/phase39_live/` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -2342,6 +2343,57 @@ climate table does not know (anywhere but Goa, Mumbai, Delhi, Jaipur, Kerala) ha
 Plan a trip: each day card has its weather under the date; a day past the forecast says "climate estimate"; a rainy
 day with nothing indoors says to keep the plans flexible. The PDF has the same lines.
 
+## Step 37 — Verify Phase 39: booking links
+
+Needs the dev containers (Step 1) for the suites; for B the production-like stack and your `.env`, and the
+frontend's packages (`npm ci` in `src/frontend`, for Playwright's Chromium).
+
+### A. The suites
+
+```bash
+pytest tests/unit/test_phase39_booking.py -v
+RUN_INTEGRATION=1 pytest tests/integration/test_phase39_booking_integration.py -v
+cd src/frontend && npx playwright test e2e/booking.spec.ts
+```
+
+The browser test answers google.com and booking.com itself (it never reaches them): "Book flight" opens the link in
+a new tab and the trip's page stays where it was; "Book hotel" is on the stay's first night only; a trip to
+Tirthan — whose stub flight and hotel have no link — shows both buttons greyed out, with no link at all.
+
+### B. A real plan's links, opened
+
+```bash
+python scripts/prodlike.py up
+python scripts/booking_check.py --prodlike        # --no-open: check the links without opening them
+```
+
+```
+A plan for Goa, 2026-11-27 to 2026-11-29, two travellers — 8.2 s
+  ✓ the flight (DEL → GOI) has its link
+  ✓ …a Google Flights search for its route, days and travellers  — Flights to GOI from DEL on 2026-11-27 through 2026-11-29 for 2 adults
+  ✓ the hotel (Alaya Stays 1 BHK with Balcony & Pool - Veera Marina) has its link
+  ✓ …a Booking.com search for it, its nights and its guests  — Alaya Stays 1 BHK with Balcony & Pool - Veera Marina, Goa · 2026-11-27 to 2026-11-29
+
+Opened in Chromium:
+     New Delhi to Goa | Google Flights
+  ✓ Google Flights opens on the route, both days and two travellers  — Round trip 2 Economy · … Departure=Fri, Nov 27, Return=Sun, Nov 29
+     Booking.com: Search results: Alaya Stays 1 BHK with Balcony & Pool - Veera Marina, Goa. Book your hotel now!
+  ✓ Booking.com opens on the nights and the guests  — Fri 27 Nov — Sun 29 Nov · 2 adults · 0 children · 1 room · first: Alaya Stays …
+  ✓ …with the plan's hotel first  — Alaya Stays 1 BHK with Balcony & Pool - Veera Marina
+  ✓ every link opened
+
+9 passed, 0 failed
+```
+
+Opening them asks Google and Booking.com one page each. Booking.com is opened with an ordinary browser's user agent:
+to headless Chrome's own it answers with a check that drops the search (`docs/phase39_live/link_formats.txt`).
+
+### C. In the browser
+
+Plan a trip: the flight on day 1 has "Book flight", the stay's first night "Book hotel"; each opens the search,
+filled in, in a new tab. The PDF's "Book this flight on Google Flights" and "Book this hotel on Booking.com" are
+links. An itinerary made before this phase has the buttons greyed out.
+
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 
 If you're on an older clone and hit these, here's what they mean and the fix:
@@ -2401,3 +2453,4 @@ If you're on an older clone and hit these, here's what they mean and the fix:
 | **36 (Languages)** | In `src/ai/language.py` make `if script == "LATIN":` `if False:` → `pytest tests/unit/test_phase36_language.py -k latin` fails six times: "5 days in Goa, budget 50k" is read — as Afrikaans — and an English request would be sent to be translated. In `src/ai/builder/builder.py` ask every plan for Hindi (`_language_block(trip_meta.get('language') or 'hi')`) → `-k zero_change` fails: an English plan's prompt is no longer the one recorded before the phase. In `src/ai/orchestrator/orchestrator.py` make the typed-destination check in `_sync_trip` `if False:` → `RUN_INTEGRATION=1 pytest tests/integration/test_pipeline_integration.py -k devanagari` fails: a trip typed "गोवा" exports as `trip-goa-…pdf` — the run's translation written back over the traveller's own name. `python scripts/language_check.py --prodlike` → 11 passed. Why: the three ways this phase could hurt a traveller who never asked for it — an English plan changed, an English request sent to a model, a name they typed taken from them. |
 | **37 (Clock)** | In `src/ai/schedule.py` make `if way and way[2] > FAR_KM:` `if False:` → `pytest tests/unit/test_phase37_schedule.py -k travel_note` fails: a stop 17 km from the last has no travel note. In `src/ai/mcp_server/tools.py` replace `set_cached_sync(cache_key, travel.model_dump(), TTL_TRAVEL)` with `pass` → `-k cache_hit` fails: the second ask goes to Google again, and no `[CACHE HIT]` is logged. In `src/ai/schedule.py` make a stop's end `max(start + usual, start + MIN_VISIT)` (no `DAY_END`, no window) → `-k 14_hours` fails on one of the 500 random days: a stop ends after 22:00. `python scripts/schedule_check.py --prodlike` → 3 passed. Why: the three promises of the phase — a far stop says how to get there, Google is asked once a day for a journey, and no day is longer than 14 hours. |
 | **38 (Weather)** | In `src/ai/weather.py` make the repair skip every day (`if not forecast or kind(forecast.get("condition")) != "rainy":` → `if True:`) → `pytest tests/unit/test_phase38_weather.py -k indoor_stop_and_a_sunny` fails: the stand-in model ignores the rain, as a real one may, and nothing gives the rainy day its museum. In `src/ai/mcp_server/tools.py` set `MAX_WEATHER_DAYS = 7` → `-k fortnight` fails: a two-week trip gets a week of weather. In `_climate_forecast` put back the guess (`if climate is None:` → a `"Partly Cloudy"` table) → `-k no_guess` fails: Leh in January is 32°. `python scripts/weather_check.py --prodlike` → 5 passed. Why: rain must reach the plan, a long trip must have all its days, and a day card must not say what nobody knows. |
+| **39 (Booking)** | In `src/ai/booking.py` drop the day back from the flight's search (`… on {out} through {home}` → `… on {out}`) → `pytest tests/unit/test_phase39_booking.py -k own_words` fails: Google Flights would make the day back up, as the roadmap's form did. Widen `BOOKING_SITES` to `("https://",)` → `-k nothing_else` fails: the page's list of the sites a link may open and the planner's no longer agree. In `src/ai/mcp_server/tools.py` make each hotel's `booking_url = None` → `-k every_hotel` fails. `python scripts/booking_check.py --prodlike` → 9 passed. Why: a link that opens the wrong search is worse than none, and a link to anywhere else is not a booking link. |
