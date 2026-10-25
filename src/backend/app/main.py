@@ -35,7 +35,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.trips import INTERRUPTED, finish_runs
 from app.api.routes.trips import router as trips_router
 from app.api.routes.users import router as users_router
-from app.core import error_reporting
+from app.core import error_reporting, notifications
 from app.core.config import settings
 from app.core.headers import SecurityHeaders, security_headers
 from app.core.security import decode_access_token
@@ -283,9 +283,11 @@ async def lifespan(app: FastAPI):
         await _recover_after_restart()
     watching = spawn(metrics.watch_event_loop())  # Phase 30: how late the event loop runs what is due
     counting = spawn(metrics.watch_embedding_queue(_embedding_queue))  # Phase 34: the embeddings owed
+    reminding = spawn(notifications.watch_reminders())  # Phase 40: "your trip starts tomorrow", when it is due
     yield
     watching.cancel()
     counting.cancel()
+    reminding.cancel()
     try:
         # The plans in flight first — they need Redis and the tool server, which are closed next.
         await finish_runs(settings.SHUTDOWN_GRACE_SECONDS)

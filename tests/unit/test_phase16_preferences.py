@@ -606,6 +606,8 @@ async def test_get_preferences_returns_empty_defaults_for_new_user():
         "travel_style": None,
         "home_city": None,
         "preferred_language": None,  # Phase 36: none chosen — each request's own language decides
+        "notification_email": True,  # Phase 40: emails on, until the traveller turns them off
+        "reminder_hours_before": 24,
         "updated_at": None,
     }
 

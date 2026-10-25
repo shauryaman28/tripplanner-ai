@@ -46,6 +46,7 @@ class UserPreferences(SQLModel, table=True):
             "preferred_language IN ('en', 'hi', 'ta', 'bn')",
             name="ck_user_preferences_preferred_language",
         ),
+        CheckConstraint("reminder_hours_before BETWEEN 1 AND 168", name="ck_user_preferences_reminder_hours"),
     )
 
     user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
@@ -61,5 +62,9 @@ class UserPreferences(SQLModel, table=True):
     travel_style: str | None = Field(default=None, max_length=20)
     home_city: str | None = Field(default=None, max_length=100)
     preferred_language: str | None = Field(default=None, max_length=5)  # Phase 36
+    # Phase 40: email when an itinerary is ready and before a trip — on unless turned off; and how many hours
+    # before the trip begins the reminder comes
+    notification_email: bool = Field(default=True, sa_column_kwargs={"server_default": "true"})
+    reminder_hours_before: int = Field(default=24, ge=1, le=168, sa_column_kwargs={"server_default": "24"})
 
     updated_at: datetime = Field(default_factory=_utcnow, sa_column_kwargs={"onupdate": _utcnow})

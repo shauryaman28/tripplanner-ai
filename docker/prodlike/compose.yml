@@ -129,6 +129,11 @@ services:
       OPENTRIPMAP_API_KEY: ${OPENTRIPMAP_API_KEY:-}
       OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      # Phase 40: the emails — sent by SendGrid with a key in .env; without one, a line in the log that they were not
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      SITE_URL: http://localhost:3200
+      REMINDER_CHECK_SECONDS: ${PRODLIKE_REMINDER_CHECK_SECONDS:-300}
     volumes:
       - certs:/certs:ro  # the stand-in's own certificate authority, and nothing else
     ports:

@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     # Comma-separated browser origins allowed by CORS (Phase 17). In production: the frontend's
     # origin — the page opens its event stream straight from the browser to this API.
     CORS_ORIGINS: str = "http://localhost:3000"
+
+    # Phase 40 — email. Without SENDGRID_API_KEY an email is written to the log instead of sent (in production
+    # without its words: the pre-start check says email is off). EMAIL_FROM is a sender SendGrid has verified.
+    # SITE_URL is where the links in an email point: the site, not the API.
+    SENDGRID_API_KEY: str = ""
+    EMAIL_FROM: str = ""
+    SITE_URL: str = "http://localhost:3000"
+    REMINDER_CHECK_SECONDS: float = 300.0  # how often the reminders that are due are looked for
     # Origins allowed by pattern as well (Phase 27) — for a host that gives every deployment an
     # address of its own, e.g. https://tripplanner-[a-z0-9-]+\.vercel\.app. Empty: only the list above.
     CORS_ORIGIN_REGEX: str = ""

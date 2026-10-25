@@ -48,6 +48,8 @@ async def put_preferences(
     prefs.travel_style = body.travel_style
     prefs.home_city = body.home_city
     prefs.preferred_language = body.preferred_language  # Phase 36
+    prefs.notification_email = body.notification_email  # Phase 40
+    prefs.reminder_hours_before = body.reminder_hours_before
 
     db.add(prefs)
     await db.commit()

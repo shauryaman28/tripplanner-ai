@@ -48,7 +48,7 @@ from sqlmodel import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.deps import get_current_user, get_current_user_sse, get_redis_dep, get_redis_or_none
-from app.core import error_reporting
+from app.core import error_reporting, notifications
 from app.core.config import settings
 from app.db.errors import database_is_away
 from app.db.session import AsyncSessionLocal, get_db
@@ -391,6 +391,8 @@ async def _run_orchestrator(
                         logger.warning("Could not publish planning_failed for trip %s", trip_id, exc_info=True)
                 else:
                     if result.get("itinerary_id"):
+                        if not has_itinerary:  # Phase 40: the first itinerary is emailed — in the background
+                            spawn(notifications.itinerary_ready(trip_id))
                         return
                     measured.outcome = "no_plan"  # it ended, and with no itinerary: nothing found, or a question back
                     fallback = TripStatus.COMPLETED if has_itinerary else None  # the graph already marked it failed

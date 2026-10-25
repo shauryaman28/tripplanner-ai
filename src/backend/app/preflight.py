@@ -132,6 +132,13 @@ def check(settings, providers=None) -> Report:
                 weak(f"{name} is empty: {what}")
     if not settings.SENTRY_DSN:
         weak("SENTRY_DSN is empty: errors are logged and reported to nobody")
+    # Phase 40: the two emails a traveller is sent
+    if not getattr(settings, "SENDGRID_API_KEY", ""):
+        weak("SENDGRID_API_KEY is empty: no email is sent — 'your itinerary is ready' and the trip reminders are not")
+    elif not getattr(settings, "EMAIL_FROM", ""):
+        weak("EMAIL_FROM is empty: SendGrid sends only from a verified sender — every email would fail")
+    if _host(getattr(settings, "SITE_URL", "")) in LOCAL_HOSTS:
+        weak("SITE_URL points at this machine (the development default): the links in the emails would lead nowhere")
     # Phase 35: what keeps a password from being guessed, and a stolen token from being good for long
     if getattr(settings, "LOGIN_ATTEMPTS_PER_MINUTE", 5) <= 0:
         weak(

@@ -161,6 +161,10 @@ GOOD = {
     "OTEL_EXPORTER_OTLP_ENDPOINT": "https://otlp.example.com",
     "OTEL_EXPORTER_OTLP_HEADERS": "",
     "LOG_FORMAT": "",
+    # Phase 40: and sends its emails, from a verified sender, with links to its own site
+    "SENDGRID_API_KEY": "SG.sendgrid-key-value-0006",
+    "EMAIL_FROM": "trips@tripplanner.example",
+    "SITE_URL": "https://tripplanner.vercel.app",
 }
 PROVIDERS = {
     "DUFFEL_ACCESS_TOKEN": "duffel-token-value-0003",
@@ -199,7 +203,15 @@ def test_the_repositorys_own_defaults_do_not_start_in_production_and_every_reaso
     said = report.text()
     for variable in ("JWT_SECRET", "DATABASE_URL", "REDIS_URL", "CORS_ORIGINS", "GROQ_API_KEY"):
         assert any(error.startswith(variable) for error in report.errors), variable  # cannot start
-    for variable in ("GOOGLE_API_KEY", "DUFFEL_ACCESS_TOKEN", "LITEAPI_API_KEY", "OPENTRIPMAP_API_KEY", "SENTRY_DSN"):
+    for variable in (
+        "GOOGLE_API_KEY",
+        "DUFFEL_ACCESS_TOKEN",
+        "LITEAPI_API_KEY",
+        "OPENTRIPMAP_API_KEY",
+        "SENTRY_DSN",
+        "SENDGRID_API_KEY",
+        "SITE_URL",
+    ):
         assert any(warning.startswith(variable) for warning in report.warnings), variable  # starts, worse
     assert said.startswith("Cannot start in production:") and "Starts, and will not fully work:" in said
     with pytest.raises(preflight.NotReady) as refused:

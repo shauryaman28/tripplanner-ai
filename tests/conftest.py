@@ -44,6 +44,17 @@ def no_sign_in_limits():
 
 
 @pytest.fixture(autouse=True)
+def no_emails_sent():
+    """Phase 40: no test sends an email, whatever .env holds — a key there would have SendGrid send it — and no
+    test's backend looks for due reminders on its own: without RUN_INTEGRATION the app is on the dev database,
+    and its trips would be reminded. The tests of the emails set the clock and call the check themselves."""
+    from app.core.config import settings
+
+    with patch.multiple(settings, SENDGRID_API_KEY="", EMAIL_FROM="", REMINDER_CHECK_SECONDS=0):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def no_fallback_llm():
     """A test whose Gemini mock fails must not reach a real model through the Groq fallback (src.ai.llm.ask)."""
     with patch("src.ai.llm._ask_groq", AsyncMock(side_effect=RuntimeError("no fallback model in tests"))) as groq:

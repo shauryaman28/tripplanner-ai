@@ -32,6 +32,9 @@ class PreferencesUpdate(BaseModel):
     travel_style: TravelStyle | None = None
     home_city: str | None = Field(default=None, max_length=100)
     preferred_language: PlanLanguage | None = None
+    # Phase 40: an email when an itinerary is ready and before a trip; the reminder this many hours before it
+    notification_email: bool = True
+    reminder_hours_before: int = Field(default=24, ge=1, le=168)
 
     @field_validator("dietary_restrictions")
     @classmethod
@@ -61,6 +64,8 @@ class PreferencesRead(BaseModel):
     travel_style: str | None = None
     home_city: str | None = None
     preferred_language: str | None = None  # Phase 36
+    notification_email: bool = True  # Phase 40
+    reminder_hours_before: int = 24
     updated_at: UTCDateTime | None = None
 
     model_config = {"from_attributes": True}
