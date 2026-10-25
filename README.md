@@ -3,7 +3,7 @@
 > Multi-agent AI travel planner — flights, hotels, activities & itineraries.
 > Built with FastAPI · LangGraph · MCP · Gemini Flash · Groq gpt-oss-120b · pgvector.
 
-**Status: Phase 39 / 50 — Booking Deep Links**
+**Status: Phase 40 / 50 — Notification System**
 
 ---
 
@@ -104,6 +104,12 @@ Every flight and hotel the searches find has the link to book it (Phase 39): a G
 the days and the travellers, and a Booking.com search for the hotel by name, its nights and its guests — each form
 opened in a browser before it was chosen. "Book flight" and "Book hotel" open them in a new tab, greyed out when
 there is none; the PDF's are links too.
+
+A traveller is emailed twice (Phase 40): "Your itinerary is ready" once a trip's first plan is saved — its days,
+its places, its total and the link — and a reminder before the trip begins, a day before its flight leaves unless
+they choose otherwise on the new settings page, with day 1's flight, stops, hotel and weather. Each email is written
+down before it is sent, once, however many backends look; sent by SendGrid with a key, written to the log without
+one. Nothing a request does waits for either.
 
 A planned trip downloads as a PDF: GET /trips/{id}/export/pdf → ReportLab lays out the saved
 itinerary (cover, day by day, local tips, cost breakdown) and adds a map drawn from OpenStreetMap tiles.
@@ -218,6 +224,7 @@ tripplanner-ai/
 │   │       │   ├── layout.tsx           ← fonts (Inter + Fraunces)
 │   │       │   ├── page.tsx             ← redirects → /trips
 │   │       │   ├── login/page.tsx       ← sign in / create account
+│   │       │   ├── settings/page.tsx    ← Phase 40: the emails on or off, and when the trip reminder comes
 │   │       │   ├── version/route.ts     ← Phase 28: GET /version — the commit this site was built from
 │   │       │   └── trips/
 │   │       │       ├── page.tsx         ← trip cards, new-trip form with "Who is going" (Phase 25), search (Phase 23)
@@ -255,6 +262,8 @@ tripplanner-ai/
 │   │       │   ├── config.py            ← pydantic-settings
 │   │       │   ├── deep_health.py       ← Phase 34: Postgres, Redis, the tool server, LangSmith — each with a deadline
 │   │       │   ├── error_reporting.py   ← Phase 27: Sentry — on with a DSN — and what is scrubbed out of a report
+│   │       │   ├── notifications.py     ← Phase 40: "your itinerary is ready" and the trip reminder — composed,
+│   │       │   │                          written down once, sent by SendGrid or logged; the reminder watcher
 │   │       │   └── security.py         ← JWT + password hashing
 │   │       ├── db/
 │   │       │   ├── session.py           ← async SQLAlchemy; Phase 30: the pool is a setting, and is reported
@@ -343,11 +352,12 @@ tripplanner-ai/
 │       ├── 005_trip_group_members.py    ← Phase 25: trips.group_members
 │       ├── 006_agent_run_tokens.py      ← Phase 26: agent_runs.token_count, agent_runs.cost_usd
 │       ├── 007_refresh_tokens.py        ← Phase 35: refresh_tokens (their hashes, their sign-in, when used)
-│       └── 008_preferred_language.py    ← Phase 36: user_preferences.preferred_language
+│       ├── 008_preferred_language.py    ← Phase 36: user_preferences.preferred_language
+│       └── 009_notifications.py         ← Phase 40: the two email settings; notifications (each email, once)
 ├── tests/
-│   ├── unit/                            ← Fast, no network, mock everything (1,714 tests)
+│   ├── unit/                            ← Fast, no network, mock everything (1,760 tests)
 │   ├── contract/                        ← Response shape tests (mocked, 8 tests)
-│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 108 tests)
+│   ├── integration/                     ← Real Postgres + Redis (RUN_INTEGRATION=1, 113 tests)
 │   ├── database.py                      ← separate test databases (<db>_test, <db>_e2e), migrated with Alembic
 │   ├── fixtures/evals/                  ← Phase 33: seven real eval records — what the API served for a scenario
 │   ├── fixtures/phase36/                ← Phase 36: every prompt an English plan sent, and the plan, recorded
@@ -483,9 +493,10 @@ tripplanner-ai/
 | 37 | Advanced itinerary features — every stop's start and end in its part of the day, as long as such a place takes; the way there from each stop to the next asked of Google's Routes API through a new tool, cached a day (the Distance Matrix API can no longer be switched on), or estimated from the straight line — measured against OpenStreetMap's router — and said to be; a travel note past 10 km; no day past 22:00; the first day after the flight lands, which the builder is now told. Found: a plan with three stops on a day that ended at the airport at 22:42, and a test that had been asking the real Groq ([docs/phase37_build_log.md](docs/phase37_build_log.md)) | ✅ Done on the production-like stack, real models, travel times estimated — **Google's times wait for your Maps key** | 40 unit + 3 integration + 2 browser |
 | 38 | Weather-aware itinerary — the trip's own days from the weather tool (it counted OpenWeatherMap's from today, stopped after them, and read a day by its midnight), the forecast where it reaches and the month's typical day after, said to be one, and no guess for a place with no climate; a rainy day — six hours of daytime rain — gets an indoor place, asked of the model and made sure of by code, or a note to keep the plans flexible; a sunny day is planned as before; an icon, the high and low and a "climate estimate" badge on every day card and in the PDF. Live: rain forecast in Goa for the trip's first day, and the model put a restaurant on it ([docs/phase38_build_log.md](docs/phase38_build_log.md)) | ✅ Done on the production-like stack, real forecast | 35 unit + 2 integration + 2 browser |
 | 39 | Booking deep links — every flight and hotel the searches find carries its link, made by the tool from what was searched: Google Flights asked in its own words (the roadmap's form makes up a day back, the old `#flt=` one opens on nothing) and Booking.com by the hotel's name and town (it comes first); "Book flight" and "Book hotel" in a new tab, greyed out with no link, and only the two searches the planner makes are ever opened; clickable in the PDF. Live: a real plan's links opened in Chromium, on its route, days, nights and travellers, its hotel first ([docs/phase39_build_log.md](docs/phase39_build_log.md)) | ✅ Done on the production-like stack; the links opened on Google Flights and Booking.com | 25 unit + 2 integration + 3 browser |
-| 40–50 | Production & Polish | ⏳ | |
+| 40 | Notification system — "Your itinerary is ready" when a trip's first plan is saved, spawned when the run ends so nothing waits for it, and a reminder before the trip begins: from its flight's departure, or 08:00 on its first day, as many hours before as the traveller chose (a day, unless changed), and said as seen from when it is sent; day 1's flight, stops, hotel and weather. Each email written down once, unique by trip, kind and what it is about — four backends looking at once send one; SendGrid with a key, the log without one, and nothing sent while the traveller has emails off; a settings page with the switch and the timing. Found: a reminder already sent made every trip after it fail, and the settings page could undo a change ([docs/phase40_build_log.md](docs/phase40_build_log.md)) | ✅ Done on the production-like stack, emails logged — **sending waits for your SendGrid key and verified sender** | 46 unit + 5 integration + 3 browser |
+| 41–50 | Production & Polish | ⏳ | |
 
-**Total: 1,722 unit + contract, 108 integration, 75 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
+**Total: 1,768 unit + contract, 113 integration, 78 browser — all passing.** Zero network calls in CI; the integration tests run every night (Phase 28). (One more browser test, `e2e-production/`, checks a running deployment and is run by hand.)
 
 > Verified against the live APIs on 2026-10-02 (Duffel and LiteAPI in sandbox mode) — see [docs/phase1-17_audit.md](docs/phase1-17_audit.md).
 
