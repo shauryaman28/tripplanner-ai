@@ -12,8 +12,8 @@ watch_reminders()           looks for due reminders every REMINDER_CHECK_SECONDS
 Every email is first written down (`notifications`, unique by trip, kind and what it is about), then sent: a
 second backend looking for the same reminder finds the row and leaves it. With `notification_email` off the row
 says "off" and nothing is sent. Sent by SendGrid when SENDGRID_API_KEY is set; otherwise written to the log —
-whole in development, and in production only that it was not sent (an email address and a trip are not for a
-log there).
+whole in development (but for the address: no log line holds one, Phase 29's scrubbing), and in production only
+that it was not sent (a traveller's trip is not for a log there).
 """
 
 from __future__ import annotations
@@ -143,11 +143,22 @@ def ready_email(user: User, trip: Trip, plan: dict) -> Email:
     return Email(user.email, f"Your {trip.destination} itinerary is ready", text, html)
 
 
-def reminder_email(user: User, trip: Trip, plan: dict, leaves: datetime, hours: int) -> Email:
-    """'Your trip starts tomorrow': day 1 — the flight, each stop and its time, the hotel, the weather."""
+def _when(leaves: datetime, now: datetime) -> tuple[str, str]:
+    """When the trip begins, as seen from `now` in India: ("tomorrow", "at 06:10"), ("on Friday 27 November", …)."""
+    local = leaves.astimezone(INDIA)
+    ahead = (local.date() - now.astimezone(INDIA).date()).days
+    day = "today" if ahead <= 0 else "tomorrow" if ahead == 1 else f"on {local:%A} {local.day} {local:%B}"
+    return day, f"at {local:%H:%M}"
+
+
+def reminder_email(user: User, trip: Trip, plan: dict, leaves: datetime, now: datetime) -> Email:
+    """'Your trip starts tomorrow': day 1 — the flight, each stop and its time, the hotel, the weather.
+
+    The day is counted from when it is sent, not from the setting: a trip planned the night before its 06:00
+    flight is reminded late, and "tomorrow" would then be wrong."""
     days = plan.get("days") or []
     first = days[0] if days else {}
-    when = "tomorrow" if hours == 24 else f"on {leaves:%A %-d %B} at {leaves:%H:%M}"
+    day, at = _when(leaves, now)
     lines = []
     flight = first.get("flight") or {}
     if flight.get("departure"):
@@ -166,13 +177,13 @@ def reminder_email(user: User, trip: Trip, plan: dict, leaves: datetime, hours: 
     if (first.get("hotel") or {}).get("name"):
         lines.append(f"Staying at {first['hotel']['name']}")
     note, note_html = _footer()
-    intro = f"Your trip to {trip.destination} starts {when}. Day 1:"
+    intro = f"Your trip to {trip.destination} starts {day} {at}. Day 1:"
     text = "\n".join([intro, "", *lines, "", f"The whole plan: {_link(trip)}", "", note])
     html = (
         f"<p>{escape(intro)}</p><ul>{''.join(f'<li>{escape(line)}</li>' for line in lines)}</ul>"
         f'<p><a href="{escape(_link(trip))}">The whole plan</a></p>{note_html}'
     )
-    return Email(user.email, f"Your trip to {trip.destination} starts {when}", text, html)
+    return Email(user.email, f"Your trip to {trip.destination} starts {day}", text, html)
 
 
 # ── Written down once, then sent ───────────────────────────────────────────
@@ -256,40 +267,44 @@ async def due_reminders(now: datetime | None = None) -> list[tuple[uuid.UUID, st
     """Send every reminder that is due at `now` (UTC). Returns (trip id, what became of its email) for each sent."""
     now = now or datetime.now(timezone.utc)
     today = now.astimezone(INDIA).date()
-    done: list[tuple[uuid.UUID, str]] = []
     async with AsyncSessionLocal() as db:
-        trips = (
-            (
-                await db.execute(
-                    select(Trip).where(
-                        Trip.status == TripStatus.COMPLETED,
-                        Trip.start_date >= today,
-                        Trip.start_date <= today + timedelta(days=8),  # the reminder is at most 168 hours before
-                    )
-                )
+        found = await db.execute(
+            select(Trip.id).where(
+                Trip.status == TripStatus.COMPLETED,
+                Trip.start_date >= today,
+                Trip.start_date <= today + timedelta(days=8),  # the reminder is at most 168 hours before
             )
-            .scalars()
-            .all()
         )
-        for trip in trips:
-            try:
-                prefs = await db.get(UserPreferences, trip.user_id)
-                hours = prefs.reminder_hours_before if prefs else 24
-                plan = await _latest_plan(db, trip.id)
-                leaves = departure(trip, plan)
-                if plan is None or not reminder_due(leaves, hours, now):
-                    continue
-                row = await _claim(db, trip, "trip_reminder", trip.start_date.isoformat())
-                if row is None:
-                    continue
-                user = await db.get(User, trip.user_id)
-                local = leaves.astimezone(INDIA)
-                compose = partial(reminder_email, user, trip, plan, local, hours)
-                done.append((trip.id, await _deliver(db, row, prefs, compose)))
-            except Exception:
-                logger.exception("The reminder for trip %s could not be sent", trip.id)
-                await db.rollback()
+        trip_ids = found.scalars().all()
+    done: list[tuple[uuid.UUID, str]] = []
+    for trip_id in trip_ids:
+        try:
+            status = await _remind(trip_id, now)
+        except Exception:
+            logger.exception("The reminder for trip %s could not be sent", trip_id)
+            continue
+        if status is not None:
+            done.append((trip_id, status))
     return done
+
+
+async def _remind(trip_id: uuid.UUID, now: datetime) -> str | None:
+    """One trip's reminder, if it is due and not yet sent — in a session of its own: a reminder another backend
+    has already claimed is rolled back, and a rollback expires whatever else the session had loaded."""
+    async with AsyncSessionLocal() as db:
+        trip = await db.get(Trip, trip_id)
+        plan = await _latest_plan(db, trip_id) if trip else None
+        if trip is None or plan is None:
+            return None
+        prefs = await db.get(UserPreferences, trip.user_id)
+        leaves = departure(trip, plan)
+        if not reminder_due(leaves, prefs.reminder_hours_before if prefs else 24, now):
+            return None
+        row = await _claim(db, trip, "trip_reminder", trip.start_date.isoformat())
+        if row is None:
+            return None
+        user = await db.get(User, trip.user_id)
+        return await _deliver(db, row, prefs, partial(reminder_email, user, trip, plan, leaves, now))
 
 
 async def watch_reminders(every: float | None = None) -> None:
