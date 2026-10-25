@@ -279,13 +279,18 @@ export interface TripStatusResponse {
 
 // ── Auth ─────────────────────────────────────────────────────────────────
 
-/** GET/PUT /users/preferences (Phase 16; `preferred_language` Phase 36). PUT replaces the whole of it. */
+/**
+ * GET/PUT /users/preferences (Phase 16; `preferred_language` Phase 36; the emails Phase 40). PUT replaces the
+ * whole of it.
+ */
 export interface Preferences {
   dietary_restrictions: string[];
   preferred_airlines: string[];
   travel_style: string | null;
   home_city: string | null;
   preferred_language: "en" | "hi" | "ta" | "bn" | null;
+  notification_email: boolean; // "your itinerary is ready", and the reminder before a trip
+  reminder_hours_before: number; // 1 to 168: how long before the trip begins the reminder is sent
   updated_at?: string | null;
 }
 

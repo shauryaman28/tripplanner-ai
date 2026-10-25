@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { getEmail, logout } from "@/lib/api";
@@ -42,6 +42,11 @@ export default function AppHeader({ children }: { children?: ReactNode }) {
             <span className="max-w-[14rem] truncate">{email}</span>
           </span>
         )}
+        {/* Phase 40: the emails — on or off, and when the reminder comes */}
+        <Link href="/settings" className="btn-ghost shrink-0 px-2.5 py-2" title="Settings">
+          <Settings className="h-4 w-4" aria-hidden />
+          <span className="sr-only">Settings</span>
+        </Link>
         <button onClick={signOut} className="btn-ghost shrink-0 px-2.5 py-2" title="Sign out">
           <LogOut className="h-4 w-4" aria-hidden />
           <span className="hidden sm:inline">Sign out</span>

@@ -219,7 +219,7 @@ export async function createTrip(payload: CreateTripPayload): Promise<Trip> {
 }
 
 // ---------------------------------------------------------------------------
-// Preferences — the language plans are written in (Phase 36)
+// Preferences — the language plans are written in (Phase 36), the emails (Phase 40)
 // ---------------------------------------------------------------------------
 
 export async function getPreferences(): Promise<Preferences> {
@@ -235,6 +235,17 @@ export async function savePreferredLanguage(language: Preferences["preferred_lan
   return request<Preferences>("/users/preferences", {
     method: "PUT",
     body: JSON.stringify({ ...current, preferred_language: language }),
+  });
+}
+
+/** Save the two email settings (Phase 40) — and, as above, nothing else. */
+export async function saveNotifications(
+  changes: Pick<Preferences, "notification_email" | "reminder_hours_before">,
+): Promise<Preferences> {
+  const { updated_at: _saved, ...current } = await getPreferences();
+  return request<Preferences>("/users/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ ...current, ...changes }),
   });
 }
 

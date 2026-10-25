@@ -52,6 +52,8 @@ os.environ.setdefault("APP_ENV", "test")  # no SQL echo
 # Phase 35: every browser test signs in from this machine — sixty of them in two minutes
 os.environ.setdefault("LOGIN_ATTEMPTS_PER_MINUTE", "0")
 os.environ.setdefault("REGISTRATIONS_PER_MINUTE", "0")
+# Phase 40: no browser test sends an email, whatever .env holds — each one is written to this server's log
+os.environ["SENDGRID_API_KEY"] = ""
 sys.path.insert(0, "src/backend")
 
 from tests import fakes  # noqa: E402
