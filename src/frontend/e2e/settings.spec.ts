@@ -95,3 +95,26 @@ test("emails turned off are saved off, the reminder greyed out — and a plan la
   await expect(page.getByRole("switch", { name: "Email notifications" })).toHaveAttribute("aria-checked", "false");
   await expect(page.getByLabel("Trip reminder")).toHaveValue("48");
 });
+
+test("a change is never undone by the page's own load answering late", async ({ page }) => {
+  // Each read of the preferences is answered later than the one before. In development React loads the page twice
+  // (and the header's language menu reads them too): an earlier load whose answer is kept would fill the form first,
+  // and a later one, arriving after the traveller's change, would put the form back.
+  await signIn(page);
+  let asked = 0;
+  let answered = 0;
+  await page.route("**/api/users/preferences", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    asked += 1;
+    await new Promise((later) => setTimeout(later, asked * 700));
+    await route.continue();
+    answered += 1;
+  });
+  await page.goto("/settings");
+  const emails = page.getByRole("switch", { name: "Email notifications" });
+  await expect(emails).toHaveAttribute("aria-checked", "false"); // as the test before left them
+  await emails.click(); // as soon as the form is there
+  await expect.poll(() => asked > 0 && answered === asked, { timeout: 15_000 }).toBe(true); // every load answered
+  await expect(emails).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+});

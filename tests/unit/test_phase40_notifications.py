@@ -350,8 +350,13 @@ async def test_the_watcher_keeps_looking_after_a_failed_look_and_stops_when_canc
     looks = AsyncMock(side_effect=[RuntimeError("database away"), [], [], [], [], [], [], [], [], [], []])
     with patch.object(notifications, "due_reminders", looks):
         watching = asyncio.create_task(notifications.watch_reminders(0.001))
-        while looks.await_count < 3:
-            await asyncio.sleep(0.001)
+
+        async def three_looks():
+            while looks.await_count < 3 and not watching.done():
+                await asyncio.sleep(0.001)
+
+        await asyncio.wait_for(three_looks(), timeout=2)  # a watcher that stopped fails here, not by hanging
+        assert not watching.done() and looks.await_count >= 3  # it went on after the failed one
         watching.cancel()
         with pytest.raises(asyncio.CancelledError):
             await watching
