@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from app.pdf.formatting import (
@@ -31,6 +31,7 @@ from app.pdf.formatting import (
     names_in_words,
     plural,
 )
+from src.ai import booking
 from src.ai.itinerary import FREE_TIME, SLOTS
 
 SLOT_LABELS = {"morning": "Morning", "afternoon": "Afternoon", "evening": "Evening"}
@@ -77,6 +78,7 @@ class Stay:
     address: str | None
     lat: float | None
     lng: float | None
+    booking_url: str | None = None  # Phase 39 — on the first night of a stay only: one link a hotel
 
 
 @dataclass(frozen=True)
@@ -98,6 +100,7 @@ class Flight:
     stops: int | None
     origin: Airport | None
     destination: Airport | None
+    booking_url: str | None = None  # Phase 39
 
 
 @dataclass(frozen=True)
@@ -254,6 +257,7 @@ def _read_flight(raw: object) -> Flight | None:
         stops=int(stops) if stops is not None else None,
         origin=_read_airport(raw.get("origin")),
         destination=_read_airport(raw.get("destination")),
+        booking_url=raw.get("booking_url") if booking.is_booking_url(raw.get("booking_url")) else None,
     )
 
 
@@ -270,6 +274,7 @@ def _read_stay(raw: object) -> Stay | None:
         address=_text(raw.get("address")),
         lat=lat,
         lng=lng,
+        booking_url=raw.get("booking_url") if booking.is_booking_url(raw.get("booking_url")) else None,
     )
 
 
@@ -371,6 +376,13 @@ def build_plan(
     if not isinstance(raw_days, list):
         raw_days = []
     days = tuple(_read_day(raw, index) for index, raw in enumerate(raw_days) if isinstance(raw, dict))
+    # Phase 39: a stay's link on its first night only — the cards of the nights after need not repeat it
+    days = tuple(
+        replace(day, stay=replace(day.stay, booking_url=None))
+        if n and day.stay and days[n - 1].stay and days[n - 1].stay.name == day.stay.name
+        else day
+        for n, day in enumerate(days)
+    )
     if not days:
         raise NothingToExport("This itinerary has no day-by-day plan to export.")
 

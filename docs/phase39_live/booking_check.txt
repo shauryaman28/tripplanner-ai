@@ -1,0 +1,18 @@
+# python scripts/booking_check.py --prodlike — 18 October 2026, 23:09:06 IST, on the production-like stack: real models,
+# Duffel's and LiteAPI's sandboxes; the links then opened in Chromium (scripts/booking_open.js).
+A plan for Goa, 2026-11-27 to 2026-11-29, two travellers — 8.2 s
+  ✓ a plan was made  — HTTP 200
+  ✓ the flight (DEL → GOI) has its link
+  ✓ …a Google Flights search for its route, days and travellers  — Flights to GOI from DEL on 2026-11-27 through 2026-11-29 for 2 adults
+  ✓ the hotel (Alaya Stays 1 BHK with Balcony & Pool - Veera Marina) has its link
+  ✓ …a Booking.com search for it, its nights and its guests  — Alaya Stays 1 BHK with Balcony & Pool - Veera Marina, Goa · 2026-11-27 to 2026-11-29
+
+Opened in Chromium:
+     New Delhi to Goa | Google Flights
+  ✓ Google Flights opens on the route, both days and two travellers  — Round trip 2 Economy · Where from? New Delhi DEL=New Delhi, Where else?=New Delhi, Where to? Goa GOI=Goa, Where else?=Goa, Departure=Fri, Nov 27, Return=Sun, Nov 29, Departure=Fri, Nov 27, Return=Sun, Nov 29
+     Booking.com: Search results: Alaya Stays 1 BHK with Balcony & Pool - Veera Marina, Goa. Book your hotel now!
+  ✓ Booking.com opens on the nights and the guests  — Fri 27 Nov — Sun 29 Nov · 2 adults · 0 children · 1 room · first: Alaya Stays 1 BHK with Balcony & Pool - Veera Marina
+  ✓ …with the plan's hotel first  — Alaya Stays 1 BHK with Balcony & Pool - Veera Marina
+  ✓ every link opened
+
+9 passed, 0 failed

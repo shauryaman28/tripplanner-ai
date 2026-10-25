@@ -111,7 +111,7 @@ class ActivitySlot(_OnlyWhenSet):
     _cost = field_validator("cost", mode="before")(_none_is_zero)
 
 
-class HotelSlot(BaseModel):
+class HotelSlot(_OnlyWhenSet):
     name: str
     cost_per_night: float = 0.0
     stars: int | None = None
@@ -119,7 +119,9 @@ class HotelSlot(BaseModel):
     address: str | None = None
     lat: float | None = None
     lng: float | None = None
+    booking_url: str | None = None  # Phase 39 — copied from the search, never the model's
 
+    _ONLY_WHEN_SET: ClassVar[tuple[str, ...]] = ("booking_url",)
     _cost = field_validator("cost_per_night", mode="before")(_none_is_zero)
 
 
@@ -511,8 +513,10 @@ def _attach_source_data(draft: dict, flights: list[dict], hotels: list[dict], at
                 slot[group.SUITS] = source.get(group.SUITS)  # Phase 25: None unless this is a group trip
 
         hotel = day.get("hotel")
+        # (Phase 39: `booking_url` too — the search's, written over whatever the model put there; the hotel is
+        # always one the search found, the data-scope check above says so)
         if hotel and (source := hotel_by_name.get(hotel["name"])):
-            hotel.update({k: source.get(k) for k in ("stars", "rating", "address", "lat", "lng")})
+            hotel.update({k: source.get(k) for k in ("stars", "rating", "address", "lat", "lng", "booking_url")})
 
         day["flight"] = None  # the model does not pick flights; the one flight shown is set below
 

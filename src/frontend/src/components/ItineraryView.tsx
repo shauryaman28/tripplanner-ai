@@ -117,9 +117,16 @@ export default function ItineraryView({ itinerary, trip, updating = null, change
       </div>
 
       <ol className="space-y-4">
-        {data.days.map((day) => (
+        {data.days.map((day, n) => (
           <li key={day.day}>
-            <DayCard day={day} onShowOnMap={showOnMap} updating={section} changed={changed} language={language?.code} />
+            <DayCard
+              day={day}
+              onShowOnMap={showOnMap}
+              updating={section}
+              changed={changed}
+              language={language?.code}
+              firstNight={n === 0 || data.days[n - 1].hotel?.name !== day.hotel?.name}
+            />
           </li>
         ))}
       </ol>
