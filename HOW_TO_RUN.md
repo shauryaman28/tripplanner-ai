@@ -38,6 +38,7 @@
 | 37 | `src/ai/mcp_server/tools.py` (`get_travel_time`: Google's Routes API, cached a day) + `models.py` + `config.py` (`GOOGLE_MAPS_API_KEY`) + `server.py` + `rate_limiter.py` (3,000 elements a minute), `src/ai/builder/builder.py` (the clock after the checks; the line on when day 1 begins), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `scripts/cache_ttls.py` + `provider_keys.py`, `docker/prodlike` + `docker/loadtest` compose files, `.env.example`, `tests/conftest.py` (no test reaches a real model), the Phase 36 English record (made again, DECISIONS #340) — see `docs/phase37_build_log.md` | `src/ai/schedule.py`, `scripts/schedule_check.py`, `src/frontend/src/lib/schedule.ts`, one unit test file, one integration test file, `e2e/schedule.spec.ts`, `docs/phase37_live/` |
 | 38 | `src/ai/mcp_server/tools.py` (`get_weather`: the trip's days, up to 15; the daytime, by the place's clock; the climate past the forecast, and none for a place with no climate) + `models.py` (`DayForecast.source`), `src/ai/builder/builder.py` (the rainy-day paragraph and each attraction's setting; the repair; each day's weather), `src/ai/orchestrator/orchestrator.py` (the weather read beside the searches), `routes/trips.py` (the timeline), `pdf/plan.py` + `pdf/document.py`, the frontend's `DayCard.tsx` + `types.ts`, `tests/fakes.py` (a stand-in forecast), `tests/conftest.py`, the Phase 36 English record (made again, DECISIONS #348) — see `docs/phase38_build_log.md` | `src/ai/weather.py`, `scripts/weather_check.py`, `src/frontend/src/lib/weather.ts`, one unit test file, one integration test file, `e2e/weather.spec.ts`, `docs/phase38_live/` |
 | 39 | `src/ai/mcp_server/tools.py` (a link on every flight and hotel, after the cache) + `models.py` (`booking_url`), `src/ai/builder/builder.py` (the plan's links copied from the search; a model's dropped; none saved as null), `pdf/plan.py` + `pdf/document.py` (clickable, the stay's on its first night, only the two searches), the frontend's `DayCard.tsx` + `ItineraryView.tsx` + `types.ts`, `tests/e2e/stub_backend.py` (links as the real tools make them; none for Tirthan) — see `docs/phase39_build_log.md` | `src/ai/booking.py`, `scripts/booking_check.py` + `booking_open.js`, `src/frontend/src/lib/booking.ts` + `components/BookButton.tsx`, one unit test file, one integration test file, `e2e/booking.spec.ts`, `docs/phase39_live/` |
+| 40 | `src/backend/app/api/routes/trips.py` (the first itinerary's email spawned when its run ends), `main.py` (the reminder watcher, started and stopped with the app), `models/user_preferences.py` + `schemas/user_preferences.py` + `routes/users.py` (`notification_email`, `reminder_hours_before`), `core/config.py` (`SENDGRID_API_KEY`, `EMAIL_FROM`, `SITE_URL`, `REMINDER_CHECK_SECONDS`), `preflight.py` (three warnings), `.env.example`, `docker/prodlike/compose.yml` + `docker/loadtest/compose.yml` (no key there), the frontend's `AppHeader.tsx` + `lib/api.ts` + `lib/types.ts`, `tests/conftest.py` + `tests/e2e/stub_backend.py` (no test sends an email) — see `docs/phase40_build_log.md` | `src/backend/app/core/notifications.py`, `models/notification.py` + migration 009, `src/frontend/src/app/settings/page.tsx`, `scripts/notify_check.py`, one unit test file, one integration test file, `e2e/settings.spec.ts`, `docs/phase40_live/` |
 | 1–17 audit | most of `src/ai`, `trips.py`, `main.py`, the trip page — see `docs/phase1-17_audit.md` | `src/ai/llm.py`, `routes/admin.py`, `tests/fakes.py`, `tests/e2e/stub_backend.py`, pipeline + schema integration tests |
 
 
@@ -2393,6 +2394,53 @@ to headless Chrome's own it answers with a check that drops the search (`docs/ph
 Plan a trip: the flight on day 1 has "Book flight", the stay's first night "Book hotel"; each opens the search,
 filled in, in a new tab. The PDF's "Book this flight on Google Flights" and "Book this hotel on Booking.com" are
 links. An itinerary made before this phase has the buttons greyed out.
+
+## Step 38 — Verify Phase 40: the two emails, and the settings
+
+Needs the dev containers (Step 1) for the suites; for B the production-like stack and your `.env`. Sending for
+real (D) needs a SendGrid account — without one, every email is written to the backend's log instead.
+
+### A. The suites
+
+```bash
+pytest tests/unit/test_phase40_notifications.py -v
+RUN_INTEGRATION=1 pytest tests/integration/test_phase40_notifications_integration.py -v
+cd src/frontend && npx playwright test e2e/settings.spec.ts
+```
+
+The integration tests set the clock: `due_reminders(now)` is asked a minute before a trip's reminder (nothing), on
+the hour (sent), an hour later (nothing: once), after the flight (nothing); with the traveller's 48 hours, at 49 and
+48; with emails off (written down "off", nothing sent); and four times at once, on the morning the trip begins (one
+email). No test can send an email: each sets `SENDGRID_API_KEY` empty, whatever `.env` holds.
+
+### B. Two real plans, their emails
+
+```bash
+PRODLIKE_REMINDER_CHECK_SECONDS=15 python scripts/prodlike.py up   # the watcher looks every 15 s, not every 5 min
+python scripts/notify_check.py --prodlike
+```
+
+LIVE_OUTPUT_HERE
+
+Two real plans, a minute apart for Groq's free tier. Without a SendGrid key the production-like backend writes
+only that each email was not sent, the address masked — never the address, never the trip.
+
+### C. In the browser
+
+The gear in the header opens Settings: the switch (on), "Trip reminder" (a day before), Save once something
+changed. Turn emails off and the reminder is greyed out; plan a trip and `python scripts/prodlike.py logs` (or the
+dev backend's terminal) says nothing of it. In development (`uvicorn` from Step 3) each email is written to the
+backend's terminal whole — but for the address, which no log line holds (Phase 29).
+
+### D. Sending for real
+
+1. A SendGrid account (https://sendgrid.com). Settings → Sender Authentication → **Single Sender Verification**:
+   your own address; click the link SendGrid sends to it.
+2. Settings → API Keys → Create API Key → **Restricted Access**, Mail Send only. It is shown once.
+3. In `.env` (never in a chat or a commit): `SENDGRID_API_KEY=SG.…` and `EMAIL_FROM=` the verified address.
+4. `PRODLIKE_REMINDER_CHECK_SECONDS=15 python scripts/prodlike.py up`, then
+   `python scripts/notify_check.py --prodlike --to you@gmail.com` — the emails go to `you+notify-…@gmail.com`;
+   both rows say `sent|sendgrid`, and the two emails are in your inbox (or its spam folder, from a new sender).
 
 ## Known first-run issues (already fixed in this repo's `requirements.txt`)
 

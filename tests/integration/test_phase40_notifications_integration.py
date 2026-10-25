@@ -140,13 +140,13 @@ async def test_the_travellers_own_timing_is_kept_and_off_is_off(db_session):
     ]
 
 
-async def test_two_backends_looking_at_once_send_the_reminder_once(db_session):
+async def test_two_backends_looking_at_once_send_the_reminder_once_even_on_the_day_it_begins(db_session):
     with outbox() as sent:
         async with _stack(flight_tool=lambda _name, params: [flight(8_200.0, params["date"])]) as (client, _e, _t):
             await _login(client)
             trip_id = await _planned_trip(client, db_session)
         sent.clear()
-        now = LEAVES - timedelta(hours=20)
+        now = LEAVES - timedelta(hours=3)  # the morning it begins, before the flight: a trip of today is looked at
         both = await asyncio.gather(*(notifications.due_reminders(now) for _ in range(4)))
 
     assert sorted(both, key=len) == [[], [], [], [(uuid.UUID(trip_id), "logged")]]
