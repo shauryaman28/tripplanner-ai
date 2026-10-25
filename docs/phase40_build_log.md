@@ -87,11 +87,44 @@ LIVE_RESULTS
 |---|---|---|
 | Unit + contract | 46 (`test_phase40_notifications.py`) | 1,768 |
 | Integration | 5 (`test_phase40_notifications_integration.py`) | 113 |
-| Browser | 3 (`e2e/settings.spec.ts`) | 78 |
+| Browser | 4 (`e2e/settings.spec.ts`) | 79 |
 
 ## Break it on purpose
 
-BREAK_RESULTS
+On a scratch copy of the repository (its own database `tripplanner_m40`, Redis number 15, and its own stub backend
+and Next server on ports 8140 and 3140 for the site), each breakage alone, the tests run after it.
+
+**34 of 36 caught in the first round**, the other two once their tests were made stronger: **36 of 36.**
+
+- **The mailer:** sent with no key; the whole email logged in production; any 2xx counted as sent; no sender
+  check; the key not sent as a Bearer token; no html part.
+- **What the emails say:** free time counted as a place; the plan's words not escaped in the html; no link to the
+  trip; the reminder's day taken from the setting; no flight line.
+- **When:**
+  - a time with no offset read by the server's clock;
+  - a flight of another day believed;
+  - a trip with no flight beginning at midnight;
+  - the traveller's hours ignored;
+  - still due after the trip has begun;
+  - reminders looked for one day ahead, not eight;
+  - a trip that begins today not looked at.
+- **Once, and off:** the claim not unique; "off" ignored; no preferences counted as off; the ready email raising
+  into its run.
+- **The run and the watcher:** the run waiting for the email; every itinerary emailed; 0 not turning the watcher
+  off.
+- **The settings:** any hour accepted; neither setting saved by the route; no pre-start warning; the load-test
+  stack given the key.
+- **On the site, in the browser:** only the reminder saved; the language menu resetting the emails; the reminder
+  not greyed out when emails are off; no way to the settings from the header.
+
+**Not caught at first, and why:**
+
+- **"a failed look ends the watcher" timed out.** The test waited, with no deadline, for a third look that a
+  stopped watcher never makes. A timeout is not a catch. The wait now has a two-second deadline, and the test
+  fails.
+- **"a late load undoes the change" survived as flaky.** The browser test failed once and passed on its retry:
+  the late answer only sometimes came after the change. A new test answers each load later than the one before,
+  so it fails every time.
 
 ## Done criterion checklist
 
